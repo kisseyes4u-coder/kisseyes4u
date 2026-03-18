@@ -9672,11 +9672,18 @@ public class PinActivity extends AppCompatActivity {
                     busFavSection2.setVisibility(kw.isEmpty() ? android.view.View.VISIBLE : android.view.View.GONE);
                 if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
                 if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
-                // 버스탭(숫자)은 200ms 자동검색, 정류장탭은 검색버튼/엔터에서만
                 if (isBusTab[0]) {
+                    // 버스: 200ms 자동검색
                     debounceRunnable[0] = doSearch;
                     debounceHandler.postDelayed(debounceRunnable[0], 200);
+                } else if (stopDbList != null && !stopDbList.isEmpty()) {
+                    // 정류장: DB 메모리 있으면 300ms 자동검색
+                    if (kw.length() >= 2) {
+                        debounceRunnable[0] = doSearch;
+                        debounceHandler.postDelayed(debounceRunnable[0], 300);
+                    }
                 }
+                // DB 없으면 검색버튼/엔터만
             }
             @Override public void afterTextChanged(android.text.Editable e) {}
         });
