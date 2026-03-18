@@ -11359,6 +11359,7 @@ public class PinActivity extends AppCompatActivity {
                 while ((line = br.readLine()) != null) sb.append(line);
                 br.close();
                 java.util.List<String[]> routes = parseBusRouteList(sb.toString()); // [rtId, rtNm]
+                android.util.Log.d("BUS_API", "응답: " + sb.toString().substring(0, Math.min(500, sb.length())));
                 runOnUiThread(() -> {
                     if (routes.isEmpty()) {
                         busArrivalContainer.removeAllViews();
@@ -11376,10 +11377,11 @@ public class PinActivity extends AppCompatActivity {
                     }
                 });
             } catch (Exception e) {
+                android.util.Log.e("BUS_API", "searchBusRoute error: " + e.getClass().getName() + " / " + e.getMessage());
                 runOnUiThread(() -> {
                     busArrivalContainer.removeAllViews();
                     TextView tvErr = new TextView(this);
-                    tvErr.setText("노선 검색 실패: " + e.getMessage());
+                    tvErr.setText("노선 검색 실패: " + e.getClass().getSimpleName() + "\n" + e.getMessage());
                     tvErr.setTextColor(Color.parseColor("#E74C3C"));
                     tvErr.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
                     busArrivalContainer.addView(tvErr);
