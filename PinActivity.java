@@ -10249,14 +10249,17 @@ public class PinActivity extends AppCompatActivity {
                         String[] driveItems = memoCache.get(memoTimestamp);
                         android.content.SharedPreferences prefs2 =
                                 getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+                        android.view.inputmethod.InputMethodManager immMemo =
+                                (android.view.inputmethod.InputMethodManager)
+                                        getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+
                         String[] hints = {"항목 1", "항목 2", "항목 3", "항목 4", "항목 5"};
                         android.widget.Button[] btnNextArr = new android.widget.Button[5];
-                        // 버튼 상태: 0=입력(회색), 1=입력중(오렌지), 2=완료(초록)
-                        int[] btnState = new int[5]; // 0=입력, 1=확인, 2=완료
+                        int[] btnState = new int[5]; // 0=입력, 1=확인중, 2=완료
 
                         for (int mi2 = 0; mi2 < 5; mi2++) {
-                            final int curIdx = mi2;
-                            // 행: LinearLayout (EditText flex + 버튼 wrap)
+                            final int finalMi = mi2;
+
                             LinearLayout itemRow = new LinearLayout(this);
                             itemRow.setOrientation(LinearLayout.HORIZONTAL);
                             itemRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -10265,6 +10268,12 @@ public class PinActivity extends AppCompatActivity {
                                     LinearLayout.LayoutParams.WRAP_CONTENT);
                             rowLp.setMargins(0, 0, 0, dpToPx(6));
                             itemRow.setLayoutParams(rowLp);
+
+                            // ── EditText + X버튼을 RelativeLayout으로 묶기 ──
+                            RelativeLayout etWrapper = new RelativeLayout(this);
+                            LinearLayout.LayoutParams wrapLp = new LinearLayout.LayoutParams(
+                                    0, dpToPx(54), 1f);
+                            etWrapper.setLayoutParams(wrapLp);
 
                             android.widget.EditText et2 = new android.widget.EditText(this);
                             et2.setHint(hints[mi2]);
@@ -10276,22 +10285,53 @@ public class PinActivity extends AppCompatActivity {
                             et2.setTextColor(Color.parseColor("#222222"));
                             et2.setSingleLine(true);
                             et2.setGravity(Gravity.CENTER_VERTICAL);
-                            et2.setMinHeight(dpToPx(50));
                             et2.setBackgroundTintList(
                                     android.content.res.ColorStateList.valueOf(
                                             Color.parseColor("#9B8EC4")));
-                            LinearLayout.LayoutParams etLlp = new LinearLayout.LayoutParams(
-                                    0, dpToPx(54), 1f);
-                            et2.setLayoutParams(etLlp);
-                            et2.setPadding(dpToPx(4), 0, dpToPx(4), 0);
+                            // 오른쪽 패딩 넉넉히 줘서 X버튼과 겹치지 않게
+                            et2.setPadding(dpToPx(4), 0, dpToPx(36), 0);
+                            RelativeLayout.LayoutParams etRlp = new RelativeLayout.LayoutParams(
+                                    RelativeLayout.LayoutParams.MATCH_PARENT,
+                                    RelativeLayout.LayoutParams.MATCH_PARENT);
+                            et2.setLayoutParams(etRlp);
                             etItems[mi2] = et2;
+                            etWrapper.addView(et2);
+
+                            // X 버튼 (오른쪽 끝, 텍스트 있을 때만 표시)
+                            TextView btnX = new TextView(this);
+                            btnX.setText("✕");
+                            btnX.setTextColor(Color.parseColor("#AAAAAA"));
+                            btnX.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
+                            btnX.setGravity(Gravity.CENTER);
+                            btnX.setVisibility(etVal.isEmpty() ? android.view.View.GONE : android.view.View.VISIBLE);
+                            RelativeLayout.LayoutParams xRlp = new RelativeLayout.LayoutParams(
+                                    dpToPx(36), RelativeLayout.LayoutParams.MATCH_PARENT);
+                            xRlp.addRule(RelativeLayout.ALIGN_PARENT_END);
+                            xRlp.addRule(RelativeLayout.CENTER_VERTICAL);
+                            btnX.setLayoutParams(xRlp);
+                            btnX.setOnClickListener(xv -> {
+                                et2.setText("");
+                                btnX.setVisibility(android.view.View.GONE);
+                                et2.requestFocus();
+                                if (immMemo != null) immMemo.showSoftInput(et2,
+                                        android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                            });
+                            etWrapper.addView(btnX);
+
+                            // 텍스트 변화 → X버튼 표시/숨김
+                            et2.addTextChangedListener(new android.text.TextWatcher() {
+                                @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+                                @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                                    btnX.setVisibility(s.length() > 0
+                                            ? android.view.View.VISIBLE : android.view.View.GONE);
+                                }
+                                @Override public void afterTextChanged(android.text.Editable e) {}
+                            });
 
                             // 확인 버튼
-                            final int finalMi = mi2;
                             android.widget.Button btnNext = new android.widget.Button(this);
                             btnNextArr[mi2] = btnNext;
 
-                            // 초기 상태: 기존 값 있으면 완료, 없으면 입력
                             android.graphics.drawable.GradientDrawable nextBg =
                                     new android.graphics.drawable.GradientDrawable();
                             nextBg.setCornerRadius(dpToPx(6));
@@ -10315,7 +10355,7 @@ public class PinActivity extends AppCompatActivity {
                             btnNext.setPadding(dpToPx(10), 0, dpToPx(10), 0);
                             btnNext.setLayoutParams(btnLlp);
 
-                            // 포커스 → 입력중(오렌지 확인)
+                            // 포커스 → 오렌지 확인
                             et2.setOnFocusChangeListener((fv, hasFocus) -> {
                                 android.graphics.drawable.GradientDrawable bg2 =
                                         new android.graphics.drawable.GradientDrawable();
@@ -10323,24 +10363,23 @@ public class PinActivity extends AppCompatActivity {
                                 if (hasFocus) {
                                     btnState[finalMi] = 1;
                                     btnNext.setText("확인");
-                                    bg2.setColor(Color.parseColor("#E67E22")); // 오렌지
+                                    bg2.setColor(Color.parseColor("#E67E22"));
                                 } else {
-                                    // 포커스 잃을때: 텍스트 있으면 완료, 없으면 입력
                                     if (!et2.getText().toString().trim().isEmpty()) {
                                         btnState[finalMi] = 2;
                                         btnNext.setText("완료");
-                                        bg2.setColor(Color.parseColor("#27AE60")); // 초록
+                                        bg2.setColor(Color.parseColor("#27AE60"));
                                     } else {
                                         btnState[finalMi] = 0;
                                         btnNext.setText("입력");
-                                        bg2.setColor(Color.parseColor("#BBBBBB")); // 회색
+                                        bg2.setColor(Color.parseColor("#BBBBBB"));
                                     }
                                 }
                                 btnNext.setBackground(bg2);
                             });
 
+                            // 확인 버튼 클릭 → 완료 + 키보드 내림 (다음 자동이동 없음)
                             btnNext.setOnClickListener(nbv -> {
-                                // 완료 처리: 다음 항목으로 포커스 이동
                                 android.graphics.drawable.GradientDrawable bg3 =
                                         new android.graphics.drawable.GradientDrawable();
                                 bg3.setCornerRadius(dpToPx(6));
@@ -10348,24 +10387,27 @@ public class PinActivity extends AppCompatActivity {
                                 btnNext.setText("완료");
                                 bg3.setColor(Color.parseColor("#27AE60"));
                                 btnNext.setBackground(bg3);
-
-                                int nextIdx = finalMi + 1;
-                                if (nextIdx < 5 && etItems[nextIdx] != null) {
-                                    etItems[nextIdx].requestFocus();
-                                    etItems[nextIdx].setSelection(etItems[nextIdx].getText().length());
-                                } else {
-                                    android.view.inputmethod.InputMethodManager imm2 =
-                                            (android.view.inputmethod.InputMethodManager)
-                                                    getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-                                    if (imm2 != null)
-                                        imm2.hideSoftInputFromWindow(etItems[finalMi].getWindowToken(), 0);
-                                }
+                                // 포커스 해제 + 키보드 내림
+                                et2.clearFocus();
+                                if (immMemo != null)
+                                    immMemo.hideSoftInputFromWindow(et2.getWindowToken(), 0);
                             });
 
-                            itemRow.addView(et2);
+                            itemRow.addView(etWrapper);
                             itemRow.addView(btnNext);
                             inputArea.addView(itemRow);
                         }
+
+                        // 팝업 스크롤 시 키보드 내림
+                        inputArea.setOnTouchListener((v2, ev) -> {
+                            if (ev.getAction() == android.view.MotionEvent.ACTION_MOVE) {
+                                if (immMemo != null)
+                                    immMemo.hideSoftInputFromWindow(
+                                            inputArea.getWindowToken(), 0);
+                                if (getCurrentFocus() != null) getCurrentFocus().clearFocus();
+                            }
+                            return false;
+                        });
                         popLayout.addView(inputArea);
 
                         // 커스텀 버튼행 (A 디자인)
