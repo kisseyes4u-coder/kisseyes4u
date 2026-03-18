@@ -10289,7 +10289,7 @@ public class PinActivity extends AppCompatActivity {
                                     android.content.res.ColorStateList.valueOf(
                                             Color.parseColor("#9B8EC4")));
                             // 오른쪽 패딩 넉넉히 줘서 X버튼과 겹치지 않게
-                            et2.setPadding(dpToPx(4), 0, dpToPx(36), 0);
+                            et2.setPadding(dpToPx(4), 0, dpToPx(46), 0);
                             RelativeLayout.LayoutParams etRlp = new RelativeLayout.LayoutParams(
                                     RelativeLayout.LayoutParams.MATCH_PARENT,
                                     RelativeLayout.LayoutParams.MATCH_PARENT);
@@ -10297,24 +10297,39 @@ public class PinActivity extends AppCompatActivity {
                             etItems[mi2] = et2;
                             etWrapper.addView(et2);
 
-                            // X 버튼 (오른쪽 끝, 텍스트 있을 때만 표시)
+                            // 삭제 버튼 (오른쪽 끝, 텍스트 있을 때만 표시)
                             TextView btnX = new TextView(this);
-                            btnX.setText("✕");
-                            btnX.setTextColor(Color.parseColor("#AAAAAA"));
-                            btnX.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
+                            btnX.setText("삭제");
+                            btnX.setTextColor(Color.WHITE);
+                            btnX.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 10);
+                            btnX.setTypeface(null, android.graphics.Typeface.BOLD);
                             btnX.setGravity(Gravity.CENTER);
+                            android.graphics.drawable.GradientDrawable xBg =
+                                    new android.graphics.drawable.GradientDrawable();
+                            xBg.setColor(Color.parseColor("#E74C3C"));
+                            xBg.setCornerRadius(dpToPx(4));
+                            btnX.setBackground(xBg);
                             btnX.setVisibility(etVal.isEmpty() ? android.view.View.GONE : android.view.View.VISIBLE);
+                            btnX.setPadding(dpToPx(5), dpToPx(3), dpToPx(5), dpToPx(3));
                             RelativeLayout.LayoutParams xRlp = new RelativeLayout.LayoutParams(
-                                    dpToPx(36), RelativeLayout.LayoutParams.MATCH_PARENT);
+                                    RelativeLayout.LayoutParams.WRAP_CONTENT,
+                                    RelativeLayout.LayoutParams.WRAP_CONTENT);
                             xRlp.addRule(RelativeLayout.ALIGN_PARENT_END);
                             xRlp.addRule(RelativeLayout.CENTER_VERTICAL);
+                            xRlp.setMargins(0, 0, dpToPx(4), 0);
                             btnX.setLayoutParams(xRlp);
                             btnX.setOnClickListener(xv -> {
                                 et2.setText("");
                                 btnX.setVisibility(android.view.View.GONE);
-                                et2.requestFocus();
-                                if (immMemo != null) immMemo.showSoftInput(et2,
-                                        android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                                // 키보드 올리지 않고 입력 상태로만 변경
+                                et2.clearFocus();
+                                android.graphics.drawable.GradientDrawable resetBg =
+                                        new android.graphics.drawable.GradientDrawable();
+                                resetBg.setCornerRadius(dpToPx(6));
+                                resetBg.setColor(Color.parseColor("#BBBBBB"));
+                                btnState[finalMi] = 0;
+                                btnNext.setText("입력");
+                                btnNext.setBackground(resetBg);
                             });
                             etWrapper.addView(btnX);
 
