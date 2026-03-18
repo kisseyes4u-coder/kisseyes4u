@@ -133,6 +133,9 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 버스 검색 화면 ─────────────────────────────────────
     private LinearLayout busSearchArea = null;
+    // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
+    private java.util.List<String[]> routeDbList = null; // [routeid, routeno, startNm, endNm, routetp]
+    private java.util.List<String[]> stopDbList  = null; // [nodeid, nodenm, nodeno]
     private LinearLayout busResultContainer = null;
     private LinearLayout busFavSection2 = null;
     private android.widget.EditText busEtSearch = null;
@@ -301,11 +304,13 @@ public class PinActivity extends AppCompatActivity {
                 showSplashProgress();
                 downloadBusRouteDb(() -> {
                     hideSplashProgress();
+                    loadBusDbToMemory();
                     ownerMenuBuilder.build();
                     checkAccessibilityService();
                 }, pct -> updateSplashProgress(pct));
             } else {
                 ownerMenuBuilder.build();
+                loadBusDbToMemory();
                 checkAccessibilityService();
             }
         } else {
@@ -2515,9 +2520,11 @@ public class PinActivity extends AppCompatActivity {
             showSplashProgress();
             downloadBusRouteDb(() -> {
                 hideSplashProgress();
+                loadBusDbToMemory();
                 doCheckVersionThenShowMenu();
             }, pct -> updateSplashProgress(pct));
         } else {
+            loadBusDbToMemory();
             doCheckVersionThenShowMenu();
         }
     }
@@ -9560,20 +9567,6 @@ public class PinActivity extends AppCompatActivity {
     }
 
     /** 로컬 정류장 DB에서 키워드 검색 */
-    private java.util.List<String[]> stopSearchLocal(String keyword) {
-        java.util.List<String[]> result = new java.util.ArrayList<>();
-        String raw = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
-                .getString("all_stops", "");
-        if (raw.isEmpty()) return result;
-        String kw = keyword.toLowerCase();
-        for (String line : raw.split(";")) {
-            String[] p = line.split("\\|", -1);
-            if (p.length < 3) continue;
-            if (p[1].toLowerCase().contains(kw)) result.add(p);
-            if (result.size() >= 30) break; // 최대 30개
-        }
-        return result;
-    }
 
 
     /** 버스 타임라인 UI 렌더링 (정적+실시간 데이터 합산) */
@@ -12846,16 +12839,78 @@ public class PinActivity extends AppCompatActivity {
     private static final String BUS_DB_VER  = "db_version";     // 버전(날짜)
     // 로컬 DB: "routeid|routeno|startnodenm|endnodenm|routetp;..." 형식
 
-    /** 로컬 노선 DB에서 검색 (즉시 반환) */
+    /** SharedPreferences DB를 메모리에 로드 (앱 시작 시 1회) */
+    private void loadBusDbToMemory() {
+        new Thread(() -> {
+            android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
+            // 노선
+            String rawRoute = p.getString(BUS_DB_KEY, "");
+            java.util.List<String[]> rList = new java.util.ArrayList<>();
+            if (!rawRoute.isEmpty()) {
+                for (String line : rawRoute.split(";")) {
+                    String[] parts = line.split("\\|", -1);
+                    if (parts.length >= 5) rList.add(parts);
+                }
+            }
+            // 정류장
+            String rawStop = p.getString("all_stops", "");
+            java.util.List<String[]> sList = new java.util.ArrayList<>();
+            if (!rawStop.isEmpty()) {
+                for (String line : rawStop.split(";")) {
+                    String[] parts = line.split("\\|", -1);
+                    if (parts.length >= 3) sList.add(parts);
+                }
+            }
+            routeDbList = rList;
+            stopDbList  = sList;
+        }).start();
+    }
+
+    /** 로컬 노선 DB에서 검색 (메모리 우선) */
     private java.util.List<String[]> busSearchLocal(String keyword) {
         java.util.List<String[]> result = new java.util.ArrayList<>();
-        String raw = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
-                .getString(BUS_DB_KEY, "");
+        // 메모리 DB 우선
+        if (routeDbList != null) {
+            for (String[] p : routeDbList) {
+                if (p[1].startsWith(keyword)) result.add(p);
+            }
+            return result;
+        }
+        // 폴백: SharedPreferences에서 직접 읽기
+        String raw = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).getString(BUS_DB_KEY, "");
         if (raw.isEmpty()) return result;
         for (String line : raw.split(";")) {
             String[] p = line.split("\\|", -1);
             if (p.length < 5) continue;
             if (p[1].startsWith(keyword)) result.add(p);
+        }
+        return result;
+    }
+
+    /** 로컬 정류장 DB에서 검색 (메모리 우선) */
+    private java.util.List<String[]> stopSearchLocal(String keyword) {
+        java.util.List<String[]> result = new java.util.ArrayList<>();
+        String kw = keyword.toLowerCase();
+        // 메모리 DB 우선
+        if (stopDbList != null) {
+            for (String[] p : stopDbList) {
+                if (p[1].toLowerCase().contains(kw)) {
+                    result.add(p);
+                    if (result.size() >= 30) break;
+                }
+            }
+            return result;
+        }
+        // 폴백: SharedPreferences에서 직접 읽기
+        String raw = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).getString("all_stops", "");
+        if (raw.isEmpty()) return result;
+        for (String line : raw.split(";")) {
+            String[] p = line.split("\\|", -1);
+            if (p.length < 3) continue;
+            if (p[1].toLowerCase().contains(kw)) {
+                result.add(p);
+                if (result.size() >= 30) break;
+            }
         }
         return result;
     }
