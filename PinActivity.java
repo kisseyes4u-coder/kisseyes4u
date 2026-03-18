@@ -971,7 +971,7 @@ public class PinActivity extends AppCompatActivity {
         TextView tvTime = new TextView(this);
         tvTime.setText(timeStr);
         tvTime.setTextColor(Color.parseColor("#AAAAAA"));
-        tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
         tvTime.setTypeface(null, android.graphics.Typeface.BOLD);
         locBox.addView(tvTime);
         topRow.addView(locBox);
@@ -9678,6 +9678,16 @@ public class PinActivity extends AppCompatActivity {
         root.addView(searchArea);
 
 
+        // ── 타임라인 고정 헤더 (708번+방향카드) ──────────
+        LinearLayout fixedHeader = new LinearLayout(this);
+        fixedHeader.setOrientation(LinearLayout.VERTICAL);
+        fixedHeader.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        fixedHeader.setVisibility(android.view.View.GONE);
+        fixedHeader.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        busFixedHeader = fixedHeader;
+        root.addView(fixedHeader);
+
         // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
         ScrollView sv = new ScrollView(this);
         sv.setLayoutParams(new LinearLayout.LayoutParams(
@@ -10759,14 +10769,14 @@ public class PinActivity extends AppCompatActivity {
             TextView tvDir = new TextView(this);
             tvDir.setText(dirLabels[d]);
             tvDir.setTextColor(isCur?Color.WHITE:Color.parseColor("#1A1A2E"));
-            tvDir.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvDir.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
             tvDir.setTypeface(null,isCur?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
             tvDir.setGravity(Gravity.CENTER); tvDir.setSingleLine(true);
             tvDir.setEllipsize(android.text.TextUtils.TruncateAt.END); dc.addView(tvDir);
             TextView tvTime = new TextView(this);
             tvTime.setText(fStF + " ~ " + fEtF);
             tvTime.setTextColor(isCur?Color.parseColor("#D6EAF8"):Color.parseColor("#AAAAAA"));
-            tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
             tvTime.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams tLp2 = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
