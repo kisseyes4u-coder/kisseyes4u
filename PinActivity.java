@@ -8818,34 +8818,58 @@ public class PinActivity extends AppCompatActivity {
             }, 1800);
         });
 
-        // ── 탭 행 (헤더 바로 아래, sticky) ───────────────
-        LinearLayout tabRow = new LinearLayout(this);
-        tabRow.setOrientation(LinearLayout.HORIZONTAL);
-        tabRow.setGravity(Gravity.CENTER_VERTICAL);
-        tabRow.setBackgroundColor(Color.WHITE);
-        tabRow.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48)));
-
+        // ── 탭 카드 행 (통장 잔액 카드와 동일한 파스텔↔진한색 스타일) ──
+        // 색상 정의: [진한색, 파스텔 배경]
+        String[][] tabColors = {
+                {"#0984E3", "#EBF5FB"},   // 버스번호 - 파란색
+                {"#E67E22", "#FEF9E7"},   // 정류장   - 주황색
+                {"#27AE60", "#EAFAF1"},   // 장소     - 초록색
+        };
         String[] tabLabels = {"🚌 버스번호", "🚏 정류장", "📍 장소"};
-        TextView[] tabs = new TextView[3];
+        LinearLayout[] tabCards = new LinearLayout[3];
+        TextView[] tabTvs = new TextView[3];
         LinearLayout[] contentPanels = new LinearLayout[3];
 
+        LinearLayout tabRow = new LinearLayout(this);
+        tabRow.setOrientation(LinearLayout.HORIZONTAL);
+        tabRow.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        tabRow.setClipChildren(false);
+        tabRow.setClipToPadding(false);
+        LinearLayout.LayoutParams tabRowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        tabRowLp.setMargins(dpToPx(10), dpToPx(6), dpToPx(10), dpToPx(4));
+        tabRow.setLayoutParams(tabRowLp);
+
         for (int i = 0; i < 3; i++) {
-            tabs[i] = new TextView(this);
-            tabs[i].setText(tabLabels[i]);
-            tabs[i].setGravity(Gravity.CENTER);
-            tabs[i].setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-            tabs[i].setTypeface(null, i == 0 ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-            tabs[i].setTextColor(i == 0 ? Color.parseColor("#0984E3") : Color.parseColor("#888888"));
-            tabs[i].setLayoutParams(new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-            if (i == 0) {
-                android.graphics.drawable.GradientDrawable sel = new android.graphics.drawable.GradientDrawable();
-                sel.setColor(Color.WHITE);
-                sel.setStroke(dpToPx(2), Color.parseColor("#0984E3"));
-                tabs[i].setBackground(sel);
-            }
-            tabRow.addView(tabs[i]);
+            final int idx = i;
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setGravity(Gravity.CENTER);
+            card.setClipChildren(false);
+            card.setClipToPadding(false);
+            // 초기: 0번 선택(진한), 나머지 파스텔
+            boolean initSel = (i == 0);
+            card.setBackground(makeShadowCardDrawable(
+                    initSel ? tabColors[i][0] : tabColors[i][1], 14, 5));
+            card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+            card.setPadding(dpToPx(4), dpToPx(10), dpToPx(4), dpToPx(10));
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            int mr = (i < 2) ? dpToPx(6) : 0;
+            cp.setMargins(0, 0, mr, 0);
+            card.setLayoutParams(cp);
+
+            TextView tv = new TextView(this);
+            tv.setText(tabLabels[i]);
+            tv.setGravity(Gravity.CENTER);
+            tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tv.setTypeface(null, android.graphics.Typeface.BOLD);
+            tv.setTextColor(initSel ? Color.WHITE : Color.parseColor(tabColors[i][0]));
+            card.addView(tv);
+
+            tabCards[i] = card;
+            tabTvs[i] = tv;
+            tabRow.addView(card);
         }
         root.addView(tabRow);
 
@@ -8874,22 +8898,16 @@ public class PinActivity extends AppCompatActivity {
         }
         root.addView(sv);
 
-        // ── 탭 클릭 처리 ──────────────────────────────────
+        // ── 탭 클릭 처리 (통장 잔액 updateBalCardColors 방식) ──
         for (int i = 0; i < 3; i++) {
             final int idx = i;
-            tabs[i].setOnClickListener(v -> {
+            tabCards[i].setOnClickListener(v -> {
                 for (int j = 0; j < 3; j++) {
-                    boolean sel = j == idx;
-                    tabs[j].setTypeface(null, sel ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-                    tabs[j].setTextColor(sel ? Color.parseColor("#0984E3") : Color.parseColor("#888888"));
-                    if (sel) {
-                        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-                        bg.setColor(Color.WHITE);
-                        bg.setStroke(dpToPx(2), Color.parseColor("#0984E3"));
-                        tabs[j].setBackground(bg);
-                    } else {
-                        tabs[j].setBackground(null);
-                    }
+                    boolean sel = (j == idx);
+                    tabCards[j].setBackground(makeShadowCardDrawable(
+                            sel ? tabColors[j][0] : tabColors[j][1], 14, 5));
+                    tabCards[j].setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                    tabTvs[j].setTextColor(sel ? Color.WHITE : Color.parseColor(tabColors[j][0]));
                     contentPanels[j].setVisibility(sel ? android.view.View.VISIBLE : android.view.View.GONE);
                 }
                 sv.smoothScrollTo(0, 0);
