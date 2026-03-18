@@ -9527,50 +9527,51 @@ public class PinActivity extends AppCompatActivity {
 
                         // ── 버스가 이 정류소 위에 있으면 버스 행 먼저 ──
                         if (hasBus) {
+                            // 차량번호에서 숫자 4자리만 추출 (예: 대전75자1234 → 1234)
+                            String shortNo = vehicleNo.replaceAll("[^0-9]", "");
+                            if (shortNo.length() > 4) shortNo = shortNo.substring(shortNo.length() - 4);
+
                             LinearLayout busRow = new LinearLayout(this);
                             busRow.setOrientation(LinearLayout.HORIZONTAL);
                             busRow.setGravity(Gravity.CENTER_VERTICAL);
                             busRow.setLayoutParams(new LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-                            busRow.setPadding(0, dpToPx(2), 0, dpToPx(2));
+                                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(32)));
 
-                            // 타임라인 선 (버스 행 - 원 없이 선만)
-                            final boolean fLastB = isLast;
-                            android.view.View busLine = new android.view.View(this) {
+                            // 타임라인 열: 선 + 버스 이모지 오버레이
+                            final String fShortNo = shortNo;
+                            android.view.View busTimeline = new android.view.View(this) {
                                 @Override protected void onDraw(android.graphics.Canvas canvas) {
                                     super.onDraw(canvas);
-                                    android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                    p.setColor(Color.parseColor("#CCCCCC"));
-                                    p.setStrokeWidth(dpToPx(3));
-                                    canvas.drawLine(getWidth()/2f, 0, getWidth()/2f, getHeight(), p);
+                                    int w = getWidth(), h = getHeight();
+                                    float cx = w / 2f;
+                                    // 세로선
+                                    android.graphics.Paint lp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                                    lp.setColor(Color.parseColor("#CCCCCC"));
+                                    lp.setStrokeWidth(dpToPx(3));
+                                    canvas.drawLine(cx, 0, cx, h, lp);
+                                    // 버스 이모지 텍스트
+                                    android.graphics.Paint tp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                                    tp.setTextSize(dpToPx(18));
+                                    tp.setTextAlign(android.graphics.Paint.Align.CENTER);
+                                    canvas.drawText("🚌", cx, h / 2f + dpToPx(7), tp);
                                 }
                             };
-                            busLine.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), dpToPx(36)));
-                            busRow.addView(busLine);
+                            busTimeline.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
+                            busRow.addView(busTimeline);
 
-                            // 버스 이모지 + 차량번호
-                            LinearLayout busInfoWrap = new LinearLayout(this);
-                            busInfoWrap.setOrientation(LinearLayout.HORIZONTAL);
-                            busInfoWrap.setGravity(Gravity.CENTER_VERTICAL);
-                            LinearLayout.LayoutParams biwLp = new LinearLayout.LayoutParams(
-                                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                            biwLp.setMargins(dpToPx(4), 0, 0, 0);
-                            busInfoWrap.setLayoutParams(biwLp);
-
-                            TextView tvBusEmoji = new TextView(this);
-                            tvBusEmoji.setText("🚌");
-                            tvBusEmoji.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
-                            busInfoWrap.addView(tvBusEmoji);
-
-                            if (!vehicleNo.isEmpty()) {
+                            // 차량번호 4자리
+                            if (!shortNo.isEmpty()) {
                                 TextView tvVehicle = new TextView(this);
-                                tvVehicle.setText("  " + vehicleNo);
-                                tvVehicle.setTextColor(Color.parseColor("#E74C3C"));
-                                tvVehicle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                                tvVehicle.setText(shortNo);
+                                tvVehicle.setTextColor(Color.parseColor("#2C3E50"));
+                                tvVehicle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                                 tvVehicle.setTypeface(null, android.graphics.Typeface.BOLD);
-                                busInfoWrap.addView(tvVehicle);
+                                LinearLayout.LayoutParams vLp = new LinearLayout.LayoutParams(
+                                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                                vLp.setMargins(dpToPx(8), 0, 0, 0);
+                                tvVehicle.setLayoutParams(vLp);
+                                busRow.addView(tvVehicle);
                             }
-                            busRow.addView(busInfoWrap);
                             container.addView(busRow);
                         }
 
