@@ -12934,13 +12934,68 @@ public class PinActivity extends AppCompatActivity {
             });
             rCard.addView(tvRStar);
 
-            // 카드 탭 → 해당 노선 타임라인
+            // 카드 탭 → 즉시 타임라인 (캐시 있으면 UI 스레드에서 바로 렌더링)
             final String fRId = rId, fRNo = rNo, fRDirKey = rDirKey;
             rCard.setOnClickListener(v2 -> {
+                if (fRId.isEmpty()) return;
                 resultContainer.removeAllViews();
-                if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
+                if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
-                if (!fRId.isEmpty()) {
+                android.view.inputmethod.InputMethodManager immF =
+                        (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                if (immF != null) immF.hideSoftInputFromWindow(resultContainer.getWindowToken(), 0);
+
+                // 캐시에서 즉시 읽기
+                android.content.SharedPreferences fc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                String fcKey = "route_" + fRId;
+                boolean hasCache = fc.contains(fcKey + "_startNm")
+                        && !fc.getString(fcKey + "_stops", "").isEmpty();
+
+                if (hasCache) {
+                    // ── 캐시 HIT: UI 스레드에서 즉시 렌더링 ──
+                    String sNm = fc.getString(fcKey+"_startNm","기점");
+                    String eNm = fc.getString(fcKey+"_endNm","종점");
+                    String sTm = fc.getString(fcKey+"_startTime","");
+                    String eTm = fc.getString(fcKey+"_endTime","");
+                    String inv = fc.getString(fcKey+"_interval","");
+                    String rTp = fc.getString(fcKey+"_rTp","");
+                    String stF = sTm.length()==4 ? sTm.substring(0,2)+":"+sTm.substring(2) : sTm;
+                    String etF = eTm.length()==4 ? eTm.substring(0,2)+":"+eTm.substring(2) : eTm;
+                    java.util.List<String[]> stops = new java.util.ArrayList<>();
+                    for (String line : fc.getString(fcKey+"_stops","").split(";")) {
+                        String[] p = line.split("\\|",-1);
+                        if (p.length==4) stops.add(p);
+                    }
+                    if ("reverse".equals(fRDirKey)) java.util.Collections.reverse(stops);
+                    // 즉시 표시 (운행대수 0, 버스위치 없음)
+                    renderBusTimeline(fRId, fRNo, fRDirKey, resultContainer,
+                            sNm, eNm, stF, etF, inv, rTp,
+                            0, new java.util.HashMap<>(), new java.util.HashSet<>(), stops);
+                    // 실시간만 백그라운드
+                    final java.util.List<String[]> fStops = stops;
+                    final String fSNm=sNm,fENm=eNm,fStF=stF,fEtF=etF,fInv=inv,fRTp2=rTp;
+                    new Thread(() -> {
+                        try {
+                            String lcXml = httpGet(BUS_BASE2+"BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                    +"?serviceKey="+BUS_KEY+"&cityCode="+BUS_CITY
+                                    +"&routeId="+fRId+"&numOfRows=50&pageNo=1&_type=xml");
+                            int cnt=0;
+                            try{cnt=Integer.parseInt(tag(lcXml,"totalCount"));}catch(Exception ig){}
+                            java.util.Set<String> ordSet=new java.util.HashSet<>();
+                            java.util.Map<String,String> vehMap=new java.util.HashMap<>();
+                            for (String item:lcXml.split("<item>")) {
+                                String ord=tag(item,"nodeord"),vno=tag(item,"vehicleno");
+                                if(!ord.isEmpty()){ordSet.add(ord);if(!vno.isEmpty())vehMap.put(ord,vno);}
+                            }
+                            final int fCnt=cnt;
+                            final java.util.Set<String> fOrd=ordSet;
+                            final java.util.Map<String,String> fVeh=vehMap;
+                            runOnUiThread(()->renderBusTimeline(fRId,fRNo,fRDirKey,resultContainer,
+                                    fSNm,fENm,fStF,fEtF,fInv,fRTp2,fCnt,fVeh,fOrd,fStops));
+                        } catch(Exception ignored){}
+                    }).start();
+                } else {
+                    // 캐시 없으면 기존 방식
                     busScreenLoadStops(fRId, fRNo, resultContainer, fRDirKey, "");
                 }
             });
@@ -13039,8 +13094,49 @@ public class PinActivity extends AppCompatActivity {
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
 
                 if (!fRouteId.isEmpty()) {
-                    // routeId 있으면 바로 이동 (캐시도 있을 가능성 높음)
-                    busScreenLoadStops(fRouteId, fRouteNo, resultContainer);
+                    // routeId 있으면 캐시 즉시 확인 후 렌더링
+                    android.content.SharedPreferences fc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                    String fcKey2 = "route_" + fRouteId;
+                    boolean hasCache2 = fc2.contains(fcKey2+"_startNm")
+                            && !fc2.getString(fcKey2+"_stops","").isEmpty();
+                    if (hasCache2) {
+                        String sNm2=fc2.getString(fcKey2+"_startNm","기점");
+                        String eNm2=fc2.getString(fcKey2+"_endNm","종점");
+                        String sTm2=fc2.getString(fcKey2+"_startTime","");
+                        String eTm2=fc2.getString(fcKey2+"_endTime","");
+                        String inv2=fc2.getString(fcKey2+"_interval","");
+                        String rTp2=fc2.getString(fcKey2+"_rTp","");
+                        String stF2=sTm2.length()==4?sTm2.substring(0,2)+":"+sTm2.substring(2):sTm2;
+                        String etF2=eTm2.length()==4?eTm2.substring(0,2)+":"+eTm2.substring(2):eTm2;
+                        java.util.List<String[]> stops2=new java.util.ArrayList<>();
+                        for (String line:fc2.getString(fcKey2+"_stops","").split(";")) {
+                            String[] p=line.split("\\|",-1); if(p.length==4) stops2.add(p);
+                        }
+                        renderBusTimeline(fRouteId,fRouteNo,"forward",resultContainer,
+                                sNm2,eNm2,stF2,etF2,inv2,rTp2,
+                                0,new java.util.HashMap<>(),new java.util.HashSet<>(),stops2);
+                        final java.util.List<String[]> fS2=stops2;
+                        final String fSN2=sNm2,fEN2=eNm2,fStF2=stF2,fEtF2=etF2,fInv2=inv2,fRT2=rTp2;
+                        new Thread(()->{
+                            try {
+                                String lc=httpGet(BUS_BASE2+"BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                        +"?serviceKey="+BUS_KEY+"&cityCode="+BUS_CITY
+                                        +"&routeId="+fRouteId+"&numOfRows=50&pageNo=1&_type=xml");
+                                int c=0; try{c=Integer.parseInt(tag(lc,"totalCount"));}catch(Exception ig){}
+                                java.util.Set<String> os=new java.util.HashSet<>();
+                                java.util.Map<String,String> vm=new java.util.HashMap<>();
+                                for(String item:lc.split("<item>")){
+                                    String o=tag(item,"nodeord"),v=tag(item,"vehicleno");
+                                    if(!o.isEmpty()){os.add(o);if(!v.isEmpty())vm.put(o,v);}
+                                }
+                                final int fc3=c; final java.util.Set<String> fo=os; final java.util.Map<String,String> fv=vm;
+                                runOnUiThread(()->renderBusTimeline(fRouteId,fRouteNo,"forward",resultContainer,
+                                        fSN2,fEN2,fStF2,fEtF2,fInv2,fRT2,fc3,fv,fo,fS2));
+                            }catch(Exception ignored){}
+                        }).start();
+                    } else {
+                        busScreenLoadStops(fRouteId, fRouteNo, resultContainer);
+                    }
                 } else {
                     // routeId 없으면 API로 조회 (구버전 즐겨찾기 호환)
                     TextView tvLoading = new TextView(this);
