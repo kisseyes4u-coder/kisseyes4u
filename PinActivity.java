@@ -4294,6 +4294,9 @@ public class PinActivity extends AppCompatActivity {
         heroBg.addView(tickerFrame);
         layout.addView(heroBg);
 
+        // ── 버스 도착정보 섹션 ────────────────────────────────
+        layout.addView(buildBusSection());
+
         // ── 잔액 데이터 로드 ──────────────────────────────────
         if (cachedBlocks != null && !cachedBlocks.isEmpty()) {
             updateMenuBalCards(cachedBlocks);
@@ -11155,5 +11158,362 @@ public class PinActivity extends AppCompatActivity {
             @Override public int getOpacity() {
                 return android.graphics.PixelFormat.TRANSLUCENT; }
         };
+    }
+
+    // ══════════════════════════════════════════════════════
+    //  버스 도착정보 섹션
+    // ══════════════════════════════════════════════════════
+    private static final String BUS_API_KEY = "4f9182aa6a8d775a6013c074fc5620578371c0031a6f97e9c0434e3973bcf1d5";
+    private static final String PREF_BUS_STOP_ID   = "bus_stop_id";
+    private static final String PREF_BUS_STOP_NAME = "bus_stop_name";
+
+    private LinearLayout busArrivalContainer; // 도착정보 목록 컨테이너
+    private TextView     busTitleLabel;        // "정류소명" 표시
+
+    /** 날씨카드 아래 버스 섹션 빌드 */
+    private LinearLayout buildBusSection() {
+        LinearLayout section = new LinearLayout(this);
+        section.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams secLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        secLp.setMargins(dpToPx(12), dpToPx(10), dpToPx(12), 0);
+        section.setLayoutParams(secLp);
+
+        // ── 헤더 행: 🚌 정류소명 + [검색] 버튼 ──────────────
+        LinearLayout headerRow = new LinearLayout(this);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        headerRow.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        busTitleLabel = new TextView(this);
+        android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        String savedName = prefs.getString(PREF_BUS_STOP_NAME, "");
+        busTitleLabel.setText("🚌 " + (savedName.isEmpty() ? "버스 정류소" : savedName));
+        busTitleLabel.setTextColor(Color.parseColor("#1A1A2E"));
+        busTitleLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        busTitleLabel.setTypeface(null, android.graphics.Typeface.BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        busTitleLabel.setLayoutParams(titleLp);
+        headerRow.addView(busTitleLabel);
+
+        // 검색 버튼
+        TextView btnSearch = new TextView(this);
+        btnSearch.setText("🔍 검색");
+        btnSearch.setTextColor(Color.parseColor("#6C5CE7"));
+        btnSearch.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+        btnSearch.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnSearch.setPadding(dpToPx(10), dpToPx(4), dpToPx(10), dpToPx(4));
+        android.graphics.drawable.GradientDrawable btnBg = new android.graphics.drawable.GradientDrawable();
+        btnBg.setColor(Color.parseColor("#EDE9FF"));
+        btnBg.setCornerRadius(dpToPx(12));
+        btnSearch.setBackground(btnBg);
+        btnSearch.setOnClickListener(v -> showBusStopSearchDialog());
+        headerRow.addView(btnSearch);
+
+        section.addView(headerRow);
+
+        // ── 도착정보 컨테이너 ───────────────────────────────
+        busArrivalContainer = new LinearLayout(this);
+        busArrivalContainer.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams contLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        contLp.setMargins(0, dpToPx(6), 0, 0);
+        busArrivalContainer.setLayoutParams(contLp);
+        section.addView(busArrivalContainer);
+
+        // 저장된 정류소가 있으면 자동 로드
+        String savedId = prefs.getString(PREF_BUS_STOP_ID, "");
+        if (!savedId.isEmpty()) {
+            loadBusArrival(savedId, savedName);
+        } else {
+            TextView tvHint = new TextView(this);
+            tvHint.setText("🔍 버튼을 눌러 정류소를 검색하세요");
+            tvHint.setTextColor(Color.parseColor("#AAAAAA"));
+            tvHint.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvHint.setPadding(0, dpToPx(4), 0, dpToPx(4));
+            busArrivalContainer.addView(tvHint);
+        }
+
+        return section;
+    }
+
+    /** 정류소 검색 다이얼로그 */
+    private void showBusStopSearchDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("정류소 검색");
+
+        final android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint("정류소 이름 입력 (예: 지족동)");
+        input.setPadding(dpToPx(16), dpToPx(12), dpToPx(16), dpToPx(12));
+        builder.setView(input);
+
+        builder.setPositiveButton("검색", (dialog, which) -> {
+            String keyword = input.getText().toString().trim();
+            if (!keyword.isEmpty()) searchBusStop(keyword);
+        });
+        builder.setNegativeButton("취소", null);
+        builder.show();
+    }
+
+    /** 대전 정류소 검색 API 호출 */
+    private void searchBusStop(String keyword) {
+        busArrivalContainer.removeAllViews();
+        TextView tvLoading = new TextView(this);
+        tvLoading.setText("검색 중...");
+        tvLoading.setTextColor(Color.parseColor("#AAAAAA"));
+        tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+        busArrivalContainer.addView(tvLoading);
+
+        new Thread(() -> {
+            try {
+                String encoded = java.net.URLEncoder.encode(keyword, "UTF-8");
+                String url = "https://apis.data.go.kr/6300000/BusStopService/getBusStopList"
+                        + "?serviceKey=" + BUS_API_KEY
+                        + "&pageNo=1&numOfRows=20"
+                        + "&bsNm=" + encoded;
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
+                        new java.net.URL(url).openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                java.io.BufferedReader br = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+                br.close();
+
+                // XML 파싱
+                java.util.List<String[]> stops = parseBusStopList(sb.toString()); // [id, name]
+                runOnUiThread(() -> showBusStopSelectDialog(stops));
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    busArrivalContainer.removeAllViews();
+                    TextView tvErr = new TextView(this);
+                    tvErr.setText("검색 실패: " + e.getMessage());
+                    tvErr.setTextColor(Color.parseColor("#E74C3C"));
+                    tvErr.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                    busArrivalContainer.addView(tvErr);
+                });
+            }
+        }).start();
+    }
+
+    /** 정류소 목록 XML 파싱 → [bsId, bsNm] */
+    private java.util.List<String[]> parseBusStopList(String xml) {
+        java.util.List<String[]> list = new java.util.ArrayList<>();
+        try {
+            org.xmlpull.v1.XmlPullParserFactory factory = org.xmlpull.v1.XmlPullParserFactory.newInstance();
+            org.xmlpull.v1.XmlPullParser parser = factory.newPullParser();
+            parser.setInput(new java.io.StringReader(xml));
+            int event = parser.getEventType();
+            String tag = "";
+            String bsId = "", bsNm = "";
+            while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                if (event == org.xmlpull.v1.XmlPullParser.START_TAG) {
+                    tag = parser.getName();
+                } else if (event == org.xmlpull.v1.XmlPullParser.TEXT) {
+                    String text = parser.getText().trim();
+                    if ("bsId".equals(tag)) bsId = text;
+                    else if ("bsNm".equals(tag)) bsNm = text;
+                } else if (event == org.xmlpull.v1.XmlPullParser.END_TAG) {
+                    if ("item".equals(parser.getName()) && !bsId.isEmpty()) {
+                        list.add(new String[]{bsId, bsNm});
+                        bsId = ""; bsNm = "";
+                    }
+                }
+                event = parser.next();
+            }
+        } catch (Exception e) {
+            android.util.Log.e("BUS_API", "parseBusStopList: " + e.getMessage());
+        }
+        return list;
+    }
+
+    /** 정류소 선택 다이얼로그 */
+    private void showBusStopSelectDialog(java.util.List<String[]> stops) {
+        if (stops.isEmpty()) {
+            busArrivalContainer.removeAllViews();
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText("검색 결과가 없습니다");
+            tvEmpty.setTextColor(Color.parseColor("#AAAAAA"));
+            tvEmpty.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            busArrivalContainer.addView(tvEmpty);
+            return;
+        }
+        String[] names = new String[stops.size()];
+        for (int i = 0; i < stops.size(); i++) names[i] = stops.get(i)[1];
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("정류소 선택")
+                .setItems(names, (dialog, which) -> {
+                    String[] selected = stops.get(which);
+                    String stopId = selected[0];
+                    String stopName = selected[1];
+                    // 저장
+                    getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                            .putString(PREF_BUS_STOP_ID, stopId)
+                            .putString(PREF_BUS_STOP_NAME, stopName)
+                            .apply();
+                    busTitleLabel.setText("🚌 " + stopName);
+                    loadBusArrival(stopId, stopName);
+                })
+                .setNegativeButton("취소", null)
+                .show();
+    }
+
+    /** 실시간 버스 도착정보 로드 */
+    private void loadBusArrival(String stopId, String stopName) {
+        busArrivalContainer.removeAllViews();
+        TextView tvLoading = new TextView(this);
+        tvLoading.setText("도착 정보 불러오는 중...");
+        tvLoading.setTextColor(Color.parseColor("#AAAAAA"));
+        tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+        busArrivalContainer.addView(tvLoading);
+
+        new Thread(() -> {
+            try {
+                String url = "https://apis.data.go.kr/6300000/BusArrivalService/getBusArrivalList"
+                        + "?serviceKey=" + BUS_API_KEY
+                        + "&pageNo=1&numOfRows=20"
+                        + "&bsId=" + stopId;
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
+                        new java.net.URL(url).openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                java.io.BufferedReader br = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+                br.close();
+
+                java.util.List<String[]> arrivals = parseBusArrivalList(sb.toString());
+                runOnUiThread(() -> renderBusArrivals(arrivals, stopId, stopName));
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    busArrivalContainer.removeAllViews();
+                    TextView tvErr = new TextView(this);
+                    tvErr.setText("도착 정보 조회 실패");
+                    tvErr.setTextColor(Color.parseColor("#E74C3C"));
+                    tvErr.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                    busArrivalContainer.addView(tvErr);
+                });
+            }
+        }).start();
+    }
+
+    /** 도착정보 XML 파싱 → [버스번호, 남은정류장, 도착시각] */
+    private java.util.List<String[]> parseBusArrivalList(String xml) {
+        java.util.List<String[]> list = new java.util.ArrayList<>();
+        try {
+            org.xmlpull.v1.XmlPullParserFactory factory = org.xmlpull.v1.XmlPullParserFactory.newInstance();
+            org.xmlpull.v1.XmlPullParser parser = factory.newPullParser();
+            parser.setInput(new java.io.StringReader(xml));
+            int event = parser.getEventType();
+            String tag = "";
+            String rtNm = "", arrTm = "", arrPrevSttnCnt = "";
+            while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                if (event == org.xmlpull.v1.XmlPullParser.START_TAG) {
+                    tag = parser.getName();
+                } else if (event == org.xmlpull.v1.XmlPullParser.TEXT) {
+                    String text = parser.getText().trim();
+                    if ("rtNm".equals(tag))            rtNm = text;             // 버스번호
+                    else if ("arrTm".equals(tag))      arrTm = text;            // 도착예정시각(초)
+                    else if ("arrPrevSttnCnt".equals(tag)) arrPrevSttnCnt = text; // 남은정류장수
+                } else if (event == org.xmlpull.v1.XmlPullParser.END_TAG) {
+                    if ("item".equals(parser.getName()) && !rtNm.isEmpty()) {
+                        // 도착시각(초) → 분 변환
+                        String arrMin = "-";
+                        try {
+                            int sec = Integer.parseInt(arrTm);
+                            int min = sec / 60;
+                            arrMin = min + "분 후";
+                        } catch (Exception ig) { arrMin = arrTm; }
+                        list.add(new String[]{rtNm, arrPrevSttnCnt + "정류장", arrMin});
+                        rtNm = ""; arrTm = ""; arrPrevSttnCnt = "";
+                    }
+                }
+                event = parser.next();
+            }
+        } catch (Exception e) {
+            android.util.Log.e("BUS_API", "parseBusArrivalList: " + e.getMessage());
+        }
+        return list;
+    }
+
+    /** 도착정보 UI 렌더링 */
+    private void renderBusArrivals(java.util.List<String[]> arrivals, String stopId, String stopName) {
+        busArrivalContainer.removeAllViews();
+
+        if (arrivals.isEmpty()) {
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText("현재 도착 예정 버스가 없습니다");
+            tvEmpty.setTextColor(Color.parseColor("#AAAAAA"));
+            tvEmpty.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvEmpty.setPadding(0, dpToPx(4), 0, dpToPx(4));
+            busArrivalContainer.addView(tvEmpty);
+        } else {
+            for (String[] arr : arrivals) {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 4));
+                row.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rowLp.setMargins(0, 0, 0, dpToPx(6));
+                row.setLayoutParams(rowLp);
+                row.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8));
+
+                // 버스 번호
+                TextView tvBusNo = new TextView(this);
+                tvBusNo.setText(arr[0]);
+                tvBusNo.setTextColor(Color.parseColor("#6C5CE7"));
+                tvBusNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                tvBusNo.setTypeface(null, android.graphics.Typeface.BOLD);
+                LinearLayout.LayoutParams busNoLp = new LinearLayout.LayoutParams(
+                        dpToPx(70), LinearLayout.LayoutParams.WRAP_CONTENT);
+                tvBusNo.setLayoutParams(busNoLp);
+                row.addView(tvBusNo);
+
+                // 남은 정류장
+                TextView tvStops = new TextView(this);
+                tvStops.setText(arr[1]);
+                tvStops.setTextColor(Color.parseColor("#888888"));
+                tvStops.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                LinearLayout.LayoutParams stopsLp = new LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                tvStops.setLayoutParams(stopsLp);
+                row.addView(tvStops);
+
+                // 도착 시각
+                TextView tvArrTime = new TextView(this);
+                tvArrTime.setText(arr[2]);
+                tvArrTime.setTextColor(Color.parseColor("#E74C3C"));
+                tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvArrTime.setGravity(Gravity.END);
+                row.addView(tvArrTime);
+
+                busArrivalContainer.addView(row);
+            }
+        }
+
+        // 새로고침 버튼
+        TextView btnRefresh = new TextView(this);
+        btnRefresh.setText("↻ 새로고침");
+        btnRefresh.setTextColor(Color.parseColor("#6C5CE7"));
+        btnRefresh.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        btnRefresh.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams rfLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rfLp.setMargins(0, dpToPx(2), 0, dpToPx(8));
+        btnRefresh.setLayoutParams(rfLp);
+        btnRefresh.setOnClickListener(v -> loadBusArrival(stopId, stopName));
+        busArrivalContainer.addView(btnRefresh);
     }
 }
