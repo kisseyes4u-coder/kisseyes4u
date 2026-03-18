@@ -8991,22 +8991,30 @@ public class PinActivity extends AppCompatActivity {
         eBg.setStroke(dpToPx(1), Color.parseColor("#C8BFEF"));
         etSearch.setBackground(eBg);
         // 오른쪽 패딩 넉넉히 줘서 X버튼과 안 겹치게
-        etSearch.setPadding(dpToPx(12), dpToPx(10), dpToPx(40), dpToPx(10));
+        etSearch.setPadding(dpToPx(12), dpToPx(10), dpToPx(50), dpToPx(10));
         etSearch.setLayoutParams(new RelativeLayout.LayoutParams(
                 RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT));
         etWrapper.addView(etSearch);
 
         // X 버튼 (처음엔 숨김)
         TextView btnClear = new TextView(this);
-        btnClear.setText("✕");
-        btnClear.setTextColor(Color.parseColor("#AAAAAA"));
-        btnClear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        btnClear.setText("삭제");
+        btnClear.setTextColor(Color.WHITE);
+        btnClear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+        btnClear.setTypeface(null, android.graphics.Typeface.BOLD);
         btnClear.setGravity(Gravity.CENTER);
         btnClear.setVisibility(android.view.View.GONE);
+        android.graphics.drawable.GradientDrawable clrBg = new android.graphics.drawable.GradientDrawable();
+        clrBg.setColor(Color.parseColor("#E74C3C"));
+        clrBg.setCornerRadius(dpToPx(4));
+        btnClear.setBackground(clrBg);
+        btnClear.setPadding(dpToPx(5), dpToPx(3), dpToPx(5), dpToPx(3));
         RelativeLayout.LayoutParams xLp = new RelativeLayout.LayoutParams(
-                dpToPx(36), RelativeLayout.LayoutParams.MATCH_PARENT);
+                RelativeLayout.LayoutParams.WRAP_CONTENT,
+                RelativeLayout.LayoutParams.WRAP_CONTENT);
         xLp.addRule(RelativeLayout.ALIGN_PARENT_END);
         xLp.addRule(RelativeLayout.CENTER_VERTICAL);
+        xLp.setMargins(0, 0, dpToPx(6), 0);
         btnClear.setLayoutParams(xLp);
         btnClear.setOnClickListener(v -> {
             etSearch.setText("");
@@ -10290,7 +10298,7 @@ public class PinActivity extends AppCompatActivity {
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                                 android.graphics.drawable.GradientDrawable cursorDrawable =
                                         new android.graphics.drawable.GradientDrawable();
-                                cursorDrawable.setColor(Color.parseColor("#6C5CE7"));
+                                cursorDrawable.setColor(Color.parseColor("#222222"));
                                 cursorDrawable.setSize(dpToPx(2), (int)(et2.getTextSize()));
                                 et2.setTextCursorDrawable(cursorDrawable);
                             }
