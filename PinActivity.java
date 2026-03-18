@@ -12937,9 +12937,11 @@ public class PinActivity extends AppCompatActivity {
     private static final String BUS_KEY   = "4f9182aa6a8d775a6013c074fc5620578371c0031a6f97e9c0434e3973bcf1d5";
     private static final String BUS_BASE2 = "https://apis.data.go.kr/1613000/";
     private static final String BUS_CITY  = "25"; // 대전
-    private static final String BUS_DB_PREF = "bus_route_db";
-    private static final String BUS_DB_KEY  = "all_routes";     // 저장 키
-    private static final String BUS_DB_VER  = "db_version";     // 버전(날짜)
+    private static final String BUS_DB_PREF   = "bus_route_db";
+    private static final String BUS_DB_KEY    = "all_routes";
+    private static final String BUS_DB_VER    = "db_version";
+    private static final String BUS_DB_SCHEMA = "db_schema";
+    private static final int    BUS_DB_SCHEMA_VER = 2; // prefix 304개 버전
     // 로컬 DB: "routeid|routeno|startnodenm|endnodenm|routetp;..." 형식
 
     /** SharedPreferences DB를 메모리에 로드 (앱 시작 시 1회) */
@@ -13131,6 +13133,7 @@ public class PinActivity extends AppCompatActivity {
                         .putString(BUS_DB_KEY,  sbRoute.toString())
                         .putString("all_stops", sbStop.toString())
                         .putString(BUS_DB_VER,  today)
+                        .putInt(BUS_DB_SCHEMA,  BUS_DB_SCHEMA_VER)
                         .apply();
                 if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(100));
                 if (onDone != null) runOnUiThread(onDone);
@@ -13145,6 +13148,8 @@ public class PinActivity extends AppCompatActivity {
         android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
         if (!p.contains(BUS_DB_KEY) || p.getString(BUS_DB_KEY,"").isEmpty()) return true;
         if (p.getString("all_stops","").isEmpty()) return true;
+        // 스키마 버전 변경 시 강제 재다운로드
+        if (p.getInt(BUS_DB_SCHEMA, 0) < BUS_DB_SCHEMA_VER) return true;
         String saved = p.getString(BUS_DB_VER, "");
         String today = new java.text.SimpleDateFormat("yyyyMMdd",
                 java.util.Locale.getDefault()).format(new java.util.Date());
