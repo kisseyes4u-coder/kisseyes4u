@@ -9365,9 +9365,9 @@ public class PinActivity extends AppCompatActivity {
         card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, 0, dpToPx(8));
+        lp.setMargins(0, 0, 0, dpToPx(10));
         card.setLayoutParams(lp);
-        card.setPadding(dpToPx(14), dpToPx(10), dpToPx(14), dpToPx(10));
+        card.setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14));
 
         // 제목 행 (배지 + 번호)
         LinearLayout titleRow = new LinearLayout(this);
@@ -9382,18 +9382,18 @@ public class PinActivity extends AppCompatActivity {
             TextView tvBadge = new TextView(this);
             tvBadge.setText(badgeInfo[0]);
             tvBadge.setTextColor(Color.WHITE);
-            tvBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
             tvBadge.setTypeface(null, android.graphics.Typeface.BOLD);
             tvBadge.setGravity(Gravity.CENTER);
-            tvBadge.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+            tvBadge.setPadding(dpToPx(8), dpToPx(3), dpToPx(8), dpToPx(3));
             android.graphics.drawable.GradientDrawable badgeBg =
                     new android.graphics.drawable.GradientDrawable();
             badgeBg.setColor(Color.parseColor(badgeInfo[1]));
-            badgeBg.setCornerRadius(dpToPx(4));
+            badgeBg.setCornerRadius(dpToPx(5));
             tvBadge.setBackground(badgeBg);
             LinearLayout.LayoutParams bdLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            bdLp.setMargins(0, 0, dpToPx(6), 0);
+            bdLp.setMargins(0, 0, dpToPx(8), 0);
             tvBadge.setLayoutParams(bdLp);
             titleRow.addView(tvBadge);
         }
@@ -9401,7 +9401,7 @@ public class PinActivity extends AppCompatActivity {
         TextView tvT = new TextView(this);
         tvT.setText(title);
         tvT.setTextColor(Color.parseColor(titleColor));
-        tvT.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvT.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
         tvT.setTypeface(null, android.graphics.Typeface.BOLD);
         titleRow.addView(tvT);
         card.addView(titleRow);
@@ -9410,23 +9410,14 @@ public class PinActivity extends AppCompatActivity {
             TextView tvS = new TextView(this);
             tvS.setText(sub);
             tvS.setTextColor(Color.parseColor("#555555"));
-            tvS.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvS.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
             LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            sl.setMargins(0, dpToPx(2), 0, 0);
+            sl.setMargins(0, dpToPx(4), 0, 0);
             tvS.setLayoutParams(sl);
             card.addView(tvS);
         }
-
-        TextView tvTap = new TextView(this);
-        tvTap.setText(tap);
-        tvTap.setTextColor(Color.parseColor("#A0A0A0"));
-        tvTap.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        tl.setMargins(0, dpToPx(3), 0, 0);
-        tvTap.setLayoutParams(tl);
-        card.addView(tvTap);
+        // tap 문구 제거
         return card;
     }
 
