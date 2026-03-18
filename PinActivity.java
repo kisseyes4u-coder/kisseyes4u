@@ -10634,7 +10634,9 @@ public class PinActivity extends AppCompatActivity {
                                 new android.app.AlertDialog.Builder(this,
                                         android.R.style.Theme_Material_Light_Dialog_Alert)
                                         .setMessage("입력 내용이 없습니다.")
-                                        .setPositiveButton("확인", null)
+                                        .setPositiveButton("확인", (d2, w2) -> {
+                                            if (dlgHolder[0] != null) dlgHolder[0].dismiss();
+                                        })
                                         .show();
                                 return;
                             }
