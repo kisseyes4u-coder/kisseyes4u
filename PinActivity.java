@@ -3583,6 +3583,141 @@ public class PinActivity extends AppCompatActivity {
             usersContainer.addView(tvLoadingUsers);
             loadUsersList(usersContainer, tvLoadingUsers);
         });
+
+        // ── 버스 데이터 관리 섹션 ────────────────────────────
+        LinearLayout busSecRow = makeSectionTitle("버스 데이터 관리", "#0984E3", TEXT1);
+        LinearLayout.LayoutParams busSecLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        busSecLp.setMargins(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(6));
+        busSecRow.setLayoutParams(busSecLp);
+        layout.addView(busSecRow);
+
+        LinearLayout busManageCard = new LinearLayout(this);
+        busManageCard.setOrientation(LinearLayout.VERTICAL);
+        busManageCard.setBackground(makeShadowCardDrawable("#FFFFFF", 14, 4));
+        busManageCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+        busManageCard.setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14));
+        LinearLayout.LayoutParams bmcLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        bmcLp.setMargins(dpToPx(16), dpToPx(6), dpToPx(16), dpToPx(10));
+        busManageCard.setLayoutParams(bmcLp);
+
+        boolean hasRouteDb = routeDbList != null && !routeDbList.isEmpty();
+        boolean hasStopDb2 = stopDbList != null && !stopDbList.isEmpty();
+
+        TextView tvRouteStatus = new TextView(this);
+        tvRouteStatus.setText("🚌 노선 DB: " + (hasRouteDb ? routeDbList.size() + "개 (매일 자동 갱신)" : "없음"));
+        tvRouteStatus.setTextColor(Color.parseColor(hasRouteDb ? "#27AE60" : "#E74C3C"));
+        tvRouteStatus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        busManageCard.addView(tvRouteStatus);
+
+        TextView tvStopStatus = new TextView(this);
+        tvStopStatus.setText("🚏 정류장 DB: " + (hasStopDb2 ? stopDbList.size() + "개" : "없음"));
+        tvStopStatus.setTextColor(Color.parseColor(hasStopDb2 ? "#27AE60" : "#E74C3C"));
+        tvStopStatus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        LinearLayout.LayoutParams stLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        stLp.setMargins(0, dpToPx(4), 0, dpToPx(12));
+        tvStopStatus.setLayoutParams(stLp);
+        busManageCard.addView(tvStopStatus);
+
+        TextView btnBusManage = new TextView(this);
+        btnBusManage.setText(hasStopDb2 ? "🚏 정류장 DB 업데이트" : "🚏 정류장 DB 생성 (최초 1회)");
+        btnBusManage.setTextColor(Color.WHITE);
+        btnBusManage.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        btnBusManage.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnBusManage.setGravity(Gravity.CENTER);
+        btnBusManage.setPadding(0, dpToPx(12), 0, dpToPx(12));
+        android.graphics.drawable.GradientDrawable btnBusBg = new android.graphics.drawable.GradientDrawable();
+        btnBusBg.setColor(Color.parseColor("#0984E3"));
+        btnBusBg.setCornerRadius(dpToPx(10));
+        btnBusManage.setBackground(btnBusBg);
+        btnBusManage.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        btnBusManage.setOnClickListener(v -> {
+            // ── 프로그레스 다이얼로그 ──
+            android.app.Dialog dlg = new android.app.Dialog(this,
+                    android.R.style.Theme_Material_Light_Dialog_Alert);
+            LinearLayout dlgLayout = new LinearLayout(this);
+            dlgLayout.setOrientation(LinearLayout.VERTICAL);
+            dlgLayout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+            dlgLayout.setBackgroundColor(Color.WHITE);
+
+            TextView tvDlgTitle = new TextView(this);
+            tvDlgTitle.setText("🚏 정류장 DB 수집 중");
+            tvDlgTitle.setTextColor(Color.parseColor("#0984E3"));
+            tvDlgTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+            tvDlgTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+            LinearLayout.LayoutParams dlgTLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            dlgTLp.setMargins(0, 0, 0, dpToPx(6));
+            tvDlgTitle.setLayoutParams(dlgTLp);
+            dlgLayout.addView(tvDlgTitle);
+
+            TextView tvDlgDesc = new TextView(this);
+            tvDlgDesc.setText("대전 전체 정류장 데이터를 수집하고\nDrive에 업로드합니다.");
+            tvDlgDesc.setTextColor(Color.parseColor("#666666"));
+            tvDlgDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            LinearLayout.LayoutParams dlgDLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            dlgDLp.setMargins(0, 0, 0, dpToPx(16));
+            tvDlgDesc.setLayoutParams(dlgDLp);
+            dlgLayout.addView(tvDlgDesc);
+
+            // 프로그레스바
+            android.widget.ProgressBar dlgPb = new android.widget.ProgressBar(
+                    this, null, android.R.attr.progressBarStyleHorizontal);
+            dlgPb.setMax(100);
+            dlgPb.setProgress(0);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                dlgPb.setProgressTintList(android.content.res.ColorStateList.valueOf(
+                        Color.parseColor("#0984E3")));
+                dlgPb.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                        Color.parseColor("#DDEEFF")));
+            }
+            dlgPb.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(10)));
+            dlgLayout.addView(dlgPb);
+
+            // 퍼센트 + 수집된 수
+            TextView tvDlgPct = new TextView(this);
+            tvDlgPct.setText("0%");
+            tvDlgPct.setTextColor(Color.parseColor("#0984E3"));
+            tvDlgPct.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvDlgPct.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvDlgPct.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams pctLp2 = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            pctLp2.setMargins(0, dpToPx(8), 0, 0);
+            tvDlgPct.setLayoutParams(pctLp2);
+            dlgLayout.addView(tvDlgPct);
+
+            dlg.setContentView(dlgLayout);
+            dlg.setCancelable(false);
+            dlg.show();
+
+            btnBusManage.setEnabled(false);
+            btnBusBg.setColor(Color.parseColor("#AAAAAA"));
+
+            buildAndUploadStopDb(() -> {
+                dlg.dismiss();
+                int cnt = stopDbList != null ? stopDbList.size() : 0;
+                tvStopStatus.setText("🚏 정류장 DB: " + cnt + "개");
+                tvStopStatus.setTextColor(Color.parseColor("#27AE60"));
+                btnBusManage.setText("🚏 정류장 DB 업데이트");
+                btnBusBg.setColor(Color.parseColor("#0984E3"));
+                btnBusManage.setEnabled(true);
+                android.widget.Toast.makeText(this,
+                        "✓ " + cnt + "개 정류장 DB 업로드 완료!",
+                        android.widget.Toast.LENGTH_LONG).show();
+            }, pct -> {
+                dlgPb.setProgress(pct);
+                tvDlgPct.setText(pct + "%");
+            });
+        });
+        busManageCard.addView(btnBusManage);
+        layout.addView(busManageCard);
+
         layout.setPadding(0, 0, 0, dpToPx(40));
 
         ScrollView scrollView = new ScrollView(this);
@@ -9116,8 +9251,8 @@ public class PinActivity extends AppCompatActivity {
     }
 
     private void buildDbCard(LinearLayout parent, String icon, String title,
-                              String countText, boolean hasData, String desc,
-                              boolean btnEnabled, Runnable onBtnClick) {
+                             String countText, boolean hasData, String desc,
+                             boolean btnEnabled, Runnable onBtnClick) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(makeShadowCardDrawable("#FFFFFF", 12, 5));
@@ -9827,7 +9962,7 @@ public class PinActivity extends AppCompatActivity {
 
     /** 노선 카드 렌더링 공통 */
     private void renderBusRouteCards(java.util.List<String[]> routes, String routeNo,
-                                      LinearLayout container) {
+                                     LinearLayout container) {
         for (String[] r : routes) {
             String routeTp = r.length > 4 ? r[4] : "";
             LinearLayout card = makeBusCard(
@@ -9849,7 +9984,7 @@ public class PinActivity extends AppCompatActivity {
     }
 
     private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container,
-                                     String direction, String routeType) {
+                                    String direction, String routeType) {
         container.removeAllViews();
         if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
 
@@ -9967,7 +10102,7 @@ public class PinActivity extends AppCompatActivity {
                         stops.add(stop);
                         if (sb.length()>0) sb.append(";");
                         sb.append(stop[0]).append("|").append(stop[1]).append("|")
-                          .append(stop[2]).append("|").append(stop[3]);
+                                .append(stop[2]).append("|").append(stop[3]);
                     }
                     cache.edit().putString(cKey+"_stops", sb.toString()).apply();
 
@@ -13485,8 +13620,8 @@ public class PinActivity extends AppCompatActivity {
                 for (String[] s : resultMap.values()) {
                     if (!first) jsonSb.append(',');
                     jsonSb.append("{\"id\":\"").append(s[0])
-                          .append("\",\"nm\":\"").append(s[1].replace("\"","\\\""))
-                          .append("\",\"no\":\"").append(s[2]).append("\"}");
+                            .append("\",\"nm\":\"").append(s[1].replace("\"","\\\""))
+                            .append("\",\"no\":\"").append(s[2]).append("\"}");
                     first = false;
                 }
                 jsonSb.append("]");
@@ -13589,10 +13724,10 @@ public class PinActivity extends AppCompatActivity {
                         if (!item.contains("<routeid>")) continue;
                         if (sbRoute.length() > 0) sbRoute.append(";");
                         sbRoute.append(tag(item,"routeid")).append("|")
-                               .append(tag(item,"routeno")).append("|")
-                               .append(tag(item,"startnodenm")).append("|")
-                               .append(tag(item,"endnodenm")).append("|")
-                               .append(tag(item,"routetp"));
+                                .append(tag(item,"routeno")).append("|")
+                                .append(tag(item,"startnodenm")).append("|")
+                                .append(tag(item,"endnodenm")).append("|")
+                                .append(tag(item,"routetp"));
                         count++;
                     }
                     doneRoute += count;
