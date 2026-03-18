@@ -9549,7 +9549,7 @@ public class PinActivity extends AppCompatActivity {
                                     // 아래 화살표 ▼
                                     android.graphics.Paint aPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                                     aPaint.setColor(Color.parseColor("#0984E3"));
-                                    float ar = dpToPx(3.5f);
+                                    float ar = dpToPx(4);
                                     float ay = h/2f;
                                     android.graphics.Path path = new android.graphics.Path();
                                     path.moveTo(cx - ar, ay - ar*0.7f);
