@@ -2483,9 +2483,9 @@ public class PinActivity extends AppCompatActivity {
         tvLoading.setTextColor(Color.parseColor("#A89CD0"));
         tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
         tvLoading.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams loadLp = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams loadingLp2 = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        loadLp.setMargins(0, dpToPx(12), 0, 0);
+        loadingLp2.setMargins(0, dpToPx(12), 0, 0);
         tvLoading.setLayoutParams(loadLp);
         center.addView(tvLoading);
 
