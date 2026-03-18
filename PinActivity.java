@@ -133,6 +133,7 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 버스 검색 화면 ─────────────────────────────────────
     private LinearLayout busSearchArea = null; // 검색창 영역 (노선 진입 시 숨김/복원용)
+    private LinearLayout busResultContainer = null; // 검색 결과 컨테이너
 
     // ── UI 참조 (잔액화면 갱신용) ──────────────────────────
     private LinearLayout msgContainer       = null;
@@ -8940,6 +8941,7 @@ public class PinActivity extends AppCompatActivity {
         resultContainer.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         svInner.addView(resultContainer);
+        busResultContainer = resultContainer;
 
         // 즐겨찾기 로드 & 렌더링
         refreshBusFavorites(favSection, resultContainer);
@@ -9739,9 +9741,8 @@ public class PinActivity extends AppCompatActivity {
                                     nowFav ? stopName + " 즐겨찾기 추가" : stopName + " 즐겨찾기 해제",
                                     android.widget.Toast.LENGTH_SHORT).show();
                             // 버스 검색 화면 즐겨찾기 섹션 갱신
-                            if (busFavSection != null) {
-                                refreshBusFavorites(busFavSection,
-                                        (LinearLayout) busFavSection.getParent().getChildAt(1));
+                            if (busFavSection != null && busResultContainer != null) {
+                                refreshBusFavorites(busFavSection, busResultContainer);
                             }
                         });
                         row.addView(tvStar);
