@@ -133,6 +133,7 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 버스 검색 화면 ─────────────────────────────────────
     private LinearLayout busSearchArea = null;
+    private LinearLayout busFixedHeader = null;
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     private java.util.List<String[]> routeDbList = null;
@@ -10446,6 +10447,11 @@ public class PinActivity extends AppCompatActivity {
                 busRefreshHandler.removeCallbacks(busRefreshRunnable);
                 busRefreshRunnable = null;
             }
+            // 고정 헤더 숨김
+            if (busFixedHeader != null) {
+                busFixedHeader.setVisibility(android.view.View.GONE);
+                busFixedHeader.removeAllViews();
+            }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             container.removeAllViews();
@@ -10674,7 +10680,16 @@ public class PinActivity extends AppCompatActivity {
         });
         topHeader.addView(tvRouteStar);
 
-        container.addView(topHeader);
+        // ── 고정 헤더: topHeader + dirRow ──────────────
+        LinearLayout fixedArea = (busFixedHeader != null) ? busFixedHeader : container;
+        fixedArea.removeAllViews();
+        fixedArea.setVisibility(android.view.View.VISIBLE);
+        fixedArea.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        LinearLayout.LayoutParams thLp2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        thLp2.setMargins(dpToPx(12), dpToPx(4), dpToPx(12), 0);
+        topHeader.setLayoutParams(thLp2);
+        fixedArea.addView(topHeader);
 
         // ── 기점↔종점 ────────────────────────────────────
         TextView tvRoute = new TextView(this);
@@ -10729,7 +10744,7 @@ public class PinActivity extends AppCompatActivity {
         dirRow.setClipChildren(false); dirRow.setClipToPadding(false);
         LinearLayout.LayoutParams drLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        drLp.setMargins(0,0,0,dpToPx(8)); dirRow.setLayoutParams(drLp);
+        drLp.setMargins(0,0,0,dpToPx(8));
         String[] dirLabels = {fEndNm + " 방향", fStartNm + " 방향"};
         String[] dirKeys   = {"forward","reverse"};
         for (int d = 0; d < 2; d++) {
@@ -10760,7 +10775,11 @@ public class PinActivity extends AppCompatActivity {
             dc.setOnClickListener(v2 -> busScreenLoadStops(routeId, routeNo, container, dKey, fRTp));
             dirRow.addView(dc);
         }
-        container.addView(dirRow);
+        LinearLayout.LayoutParams drLp2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        drLp2.setMargins(dpToPx(12), 0, dpToPx(12), dpToPx(6));
+        dirRow.setLayoutParams(drLp2);
+        fixedArea.addView(dirRow);
 
         // ── 구분선 ────────────────────────────────────────
         View divider = new View(this);
