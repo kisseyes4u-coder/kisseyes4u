@@ -8734,71 +8734,84 @@ public class PinActivity extends AppCompatActivity {
         isOnMenuScreen    = false;
         isOnBalanceScreen = false;
 
+        // ── 루트 ──────────────────────────────────────────
         RelativeLayout root = new RelativeLayout(this);
         root.setBackgroundColor(Color.parseColor("#F2F4F8"));
-        root.setPadding(0, 0, 0, 0);
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+
+        // ── topLayout: inset 처리 + 헤더 포함 (스크롤 안) ─
+        LinearLayout topLayout = new LinearLayout(this);
+        topLayout.setOrientation(LinearLayout.VERTICAL);
+        topLayout.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        topLayout.setPadding(0, dpToPx(4), 0, 0);
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(topLayout, (v, insets) -> {
             int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
-            int bot = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars()).bottom;
-            v.setPadding(0, top, 0, bot);
+            v.setPadding(0, top + dpToPx(4), 0, 0);
             return insets;
         });
+        topLayout.setId(View.generateViewId());
+        int topId = topLayout.getId();
+        RelativeLayout.LayoutParams topLp = new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
+        topLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        topLayout.setLayoutParams(topLp);
 
-        // ── 헤더 ──────────────────────────────────────────
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.VERTICAL);
+        // 헤더 그라디언트 바 (스크롤과 함께 사라짐)
+        LinearLayout headerBar = new LinearLayout(this);
+        headerBar.setOrientation(LinearLayout.HORIZONTAL);
+        headerBar.setGravity(Gravity.CENTER_VERTICAL);
         android.graphics.drawable.GradientDrawable hGrad = new android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
                 new int[]{Color.parseColor("#0984E3"), Color.parseColor("#74B9FF")});
         hGrad.setCornerRadii(new float[]{0,0,0,0,dpToPx(20),dpToPx(20),dpToPx(20),dpToPx(20)});
-        header.setBackground(hGrad);
-        header.setPadding(dpToPx(20), dpToPx(14), dpToPx(20), dpToPx(18));
-        header.setId(View.generateViewId());
-        int headerId = header.getId();
-        RelativeLayout.LayoutParams hLp = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
-        hLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        header.setLayoutParams(hLp);
+        headerBar.setBackground(hGrad);
+        headerBar.setPadding(dpToPx(20), dpToPx(14), dpToPx(20), dpToPx(18));
+        LinearLayout.LayoutParams hbLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        hbLp.setMargins(0, 0, 0, dpToPx(0));
+        headerBar.setLayoutParams(hbLp);
 
-        LinearLayout hRow = new LinearLayout(this);
-        hRow.setOrientation(LinearLayout.HORIZONTAL);
-        hRow.setGravity(Gravity.CENTER_VERTICAL);
-        TextView tvIcon = new TextView(this);
-        tvIcon.setText("🚌");
-        tvIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
-        tvIcon.setPadding(0, 0, dpToPx(10), 0);
-        hRow.addView(tvIcon);
-        LinearLayout hTxt = new LinearLayout(this);
-        hTxt.setOrientation(LinearLayout.VERTICAL);
-        TextView hTitle = new TextView(this);
-        hTitle.setText("버스 노선 검색");
-        hTitle.setTextColor(Color.WHITE);
-        hTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 17);
-        hTitle.setTypeface(null, android.graphics.Typeface.BOLD);
-        hTxt.addView(hTitle);
-        TextView hSub = new TextView(this);
-        hSub.setText("버스번호 · 정류장 · 장소로 검색");
-        hSub.setTextColor(Color.parseColor("#D6EAF8"));
-        hSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 11);
-        hTxt.addView(hSub);
-        hRow.addView(hTxt);
-        header.addView(hRow);
+        TextView tvHeaderIcon = new TextView(this);
+        tvHeaderIcon.setText("🚌");
+        tvHeaderIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
+        tvHeaderIcon.setPadding(0, 0, dpToPx(10), 0);
+        headerBar.addView(tvHeaderIcon);
 
-        // ── 탭 행 (버스번호 / 정류장 / 장소) ──────────────
+        LinearLayout headerTxt = new LinearLayout(this);
+        headerTxt.setOrientation(LinearLayout.VERTICAL);
+        headerTxt.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView tvHeaderTitle = new TextView(this);
+        tvHeaderTitle.setText("버스 노선 검색");
+        tvHeaderTitle.setTextColor(Color.WHITE);
+        tvHeaderTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 17);
+        tvHeaderTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        headerTxt.addView(tvHeaderTitle);
+        TextView tvHeaderSub = new TextView(this);
+        tvHeaderSub.setText("버스번호 · 정류장 · 장소로 검색");
+        tvHeaderSub.setTextColor(Color.parseColor("#D6EAF8"));
+        tvHeaderSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 11);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subLp.setMargins(0, dpToPx(2), 0, 0);
+        tvHeaderSub.setLayoutParams(subLp);
+        headerTxt.addView(tvHeaderSub);
+        headerBar.addView(headerTxt);
+        topLayout.addView(headerBar);
+
+        // ── 탭 행 (sticky: topLayout 아래 고정) ──────────
         LinearLayout tabRow = new LinearLayout(this);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
         tabRow.setGravity(Gravity.CENTER_VERTICAL);
         tabRow.setBackgroundColor(Color.WHITE);
         tabRow.setId(View.generateViewId());
         int tabRowId = tabRow.getId();
-        RelativeLayout.LayoutParams tabLp = new RelativeLayout.LayoutParams(
+        RelativeLayout.LayoutParams tabRlLp = new RelativeLayout.LayoutParams(
                 RelativeLayout.LayoutParams.MATCH_PARENT, dpToPx(48));
-        tabLp.addRule(RelativeLayout.BELOW, headerId);
-        tabRow.setLayoutParams(tabLp);
+        tabRlLp.addRule(RelativeLayout.BELOW, topId);
+        tabRow.setLayoutParams(tabRlLp);
 
         String[] tabLabels = {"🚌 버스번호", "🚏 정류장", "📍 장소"};
         TextView[] tabs = new TextView[3];
-        int[] tabState = {0}; // 현재 선택 탭
         LinearLayout[] contentPanels = new LinearLayout[3];
 
         for (int i = 0; i < 3; i++) {
@@ -8808,9 +8821,8 @@ public class PinActivity extends AppCompatActivity {
             tabs[i].setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
             tabs[i].setTypeface(null, i == 0 ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             tabs[i].setTextColor(i == 0 ? Color.parseColor("#0984E3") : Color.parseColor("#888888"));
-            LinearLayout.LayoutParams tLp = new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
-            tabs[i].setLayoutParams(tLp);
+            tabs[i].setLayoutParams(new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
             if (i == 0) {
                 android.graphics.drawable.GradientDrawable sel = new android.graphics.drawable.GradientDrawable();
                 sel.setColor(Color.WHITE);
@@ -8820,75 +8832,7 @@ public class PinActivity extends AppCompatActivity {
             tabRow.addView(tabs[i]);
         }
 
-        // ── 콘텐츠 영역 ───────────────────────────────────
-        ScrollView sv = new ScrollView(this);
-        sv.setClipToPadding(false);
-        RelativeLayout.LayoutParams svLp = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
-        svLp.addRule(RelativeLayout.BELOW, tabRowId);
-        svLp.addRule(RelativeLayout.ABOVE, View.generateViewId());
-        sv.setLayoutParams(svLp);
-
-        LinearLayout svInner = new LinearLayout(this);
-        svInner.setOrientation(LinearLayout.VERTICAL);
-        svInner.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(80));
-        sv.addView(svInner);
-
-        // ── 3개 패널 생성 ──────────────────────────────────
-        for (int i = 0; i < 3; i++) {
-            contentPanels[i] = new LinearLayout(this);
-            contentPanels[i].setOrientation(LinearLayout.VERTICAL);
-            contentPanels[i].setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            contentPanels[i].setVisibility(i == 0 ? android.view.View.VISIBLE : android.view.View.GONE);
-        }
-
-        // 패널0: 버스번호 검색
-        LinearLayout busResultContainer = new LinearLayout(this);
-        busResultContainer.setOrientation(LinearLayout.VERTICAL);
-        busResultContainer.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        buildSearchPanel(contentPanels[0], busResultContainer, 0);
-
-        // 패널1: 정류장 검색
-        LinearLayout stopResultContainer = new LinearLayout(this);
-        stopResultContainer.setOrientation(LinearLayout.VERTICAL);
-        stopResultContainer.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        buildSearchPanel(contentPanels[1], stopResultContainer, 1);
-
-        // 패널2: 장소 검색
-        LinearLayout placeResultContainer = new LinearLayout(this);
-        placeResultContainer.setOrientation(LinearLayout.VERTICAL);
-        placeResultContainer.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        buildSearchPanel(contentPanels[2], placeResultContainer, 2);
-
-        for (LinearLayout p : contentPanels) svInner.addView(p);
-
-        // 탭 클릭 처리
-        for (int i = 0; i < 3; i++) {
-            final int idx = i;
-            tabs[i].setOnClickListener(v -> {
-                tabState[0] = idx;
-                for (int j = 0; j < 3; j++) {
-                    boolean sel = j == idx;
-                    tabs[j].setTypeface(null, sel ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-                    tabs[j].setTextColor(sel ? Color.parseColor("#0984E3") : Color.parseColor("#888888"));
-                    if (sel) {
-                        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-                        bg.setColor(Color.WHITE);
-                        bg.setStroke(dpToPx(2), Color.parseColor("#0984E3"));
-                        tabs[j].setBackground(bg);
-                    } else {
-                        tabs[j].setBackground(null);
-                    }
-                    contentPanels[j].setVisibility(sel ? android.view.View.VISIBLE : android.view.View.GONE);
-                }
-            });
-        }
-
-        // ── 하단 돌아가기 버튼 ────────────────────────────
+        // ── 하단 돌아가기 버튼 (고정) ─────────────────────
         TextView btnBack = new TextView(this);
         btnBack.setText("← 돌아가기");
         btnBack.setTextColor(Color.parseColor("#4A3DBF"));
@@ -8910,14 +8854,61 @@ public class PinActivity extends AppCompatActivity {
             else userMenuBuilder.build(false);
         });
 
-        // sv의 ABOVE 설정 재지정
+        // ── 스크롤 (탭 아래 ~ 돌아가기 위) ──────────────
+        ScrollView sv = new ScrollView(this);
+        sv.setClipToPadding(false);
+        RelativeLayout.LayoutParams svLp = new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT);
+        svLp.addRule(RelativeLayout.BELOW, tabRowId);
         svLp.addRule(RelativeLayout.ABOVE, backId);
         sv.setLayoutParams(svLp);
 
-        root.addView(header);
+        LinearLayout svInner = new LinearLayout(this);
+        svInner.setOrientation(LinearLayout.VERTICAL);
+        svInner.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
+        sv.addView(svInner);
+
+        // ── 3개 콘텐츠 패널 ────────────────────────────────
+        for (int i = 0; i < 3; i++) {
+            contentPanels[i] = new LinearLayout(this);
+            contentPanels[i].setOrientation(LinearLayout.VERTICAL);
+            contentPanels[i].setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            contentPanels[i].setVisibility(i == 0 ? android.view.View.VISIBLE : android.view.View.GONE);
+            LinearLayout resultContainer = new LinearLayout(this);
+            resultContainer.setOrientation(LinearLayout.VERTICAL);
+            resultContainer.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            buildSearchPanel(contentPanels[i], resultContainer, i);
+            svInner.addView(contentPanels[i]);
+        }
+
+        // 탭 클릭 처리
+        for (int i = 0; i < 3; i++) {
+            final int idx = i;
+            tabs[i].setOnClickListener(v -> {
+                for (int j = 0; j < 3; j++) {
+                    boolean sel = j == idx;
+                    tabs[j].setTypeface(null, sel ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+                    tabs[j].setTextColor(sel ? Color.parseColor("#0984E3") : Color.parseColor("#888888"));
+                    if (sel) {
+                        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+                        bg.setColor(Color.WHITE);
+                        bg.setStroke(dpToPx(2), Color.parseColor("#0984E3"));
+                        tabs[j].setBackground(bg);
+                    } else {
+                        tabs[j].setBackground(null);
+                    }
+                    contentPanels[j].setVisibility(sel ? android.view.View.VISIBLE : android.view.View.GONE);
+                }
+                sv.smoothScrollTo(0, 0);
+            });
+        }
+
+        root.addView(topLayout);
         root.addView(tabRow);
-        root.addView(sv);
         root.addView(btnBack);
+        root.addView(sv);
         setContentView(root);
     }
 
