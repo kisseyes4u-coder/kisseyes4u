@@ -10990,58 +10990,13 @@ public class PinActivity extends AppCompatActivity {
                 container.addView(turnRow);
             }
 
+            // 버스 번호 (hasBus 시 사용)
+            final String fShortNo;
             if (hasBus) {
-                String shortNo = vehicleNo.replaceAll("[^0-9]","");
-                if (shortNo.length()>4) shortNo = shortNo.substring(shortNo.length()-4);
-                final String fShortNo = shortNo;
-                android.view.View busTimeline = new android.view.View(this) {
-                    @Override protected void onDraw(android.graphics.Canvas canvas) {
-                        int w=getWidth(), h=getHeight(); float cx=w/2f;
-                        android.graphics.Paint lp2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                        lp2.setColor(Color.parseColor("#AED6F1")); lp2.setStrokeWidth(dpToPx(2));
-                        canvas.drawLine(cx,0,cx,h,lp2);
-                        float boxW=dpToPx(28), emojiH=dpToPx(26), numH=dpToPx(14), gap=dpToPx(1);
-                        float totalH=emojiH+gap+numH, startY=h/2f-totalH/2f, left=cx-boxW/2f;
-                        // 버스 이미지 배경 지우기
-                        android.graphics.Paint bgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                        bgP.setColor(Color.parseColor("#F2F4F8"));
-                        canvas.drawRect(left, startY, left+boxW, startY+emojiH, bgP);
-                        // 버스 이미지
-                        android.graphics.Bitmap bmp = getBusIcon();
-                        if (bmp != null) {
-                            android.graphics.Paint imgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.FILTER_BITMAP_FLAG);
-                            android.graphics.RectF dst = new android.graphics.RectF(left, startY, left+boxW, startY+emojiH);
-                            canvas.drawBitmap(bmp, null, dst, imgP);
-                        } else {
-                            android.graphics.Paint tp2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                            tp2.setTextSize(dpToPx(13)); tp2.setTextAlign(android.graphics.Paint.Align.CENTER);
-                            canvas.drawText("\uD83D\uDE8C", cx, startY+emojiH*0.72f+dpToPx(2), tp2);
-                        }
-                        // 번호
-                        if (!fShortNo.isEmpty()) {
-                            float numY=startY+emojiH+gap;
-                            android.graphics.Paint np2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                            np2.setColor(Color.parseColor("#E74C3C")); np2.setTextSize(dpToPx(8));
-                            np2.setTextAlign(android.graphics.Paint.Align.CENTER); np2.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                            canvas.drawText(fShortNo, cx, numY+numH*0.72f, np2);
-                        }
-                    }
-                };
-                // busRow 없이 busTimeline을 container에 직접 추가 (40dp 고정, 오른쪽 공간 없음)
-                LinearLayout.LayoutParams btLp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50));
-                busTimeline.setLayoutParams(btLp);
-                container.addView(busTimeline);
+                String sn = vehicleNo.replaceAll("[^0-9]","");
+                fShortNo = sn.length()>4 ? sn.substring(sn.length()-4) : sn;
+            } else { fShortNo = ""; }
 
-            }
-            // 정류소 행
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.TOP);
-            row.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            final boolean fFirst2=isFirst, fLast2=isLast, fIsReturn=isReturn;
-
-            // ── 세로줄 + 원을 FrameLayout으로 분리 ──────────
             android.widget.FrameLayout tlFrame = new android.widget.FrameLayout(this);
             tlFrame.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
 
@@ -11106,6 +11061,41 @@ public class PinActivity extends AppCompatActivity {
             circleView.setLayoutParams(cvLp);
             tlFrame.addView(circleView);
 
+            // 버스 오버레이: hasBus일 때 tlFrame 위에 겹쳐서 표시 (별도 행 없음)
+            if (hasBus) {
+                android.view.View busOverlay = new android.view.View(this) {
+                    @Override protected void onDraw(android.graphics.Canvas canvas) {
+                        int w=getWidth(), h=getHeight();
+                        float cx = dpToPx(20); // tlFrame 40dp의 중앙
+                        float boxW=dpToPx(24), imgH=dpToPx(20), numH=dpToPx(10), gap=dpToPx(1);
+                        float totalH = imgH + gap + numH;
+                        float startY = h/2f - totalH/2f - dpToPx(2);
+                        float left = cx - boxW/2f;
+                        // 세로줄 배경 덮기
+                        android.graphics.Paint bgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        bgP.setColor(Color.parseColor("#F2F4F8"));
+                        canvas.drawRect(left-dpToPx(1), startY-dpToPx(1), left+boxW+dpToPx(1), startY+totalH+dpToPx(1), bgP);
+                        // 버스 이미지
+                        android.graphics.Bitmap bmp = getBusIcon();
+                        if (bmp != null) {
+                            android.graphics.Paint imgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.FILTER_BITMAP_FLAG);
+                            canvas.drawBitmap(bmp, null, new android.graphics.RectF(left, startY, left+boxW, startY+imgH), imgP);
+                        }
+                        // 번호
+                        if (!fShortNo.isEmpty()) {
+                            android.graphics.Paint np2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                            np2.setColor(Color.parseColor("#E74C3C")); np2.setTextSize(dpToPx(8));
+                            np2.setTextAlign(android.graphics.Paint.Align.CENTER); np2.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                            canvas.drawText(fShortNo, cx, startY+imgH+gap+numH*0.8f, np2);
+                        }
+                    }
+                };
+                android.widget.FrameLayout.LayoutParams boLp = new android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
+                busOverlay.setLayoutParams(boLp);
+                tlFrame.addView(busOverlay);
+            }
             row.addView(tlFrame);
 
             LinearLayout stopInfo = new LinearLayout(this);
@@ -14447,6 +14437,7 @@ public class PinActivity extends AppCompatActivity {
                 resultContainer.removeAllViews();
                 if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                 android.view.inputmethod.InputMethodManager immF =
                         (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
                 if (immF != null) immF.hideSoftInputFromWindow(resultContainer.getWindowToken(), 0);
@@ -14615,6 +14606,7 @@ public class PinActivity extends AppCompatActivity {
                 resultContainer.removeAllViews();
                 if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
 
                 if (!fRouteId.isEmpty()) {
                     // routeId 있으면 캐시 즉시 확인 후 렌더링
