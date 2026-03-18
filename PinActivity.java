@@ -14039,68 +14039,32 @@ public class PinActivity extends AppCompatActivity {
             rCardLp.setMargins(0, 0, routeColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             rCard.setLayoutParams(rCardLp);
 
-            // 번호 + 즐겨찾기 버튼 행
-            LinearLayout topRow = new LinearLayout(this);
-            topRow.setOrientation(LinearLayout.HORIZONTAL);
-            topRow.setGravity(Gravity.CENTER_VERTICAL);
-            topRow.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-
-            TextView tvRNo = new TextView(this);
-            tvRNo.setText(rNo + "번");
-            tvRNo.setTextColor(Color.parseColor("#0984E3"));
-            tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
-            tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvRNo.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-            topRow.addView(tvRNo);
-
-            // 알림 버튼 + 설정 버튼
+            // 오른쪽 위: 설정 + 알림 버튼 행
             final String fRKey = rKey;
 
             LinearLayout iconBtnRow = new LinearLayout(this);
             iconBtnRow.setOrientation(LinearLayout.HORIZONTAL);
-            iconBtnRow.setGravity(Gravity.CENTER_VERTICAL);
-            LinearLayout.LayoutParams ibrLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            ibrLp.gravity = Gravity.CENTER_VERTICAL;
-            iconBtnRow.setLayoutParams(ibrLp);
+            iconBtnRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+            iconBtnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-            // 알림 버튼 (왼쪽)
-            TextView tvBell = new TextView(this);
-            tvBell.setText("알림");
-            tvBell.setTextColor(Color.parseColor("#5BA9F0"));
-            tvBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-            tvBell.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvBell.setGravity(Gravity.CENTER);
-            tvBell.setPadding(dpToPx(10), dpToPx(5), dpToPx(10), dpToPx(5));
-            android.graphics.drawable.GradientDrawable bellBg = new android.graphics.drawable.GradientDrawable();
-            bellBg.setColor(Color.parseColor("#EBF5FB"));
-            bellBg.setCornerRadius(dpToPx(6));
-            bellBg.setStroke(dpToPx(1), Color.parseColor("#5BA9F0"));
-            tvBell.setBackground(bellBg);
-            LinearLayout.LayoutParams bellLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            bellLp.setMargins(0, 0, dpToPx(5), 0);
-            tvBell.setLayoutParams(bellLp);
-            tvBell.setOnClickListener(v2 -> android.widget.Toast.makeText(this,
-                    rNo + "번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
-            iconBtnRow.addView(tvBell);
-
-            // 설정 버튼 (오른쪽)
+            // 설정 버튼 (왼쪽)
             TextView tvGear = new TextView(this);
             tvGear.setText("설정");
             tvGear.setTextColor(Color.parseColor("#888888"));
-            tvGear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvGear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
             tvGear.setTypeface(null, android.graphics.Typeface.BOLD);
             tvGear.setGravity(Gravity.CENTER);
-            tvGear.setPadding(dpToPx(10), dpToPx(5), dpToPx(10), dpToPx(5));
+            tvGear.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
             android.graphics.drawable.GradientDrawable gearBg = new android.graphics.drawable.GradientDrawable();
             gearBg.setColor(Color.parseColor("#F0F0F0"));
             gearBg.setCornerRadius(dpToPx(6));
             gearBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
             tvGear.setBackground(gearBg);
-            tvGear.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            LinearLayout.LayoutParams gearLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            gearLp.setMargins(0, 0, dpToPx(5), 0);
+            tvGear.setLayoutParams(gearLp);
             tvGear.setOnClickListener(v2 -> {
                 String[] options = {"메모 수정", "즐겨찾기 해제"};
                 new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
@@ -14125,10 +14089,40 @@ public class PinActivity extends AppCompatActivity {
                     }).show();
             });
             iconBtnRow.addView(tvGear);
-            topRow.addView(iconBtnRow);
-            rCard.addView(topRow);
 
-            // 메모/방향 (크게)
+            // 알림 버튼 (오른쪽)
+            TextView tvBell = new TextView(this);
+            tvBell.setText("알림");
+            tvBell.setTextColor(Color.parseColor("#5BA9F0"));
+            tvBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvBell.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvBell.setGravity(Gravity.CENTER);
+            tvBell.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
+            android.graphics.drawable.GradientDrawable bellBg = new android.graphics.drawable.GradientDrawable();
+            bellBg.setColor(Color.parseColor("#EBF5FB"));
+            bellBg.setCornerRadius(dpToPx(6));
+            bellBg.setStroke(dpToPx(1), Color.parseColor("#5BA9F0"));
+            tvBell.setBackground(bellBg);
+            tvBell.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            tvBell.setOnClickListener(v2 -> android.widget.Toast.makeText(this,
+                    rNo + "번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
+            iconBtnRow.addView(tvBell);
+            rCard.addView(iconBtnRow);
+
+            // 버스 번호
+            TextView tvRNo = new TextView(this);
+            tvRNo.setText(rNo + "번");
+            tvRNo.setTextColor(Color.parseColor("#0984E3"));
+            tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
+            tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
+            LinearLayout.LayoutParams rNoLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            rNoLp.setMargins(0, dpToPx(4), 0, 0);
+            tvRNo.setLayoutParams(rNoLp);
+            rCard.addView(tvRNo);
+
+            // 방면 (메모 or 방향)
             String subText = rMemo.isEmpty() ? rDir : rMemo;
             if (!subText.isEmpty()) {
                 TextView tvRSub = new TextView(this);
@@ -14137,10 +14131,11 @@ public class PinActivity extends AppCompatActivity {
                 tvRSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
                 LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                subLp.setMargins(0, dpToPx(4), 0, 0);
+                subLp.setMargins(0, dpToPx(3), 0, 0);
                 tvRSub.setLayoutParams(subLp);
                 rCard.addView(tvRSub);
             }
+
 
             // 카드 탭 → 즉시 타임라인 (캐시 있으면 UI 스레드에서 바로 렌더링)
             final String fRId = rId, fRNo = rNo, fRDirKey = rDirKey;
