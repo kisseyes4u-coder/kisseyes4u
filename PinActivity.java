@@ -12870,11 +12870,13 @@ public class PinActivity extends AppCompatActivity {
     }
 
     /** 대전 전체 노선 + 정류장 DB 다운로드 후 로컬 저장 */
+    interface ProgressCallback { void onProgress(int pct); }
+
     private void downloadBusRouteDb(Runnable onDone) {
         downloadBusRouteDb(onDone, null);
     }
 
-    private void downloadBusRouteDb(Runnable onDone, java.util.function.Consumer<Integer> onProgress) {
+    private void downloadBusRouteDb(Runnable onDone, ProgressCallback onProgress) {
         new Thread(() -> {
             try {
                 // ── 전체 개수 미리 파악 ────────────────────────
@@ -12913,7 +12915,7 @@ public class PinActivity extends AppCompatActivity {
                     }
                     doneRoute += count;
                     final int pct1 = (int)(doneRoute * 50.0 / Math.max(totalRoute, 1));
-                    if (onProgress != null) runOnUiThread(() -> onProgress.accept(Math.min(pct1, 50)));
+                    if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct1, 50)));
                     if (count < 100) break;
                     page++;
                     if (page > 20) break;
@@ -12938,7 +12940,7 @@ public class PinActivity extends AppCompatActivity {
                     }
                     doneStop += cnt2;
                     final int pct2 = 50 + (int)(doneStop * 50.0 / Math.max(totalStop, 1));
-                    if (onProgress != null) runOnUiThread(() -> onProgress.accept(Math.min(pct2, 99)));
+                    if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct2, 99)));
                     if (cnt2 < 100) break;
                     sPage++;
                     if (sPage > 100) break;
@@ -12951,7 +12953,7 @@ public class PinActivity extends AppCompatActivity {
                         .putString("all_stops", sbStop.toString())
                         .putString(BUS_DB_VER,  today)
                         .apply();
-                if (onProgress != null) runOnUiThread(() -> onProgress.accept(100));
+                if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(100));
                 if (onDone != null) runOnUiThread(onDone);
             } catch (Exception ignored) {
                 if (onDone != null) runOnUiThread(onDone);
