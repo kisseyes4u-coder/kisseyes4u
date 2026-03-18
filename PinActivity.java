@@ -11043,18 +11043,16 @@ public class PinActivity extends AppCompatActivity {
             android.widget.FrameLayout tlFrame = new android.widget.FrameLayout(this);
             tlFrame.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
 
-            // 세로줄 전용 View (배경만)
+            // 세로줄 전용 View (항상 연파랑 #AED6F1)
             android.view.View lineView = new android.view.View(this) {
                 @Override protected void onDraw(android.graphics.Canvas canvas) {
                     super.onDraw(canvas);
                     int w=getWidth(), h=getHeight(); float cx=w/2f;
-                    String lineColor = fIsReturn ? "#F1948A" : "#AED6F1";
                     android.graphics.Paint lPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                    lPaint.setColor(Color.parseColor(lineColor)); lPaint.setStrokeWidth(dpToPx(2));
+                    lPaint.setColor(Color.parseColor("#AED6F1")); lPaint.setStrokeWidth(dpToPx(2));
                     if (!fFirst2) canvas.drawLine(cx, 0, cx, h, lPaint);
                     else          canvas.drawLine(cx, h/2f, cx, h, lPaint);
                     if (fLast2) {
-                        // 종점: 아래쪽 줄 지움
                         android.graphics.Paint clearP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         clearP.setColor(Color.parseColor("#F2F4F8"));
                         canvas.drawRect(cx-dpToPx(2), h/2f, cx+dpToPx(2), h, clearP);
@@ -11066,17 +11064,15 @@ public class PinActivity extends AppCompatActivity {
                     android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
             tlFrame.addView(lineView);
 
-            // 원 + 화살표 전용 View (세로줄 위에 겹침)
+            // 원 + 화살표 View (원: 회차이후=빨강, 나머지=파랑 / 화살표: 항상 파랑)
             android.view.View circleView = new android.view.View(this) {
                 @Override protected void onDraw(android.graphics.Canvas canvas) {
                     super.onDraw(canvas);
                     int w=getWidth(), h=getHeight(); float cx=w/2f, cr=dpToPx(9);
-                    // 원: 회차 이후만 빨간색, 나머지 파란색
                     String circleColor = fIsReturn ? "#E74C3C" : "#0984E3";
-                    // 세로줄 끊기 (원 위아래)
-                    String lineColor = fIsReturn ? "#F1948A" : "#AED6F1";
+                    // 원 뒤 세로줄 가리기
                     android.graphics.Paint bgPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                    bgPaint.setColor(Color.parseColor("#F2F4F8")); // 배경색과 동일
+                    bgPaint.setColor(Color.parseColor("#F2F4F8"));
                     canvas.drawRect(cx-cr-dpToPx(2), h/2f-cr-dpToPx(1), cx+cr+dpToPx(2), h/2f+cr+dpToPx(1), bgPaint);
                     // 원 테두리
                     android.graphics.Paint cPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
@@ -11088,9 +11084,9 @@ public class PinActivity extends AppCompatActivity {
                     android.graphics.Paint wPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                     wPaint.setColor(Color.WHITE);
                     canvas.drawCircle(cx, h/2f, cr-dpToPx(1), wPaint);
-                    // 화살표: 원과 같은 색
+                    // 화살표: 항상 파랑 #0984E3
                     android.graphics.Paint vPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                    vPaint.setColor(Color.parseColor(circleColor));
+                    vPaint.setColor(Color.parseColor("#0984E3"));
                     vPaint.setStyle(android.graphics.Paint.Style.STROKE);
                     vPaint.setStrokeWidth(dpToPx(2));
                     vPaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
