@@ -871,9 +871,7 @@ public class PinActivity extends AppCompatActivity {
                 double sd = Double.parseDouble(sky.trim());
                 if (sd > 0) sN = (int) sd;
             } catch (Exception ig) {}
-            String icon = sN == 1 ? "☀" : sN == 3 ? "⛅" : "☁";
-            android.util.Log.d("ICON_DEBUG", "SKY분기 skyRaw="+skyRaw+" sky="+sky+" sN="+sN+" icon="+icon);
-            return icon;
+            return sN == 1 ? "☀" : sN == 3 ? "⛅" : "☁";
         } else if (pN == 1 || pN == 4 || pN == 5 || pN == 6) return "🌧";
         else if (pN == 2) return "🌨";
         else if (pN == 3 || pN == 7) return "❄";
