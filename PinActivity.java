@@ -11385,20 +11385,21 @@ public class PinActivity extends AppCompatActivity {
         return xml.substring(s, e).trim();
     }
 
-    /** getRouteInfoAll XML 파싱 → ROUTE_NO 일치 항목 [ROUTE_CD, ROUTE_NO, 기점명, 종점명] */
+    /** getRouteInfoAll XML 파싱 → ROUTE_NO 일치 항목 [ROUTE_CD, ROUTE_NO, 기점ID, 종점ID] */
     private java.util.List<String[]> parseRouteInfoAll(String xml, String routeNo) {
         java.util.List<String[]> list = new java.util.ArrayList<>();
         String[] items = xml.split("<itemList>");
         for (int i = 1; i < items.length; i++) {
-            String item = items[i];
+            String item  = items[i];
             String rNo   = extractTag(item, "ROUTE_NO").trim();
             String rCd   = extractTag(item, "ROUTE_CD").trim();
-            String start = extractTag(item, "BUSSTOP_NM_START").trim();
-            if (start.isEmpty()) start = extractTag(item, "START_NODE_NM").trim();
-            String end   = extractTag(item, "BUSSTOP_NM_END").trim();
-            if (end.isEmpty()) end = extractTag(item, "END_NODE_NM").trim();
+            String startId = extractTag(item, "START_NODE_ID").trim();
+            String endId   = extractTag(item, "END_NODE_ID").trim();
+            String startTm = extractTag(item, "ORIGIN_START").trim(); // 첫차시간
+            String endTm   = extractTag(item, "ORIGIN_END").trim();   // 막차시간
             if (rNo.equals(routeNo) && !rCd.isEmpty()) {
-                list.add(new String[]{rCd, rNo, start, end});
+                // 기점/종점 이름은 별도 API에서 가져오기 어려우니 ID로 표시
+                list.add(new String[]{rCd, rNo, startId, endId, startTm, endTm});
             }
         }
         return list;
@@ -11408,7 +11409,7 @@ public class PinActivity extends AppCompatActivity {
     private void showRouteList(java.util.List<String[]> routes, String routeNo) {
         busTitleLabel.setText("🚌 " + routeNo + "번 버스");
         for (String[] r : routes) {
-            // r = [ROUTE_CD, ROUTE_NO, 기점명, 종점명]
+            // r = [ROUTE_CD, ROUTE_NO, START_NODE_ID, END_NODE_ID, 첫차, 막차]
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 4));
@@ -11427,20 +11428,33 @@ public class PinActivity extends AppCompatActivity {
             tvNo.setTypeface(null, android.graphics.Typeface.BOLD);
             card.addView(tvNo);
 
-            // 기점 ↔ 종점
-            TextView tvRoute = new TextView(this);
-            String startNm = r[2].isEmpty() ? "기점" : r[2];
-            String endNm   = r[3].isEmpty() ? "종점" : r[3];
-            tvRoute.setText(startNm + "  ↔  " + endNm);
-            tvRoute.setTextColor(Color.parseColor("#555555"));
-            tvRoute.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-            LinearLayout.LayoutParams routeLp = new LinearLayout.LayoutParams(
+            // 노선 ID
+            TextView tvId = new TextView(this);
+            tvId.setText("노선 ID: " + r[0]);
+            tvId.setTextColor(Color.parseColor("#888888"));
+            tvId.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            LinearLayout.LayoutParams idLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            routeLp.setMargins(0, dpToPx(2), 0, 0);
-            tvRoute.setLayoutParams(routeLp);
-            card.addView(tvRoute);
+            idLp.setMargins(0, dpToPx(2), 0, 0);
+            tvId.setLayoutParams(idLp);
+            card.addView(tvId);
 
-            // 탭하면 버스 위치 조회
+            // 첫차/막차
+            if (r.length > 4 && !r[4].isEmpty()) {
+                TextView tvTime = new TextView(this);
+                String startFmt = r[4].length() == 4 ? r[4].substring(0,2) + ":" + r[4].substring(2) : r[4];
+                String endFmt   = r[5].length() == 4 ? r[5].substring(0,2) + ":" + r[5].substring(2) : r[5];
+                tvTime.setText("첫차 " + startFmt + "  막차 " + endFmt);
+                tvTime.setTextColor(Color.parseColor("#555555"));
+                tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                LinearLayout.LayoutParams timeLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                timeLp.setMargins(0, dpToPx(2), 0, 0);
+                tvTime.setLayoutParams(timeLp);
+                card.addView(tvTime);
+            }
+
+            // 탭 안내
             TextView tvTap = new TextView(this);
             tvTap.setText("탭하여 현재 운행 버스 확인 →");
             tvTap.setTextColor(Color.parseColor("#A0A0A0"));
@@ -11453,9 +11467,7 @@ public class PinActivity extends AppCompatActivity {
 
             final String routeCd = r[0];
             final String routeNoStr = r[1];
-            final String startName = startNm;
-            final String endName = endNm;
-            card.setOnClickListener(v -> loadBusPositions(routeCd, routeNoStr, startName, endName));
+            card.setOnClickListener(v -> loadBusPositions(routeCd, routeNoStr, "", ""));
             busArrivalContainer.addView(card);
         }
     }
