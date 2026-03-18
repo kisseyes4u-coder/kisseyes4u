@@ -10997,8 +10997,8 @@ public class PinActivity extends AppCompatActivity {
                 LinearLayout busRow = new LinearLayout(this);
                 busRow.setOrientation(LinearLayout.HORIZONTAL); busRow.setGravity(Gravity.CENTER_VERTICAL);
                 busRow.setLayoutParams(new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50)));
-                android.view.View busTimeline = new android.view.View(this) {
+                busRow.setLayoutParams(new LinearLayout.LayoutParams(
+                        dpToPx(40), dpToPx(50)));
                     @Override protected void onDraw(android.graphics.Canvas canvas) {
                         super.onDraw(canvas);
                         int w=getWidth(), h=getHeight(); float cx=w/2f;
@@ -11029,10 +11029,9 @@ public class PinActivity extends AppCompatActivity {
                     }
                 };
                 busTimeline.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
+                busTimeline.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), dpToPx(50)));
                 busRow.addView(busTimeline);
-                View busSpace = new View(this); busSpace.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f));
-                busRow.addView(busSpace); container.addView(busRow);
-            }
+                container.addView(busRow);
 
             // 정류소 행
             LinearLayout row = new LinearLayout(this);
