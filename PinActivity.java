@@ -9381,7 +9381,6 @@ public class PinActivity extends AppCompatActivity {
                         dc.setOnClickListener(v2 -> busScreenLoadStops(routeId, routeNo, container, dKey, fRTp));
                         dirRow.addView(dc);
                     }
-                    container.addView(dirRow);
 
                     // ── 퀵 메뉴 (홈추가/운행정보/지도/주변정류장) ──
                     LinearLayout quickMenu = new LinearLayout(this);
@@ -9426,7 +9425,6 @@ public class PinActivity extends AppCompatActivity {
                         tvLabel2.setLayoutParams(labelLp);
                         qItem.addView(tvLabel2);
 
-                        // 운행정보 클릭 → 배차간격 다이얼로그
                         if ("운행정보".equals(qi[1])) {
                             qItem.setOnClickListener(v2 -> {
                                 String msg = "노선번호: " + routeNo + "번\n"
@@ -9446,6 +9444,9 @@ public class PinActivity extends AppCompatActivity {
                         quickMenu.addView(qItem);
                     }
                     container.addView(quickMenu);
+
+                    // ── 방향 카드 2개 ─────────────────────────
+                    container.addView(dirRow);
 
                     // ── 구분선 ────────────────────────────────
                     View divider = new View(this);
