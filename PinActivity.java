@@ -3563,6 +3563,77 @@ public class PinActivity extends AppCompatActivity {
         usersContainer.setLayoutParams(ucLp);
         layout.addView(usersContainer);
 
+        // ── 버스 데이터 관리 섹션 ────────────────────────────
+        LinearLayout busSecRow = makeSectionTitle("버스 데이터 관리", "#0984E3", TEXT1);
+        LinearLayout.LayoutParams busSecLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        busSecLp.setMargins(dpToPx(16), dpToPx(10), dpToPx(16), dpToPx(6));
+        busSecRow.setLayoutParams(busSecLp);
+        layout.addView(busSecRow);
+
+        LinearLayout busManageCard = new LinearLayout(this);
+        busManageCard.setOrientation(LinearLayout.VERTICAL);
+        busManageCard.setBackground(makeShadowCardDrawable("#FFFFFF", 14, 4));
+        busManageCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+        busManageCard.setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14));
+        LinearLayout.LayoutParams bmcLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        bmcLp.setMargins(dpToPx(16), dpToPx(6), dpToPx(16), dpToPx(10));
+        busManageCard.setLayoutParams(bmcLp);
+
+        // 노선 DB 상태
+        boolean hasRouteDb = routeDbList != null && !routeDbList.isEmpty();
+        boolean hasStopDb2 = stopDbList != null && !stopDbList.isEmpty();
+
+        TextView tvRouteStatus = new TextView(this);
+        tvRouteStatus.setText("🚌 노선 DB: " + (hasRouteDb ? routeDbList.size() + "개 (매일 자동 갱신)" : "없음"));
+        tvRouteStatus.setTextColor(Color.parseColor(hasRouteDb ? "#27AE60" : "#E74C3C"));
+        tvRouteStatus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        busManageCard.addView(tvRouteStatus);
+
+        TextView tvStopStatus = new TextView(this);
+        tvStopStatus.setText("🚏 정류장 DB: " + (hasStopDb2 ? stopDbList.size() + "개" : "없음"));
+        tvStopStatus.setTextColor(Color.parseColor(hasStopDb2 ? "#27AE60" : "#E74C3C"));
+        tvStopStatus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        LinearLayout.LayoutParams stLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        stLp.setMargins(0, dpToPx(4), 0, dpToPx(12));
+        tvStopStatus.setLayoutParams(stLp);
+        busManageCard.addView(tvStopStatus);
+
+        // 정류장 DB 업데이트 버튼
+        TextView btnBusManage = new TextView(this);
+        btnBusManage.setText(hasStopDb2 ? "🚏 정류장 DB 업데이트" : "🚏 정류장 DB 생성 (최초 1회)");
+        btnBusManage.setTextColor(Color.WHITE);
+        btnBusManage.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        btnBusManage.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnBusManage.setGravity(Gravity.CENTER);
+        btnBusManage.setPadding(0, dpToPx(12), 0, dpToPx(12));
+        android.graphics.drawable.GradientDrawable btnBusBg = new android.graphics.drawable.GradientDrawable();
+        btnBusBg.setColor(Color.parseColor("#0984E3"));
+        btnBusBg.setCornerRadius(dpToPx(10));
+        btnBusManage.setBackground(btnBusBg);
+        btnBusManage.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        btnBusManage.setOnClickListener(v -> {
+            btnBusManage.setText("⏳ 수집 중... (수분 소요)");
+            btnBusBg.setColor(Color.parseColor("#AAAAAA"));
+            btnBusManage.setEnabled(false);
+            buildAndUploadStopDb(() -> {
+                int cnt = stopDbList != null ? stopDbList.size() : 0;
+                tvStopStatus.setText("🚏 정류장 DB: " + cnt + "개");
+                tvStopStatus.setTextColor(Color.parseColor("#27AE60"));
+                btnBusManage.setText("🚏 정류장 DB 업데이트");
+                btnBusBg.setColor(Color.parseColor("#0984E3"));
+                btnBusManage.setEnabled(true);
+                android.widget.Toast.makeText(this,
+                        "✓ " + cnt + "개 정류장 DB 업로드 완료!",
+                        android.widget.Toast.LENGTH_LONG).show();
+            }, null);
+        });
+        busManageCard.addView(btnBusManage);
+        layout.addView(busManageCard);
+
         TextView tvLoadingUsers = new TextView(this);
         tvLoadingUsers.setText("불러오는 중...");
         tvLoadingUsers.setTextColor(Color.parseColor("#888888"));
@@ -4515,7 +4586,7 @@ public class PinActivity extends AppCompatActivity {
         // ── 메뉴 카드들 ───────────────────────────────────────
         String[][] menuItems = {
                 {"💰", "통장 잔액 보기",   "계좌별 문자 내역 상세 확인",    "#6C5CE7", "#EDE9FF"},
-                {"🚌", "버스 데이터 관리", "노선·정류장 DB 업데이트",        "#0984E3", "#EBF5FB"},
+                {"🚌", "버스 노선 검색",   "버스번호·정류장으로 검색",       "#0984E3", "#EBF5FB"},
                 {"🥩", "선결제 잔액 보기", "선결제 입출금 내역을 확인합니다", "#27AE60", "#EAFAF1"},
                 {"📊", "월별 지출 통계",   "계좌별 월별 수입/지출 차트",     "#E74C3C", "#FDEDEC"},
                 {"📠", "팩스 전송 방법",   "팩스 전송 절차를 확인합니다",    "#E67E22", "#FEF9E7"},
@@ -4524,7 +4595,7 @@ public class PinActivity extends AppCompatActivity {
         };
         android.view.View.OnClickListener[] menuClicks = {
                 v -> showBalanceScreen(),
-                v -> showBusDataManageScreen(),
+                v -> showBusSearchScreen(),
                 v -> showMeatClubScreen(),
                 v -> showStatsScreen(),
                 v -> showFaxGuideScreen(),
