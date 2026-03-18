@@ -10994,10 +10994,6 @@ public class PinActivity extends AppCompatActivity {
                 String shortNo = vehicleNo.replaceAll("[^0-9]","");
                 if (shortNo.length()>4) shortNo = shortNo.substring(shortNo.length()-4);
                 final String fShortNo = shortNo;
-                LinearLayout busRow = new LinearLayout(this);
-                busRow.setOrientation(LinearLayout.HORIZONTAL); busRow.setGravity(Gravity.CENTER_VERTICAL);
-                busRow.setLayoutParams(new LinearLayout.LayoutParams(
-                        dpToPx(40), dpToPx(50)));
                 android.view.View busTimeline = new android.view.View(this) {
                     @Override protected void onDraw(android.graphics.Canvas canvas) {
                         int w=getWidth(), h=getHeight(); float cx=w/2f;
@@ -11006,7 +11002,11 @@ public class PinActivity extends AppCompatActivity {
                         canvas.drawLine(cx,0,cx,h,lp2);
                         float boxW=dpToPx(28), emojiH=dpToPx(26), numH=dpToPx(14), gap=dpToPx(1);
                         float totalH=emojiH+gap+numH, startY=h/2f-totalH/2f, left=cx-boxW/2f;
-                        // 버스 이미지 (테두리 없이 그대로)
+                        // 버스 이미지 배경 지우기
+                        android.graphics.Paint bgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        bgP.setColor(Color.parseColor("#F2F4F8"));
+                        canvas.drawRect(left, startY, left+boxW, startY+emojiH, bgP);
+                        // 버스 이미지
                         android.graphics.Bitmap bmp = getBusIcon();
                         if (bmp != null) {
                             android.graphics.Paint imgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.FILTER_BITMAP_FLAG);
@@ -11017,7 +11017,7 @@ public class PinActivity extends AppCompatActivity {
                             tp2.setTextSize(dpToPx(13)); tp2.setTextAlign(android.graphics.Paint.Align.CENTER);
                             canvas.drawText("\uD83D\uDE8C", cx, startY+emojiH*0.72f+dpToPx(2), tp2);
                         }
-                        // 번호 (테두리 없이 텍스트만)
+                        // 번호
                         if (!fShortNo.isEmpty()) {
                             float numY=startY+emojiH+gap;
                             android.graphics.Paint np2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
@@ -11027,9 +11027,11 @@ public class PinActivity extends AppCompatActivity {
                         }
                     }
                 };
-                busTimeline.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), dpToPx(50)));
-                busRow.addView(busTimeline);
-                container.addView(busRow);
+                // busRow 없이 busTimeline을 container에 직접 추가 (40dp 고정, 오른쪽 공간 없음)
+                LinearLayout.LayoutParams btLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50));
+                busTimeline.setLayoutParams(btLp);
+                container.addView(busTimeline);
 
             }
             // 정류소 행
