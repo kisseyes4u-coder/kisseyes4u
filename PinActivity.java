@@ -132,8 +132,10 @@ public class PinActivity extends AppCompatActivity {
     private List<Integer> pendingSelectIdx = new ArrayList<>();
 
     // ── 버스 검색 화면 ─────────────────────────────────────
-    private LinearLayout busSearchArea = null; // 검색창 영역 (노선 진입 시 숨김/복원용)
-    private LinearLayout busResultContainer = null; // 검색 결과 컨테이너
+    private LinearLayout busSearchArea = null;
+    private LinearLayout busResultContainer = null;
+    private LinearLayout busFavSection2 = null; // favSection 외부 참조용
+    private android.widget.EditText busEtSearch = null; // 검색창 외부 참조용
 
     // ── UI 참조 (잔액화면 갱신용) ──────────────────────────
     private LinearLayout msgContainer       = null;
@@ -8849,6 +8851,7 @@ public class PinActivity extends AppCompatActivity {
                 (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
 
         android.widget.EditText etSearch = new android.widget.EditText(this);
+        busEtSearch = etSearch;
         etSearch.setHint("버스번호, 정류장, 장소 검색");
         etSearch.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
         etSearch.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
@@ -8934,6 +8937,7 @@ public class PinActivity extends AppCompatActivity {
         favSection.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         svInner.addView(favSection);
+        busFavSection2 = favSection;
 
         // 결과 컨테이너 (단일)
         LinearLayout resultContainer = new LinearLayout(this);
@@ -8964,9 +8968,13 @@ public class PinActivity extends AppCompatActivity {
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
                 String kw = s.toString().trim();
                 btnClear.setVisibility(kw.isEmpty() ? android.view.View.GONE : android.view.View.VISIBLE);
+                // 입력 있으면 즐겨찾기 숨기기, 없으면 보이기
+                if (busFavSection2 != null) {
+                    busFavSection2.setVisibility(kw.isEmpty()
+                            ? android.view.View.VISIBLE : android.view.View.GONE);
+                }
                 if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
                 if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
-                // 숫자 입력은 실시간, 텍스트는 300ms 디바운스
                 debounceRunnable[0] = doSearch;
                 debounceHandler.postDelayed(debounceRunnable[0], kw.matches("\\d+") ? 300 : 500);
             }
@@ -8976,6 +8984,8 @@ public class PinActivity extends AppCompatActivity {
         btnClear.setOnClickListener(v -> {
             etSearch.setText("");
             resultContainer.removeAllViews();
+            // 즐겨찾기 다시 보이기
+            if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             etSearch.requestFocus();
             if (immBus != null) immBus.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
         });
@@ -9203,7 +9213,13 @@ public class PinActivity extends AppCompatActivity {
                                     (r[2].isEmpty()?"기점":r[2]) + "  ↔  " + (r[3].isEmpty()?"종점":r[3]),
                                     "탭하여 정류소 선택 →", "#0984E3",
                                     routeTp);
-                            card.setOnClickListener(v -> busScreenLoadStops(r[0], r[1], container));
+                            card.setOnClickListener(v -> {
+                                // 검색창 텍스트 삭제
+                                if (busEtSearch != null) busEtSearch.setText("");
+                                // 즐겨찾기 숨기기
+                                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+                                busScreenLoadStops(r[0], r[1], container);
+                            });
                             container.addView(card);
                         }
                     }
@@ -9308,6 +9324,7 @@ public class PinActivity extends AppCompatActivity {
                     btnBack2.setPadding(0, 0, dpToPx(8), 0);
                     btnBack2.setOnClickListener(v -> {
                         if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
                         busScreenSearchByNo(routeNo, container);
                     });
                     topHeader.addView(btnBack2);
