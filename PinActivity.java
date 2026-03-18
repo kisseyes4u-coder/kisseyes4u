@@ -10106,10 +10106,10 @@ public class PinActivity extends AppCompatActivity {
 
     /** 노선별 정류소 목록 로드 */
     private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container) {
-    private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container) {
         busScreenLoadStops(routeId, routeNo, container, "forward", "");
+    }
 
-    /** 30초마다 버스 위치 자동 갱신 */
+
     private void startBusAutoRefresh(
             String routeId, String routeNo, String direction, LinearLayout container,
             String sNm, String eNm, String stF, String etF, String interval, String rTp,
