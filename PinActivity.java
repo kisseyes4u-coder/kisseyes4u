@@ -11027,11 +11027,11 @@ public class PinActivity extends AppCompatActivity {
                         }
                     }
                 };
-                busTimeline.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
                 busTimeline.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), dpToPx(50)));
                 busRow.addView(busTimeline);
                 container.addView(busRow);
 
+            }
             // 정류소 행
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.TOP);
