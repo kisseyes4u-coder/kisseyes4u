@@ -8798,6 +8798,34 @@ public class PinActivity extends AppCompatActivity {
         headerBar.addView(headerTxt);
         topLayout.addView(headerBar);
 
+        // 1.8초 후 headerBar 자동 사라짐 (통장 잔액과 동일)
+        headerBar.post(() -> {
+            final int origHeight = headerBar.getMeasuredHeight() + dpToPx(18);
+            headerBar.postDelayed(() -> {
+                android.animation.ValueAnimator anim =
+                        android.animation.ValueAnimator.ofFloat(1f, 0f);
+                anim.setDuration(600);
+                anim.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+                anim.addUpdateListener(va -> {
+                    float f = (float) va.getAnimatedValue();
+                    headerBar.setAlpha(f);
+                    int h = (int)(origHeight * f);
+                    android.view.ViewGroup.LayoutParams vlp = headerBar.getLayoutParams();
+                    vlp.height = Math.max(h - dpToPx(18), 0);
+                    if (vlp instanceof LinearLayout.LayoutParams)
+                        ((LinearLayout.LayoutParams) vlp).bottomMargin = (int)(dpToPx(0) * f);
+                    headerBar.setLayoutParams(vlp);
+                    headerBar.requestLayout();
+                });
+                anim.addListener(new android.animation.AnimatorListenerAdapter() {
+                    @Override public void onAnimationEnd(android.animation.Animator a) {
+                        headerBar.setVisibility(View.GONE);
+                    }
+                });
+                anim.start();
+            }, 1800);
+        });
+
         // ── 탭 행 (sticky: topLayout 아래 고정) ──────────
         LinearLayout tabRow = new LinearLayout(this);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
