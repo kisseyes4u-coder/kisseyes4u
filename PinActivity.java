@@ -9119,6 +9119,7 @@ public class PinActivity extends AppCompatActivity {
                     routes.add(new String[]{tag(item,"routeid"), rno,
                             tag(item,"startnodenm"), tag(item,"endnodenm"),
                             tag(item,"routetp")}); // 노선유형 추가
+                    android.util.Log.d("BUS_TP", "routeno=" + rno + " routetp=" + tag(item,"routetp"));
                 }
                 runOnUiThread(() -> {
                     container.removeAllViews();
