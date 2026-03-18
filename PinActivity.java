@@ -10321,15 +10321,16 @@ public class PinActivity extends AppCompatActivity {
                             btnX.setOnClickListener(xv -> {
                                 et2.setText("");
                                 btnX.setVisibility(android.view.View.GONE);
-                                // 키보드 올리지 않고 입력 상태로만 변경
                                 et2.clearFocus();
                                 android.graphics.drawable.GradientDrawable resetBg =
                                         new android.graphics.drawable.GradientDrawable();
                                 resetBg.setCornerRadius(dpToPx(6));
                                 resetBg.setColor(Color.parseColor("#BBBBBB"));
                                 btnState[finalMi] = 0;
-                                btnNext.setText("입력");
-                                btnNext.setBackground(resetBg);
+                                if (btnNextArr[finalMi] != null) {
+                                    btnNextArr[finalMi].setText("입력");
+                                    btnNextArr[finalMi].setBackground(resetBg);
+                                }
                             });
                             etWrapper.addView(btnX);
 
