@@ -10476,17 +10476,6 @@ public class PinActivity extends AppCompatActivity {
                 dlgLayout.setBackground(dlgCardBg);
                 dlgLayout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
 
-                // 아이콘
-                TextView tvFavIcon = new TextView(this);
-                tvFavIcon.setText("⭐");
-                tvFavIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 32);
-                tvFavIcon.setGravity(Gravity.CENTER);
-                LinearLayout.LayoutParams fiLp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                fiLp.setMargins(0, 0, 0, dpToPx(8));
-                tvFavIcon.setLayoutParams(fiLp);
-                dlgLayout.addView(tvFavIcon);
-
                 // 제목
                 TextView tvDlgTitle = new TextView(this);
                 tvDlgTitle.setText(routeNo + "번  " + shortDir);
