@@ -9633,7 +9633,7 @@ public class PinActivity extends AppCompatActivity {
                                 android.graphics.Paint vPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                                 vPaint.setColor(Color.parseColor("#888888"));
                                 vPaint.setStyle(android.graphics.Paint.Style.STROKE);
-                                vPaint.setStrokeWidth(dpToPx(1.2f));
+                                vPaint.setStrokeWidth(dpToPx(2));
                                 vPaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
                                 float vSize = dpToPx(4);
                                 float vy = h/2f;
