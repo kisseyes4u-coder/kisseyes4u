@@ -9362,14 +9362,28 @@ public class PinActivity extends AppCompatActivity {
     private void busScreenSearchByNo(String routeNo, LinearLayout container) {
         container.removeAllViews();
 
-        // 로컬 DB 검색 시도
-        java.util.List<String[]> local = busSearchLocal(routeNo);
-        if (!local.isEmpty()) {
-            renderBusRouteCards(local, routeNo, container);
+        // 메모리 DB 있으면 백그라운드에서 즉시 검색
+        if (routeDbList != null) {
+            new Thread(() -> {
+                java.util.List<String[]> result = new java.util.ArrayList<>();
+                for (String[] p : routeDbList) {
+                    if (p[1].startsWith(routeNo)) result.add(p);
+                }
+                runOnUiThread(() -> {
+                    container.removeAllViews();
+                    if (result.isEmpty()) {
+                        TextView tv = new TextView(this);
+                        tv.setText(routeNo + "번 노선을 찾을 수 없습니다");
+                        tv.setTextColor(Color.parseColor("#AAAAAA"));
+                        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                        container.addView(tv);
+                    } else {
+                        renderBusRouteCards(result, routeNo, container);
+                    }
+                });
+            }).start();
             return;
         }
-
-        // 로컬 없으면 API 검색
         TextView tvL = new TextView(this); tvL.setText("검색 중...");
         tvL.setTextColor(Color.parseColor("#AAAAAA"));
         tvL.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
@@ -9585,14 +9599,34 @@ public class PinActivity extends AppCompatActivity {
     private void busScreenSearchByStop(String keyword, LinearLayout container) {
         container.removeAllViews();
 
-        // 로컬 DB 검색 시도
-        java.util.List<String[]> local = stopSearchLocal(keyword);
-        if (!local.isEmpty()) {
-            renderStopCards(local, keyword, container);
+        // 메모리 DB 있으면 백그라운드에서 검색 후 UI 업데이트
+        if (stopDbList != null) {
+            new Thread(() -> {
+                java.util.List<String[]> result = new java.util.ArrayList<>();
+                String kw = keyword.toLowerCase();
+                for (String[] p : stopDbList) {
+                    if (p[1].toLowerCase().contains(kw)) {
+                        result.add(p);
+                        if (result.size() >= 30) break;
+                    }
+                }
+                runOnUiThread(() -> {
+                    container.removeAllViews();
+                    if (result.isEmpty()) {
+                        TextView tv = new TextView(this);
+                        tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
+                        tv.setTextColor(Color.parseColor("#AAAAAA"));
+                        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                        container.addView(tv);
+                    } else {
+                        renderStopCards(result, keyword, container);
+                    }
+                });
+            }).start();
             return;
         }
 
-        // 로컬 없으면 API 검색
+        // 메모리 DB 없으면 API 검색
         TextView tvL = new TextView(this); tvL.setText("정류소 검색 중...");
         tvL.setTextColor(Color.parseColor("#AAAAAA")); tvL.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12)); container.addView(tvL);
         new Thread(() -> {
