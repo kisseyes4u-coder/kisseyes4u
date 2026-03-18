@@ -12877,13 +12877,9 @@ public class PinActivity extends AppCompatActivity {
                         + "&routeNo=&numOfRows=1&pageNo=1&_type=xml");
                 int totalRoute = 0;
                 try { totalRoute = Integer.parseInt(tag(firstRouteXml,"totalCount")); } catch(Exception ig){}
-                // 정류장: 첫 페이지 totalCount
-                String firstStopXml = httpGet(BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
-                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                        + "&nodeNm=&numOfRows=1&pageNo=1&_type=xml");
-                int totalStop = 0;
-                try { totalStop = Integer.parseInt(tag(firstStopXml,"totalCount")); } catch(Exception ig){}
-                final int grandTotal = Math.max(totalRoute + totalStop, 1);
+                // 정류장 총계는 prefix 분할 방식으로 계산하므로 별도 API 호출 불필요
+                int totalStop = 0; // 사용 안함 (prefix 23개 기준 진행률 계산)
+                final int grandTotal = Math.max(totalRoute, 1);
 
                 // ① 노선 목록
                 StringBuilder sbRoute = new StringBuilder();
@@ -12912,29 +12908,43 @@ public class PinActivity extends AppCompatActivity {
                     if (page > 20) break;
                 }
 
-                // ② 정류장 목록
+                // ② 정류장 목록 - 초성/숫자 prefix별로 나눠서 전체 수집
+                // (nodeNm 빈값 전체조회가 API에서 지원 안 돼서 prefix 분할)
                 StringBuilder sbStop = new StringBuilder();
-                int sPage = 1, doneStop = 0;
-                while (true) {
-                    String url2 = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
-                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                            + "&nodeNm=&numOfRows=100&pageNo=" + sPage + "&_type=xml";
-                    String xml2 = httpGet(url2);
-                    int cnt2 = 0;
-                    for (String item : xml2.split("<item>")) {
-                        if (!item.contains("<nodeid>")) continue;
-                        if (sbStop.length() > 0) sbStop.append(";");
-                        sbStop.append(tag(item,"nodeid")).append("|")
-                              .append(tag(item,"nodenm")).append("|")
-                              .append(tag(item,"nodeno"));
-                        cnt2++;
+                java.util.Set<String> stopIdSet = new java.util.HashSet<>();
+                String[] prefixes = {
+                    "가","나","다","라","마","바","사","아","자","차","카","타","파","하",
+                    "1","2","3","4","5","6","7","8","9"
+                };
+                for (int pi = 0; pi < prefixes.length; pi++) {
+                    String prefix = prefixes[pi];
+                    int sp = 1;
+                    while (true) {
+                        try {
+                            String url2 = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
+                                    + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                    + "&nodeNm=" + java.net.URLEncoder.encode(prefix, "UTF-8")
+                                    + "&numOfRows=100&pageNo=" + sp + "&_type=xml";
+                            String xml2 = httpGet(url2);
+                            int cnt2 = 0;
+                            for (String item : xml2.split("<item>")) {
+                                if (!item.contains("<nodeid>")) continue;
+                                String nid = tag(item,"nodeid");
+                                if (stopIdSet.contains(nid)) continue;
+                                stopIdSet.add(nid);
+                                if (sbStop.length() > 0) sbStop.append(";");
+                                sbStop.append(nid).append("|")
+                                      .append(tag(item,"nodenm")).append("|")
+                                      .append(tag(item,"nodeno"));
+                                cnt2++;
+                            }
+                            if (cnt2 < 100) break;
+                            sp++;
+                            if (sp > 20) break;
+                        } catch (Exception ignored) { break; }
                     }
-                    doneStop += cnt2;
-                    final int pct2 = 50 + (int)(doneStop * 50.0 / Math.max(totalStop, 1));
+                    final int pct2 = 50 + (int)((pi + 1) * 50.0 / prefixes.length);
                     if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct2, 99)));
-                    if (cnt2 < 100) break;
-                    sPage++;
-                    if (sPage > 100) break;
                 }
 
                 String today = new java.text.SimpleDateFormat("yyyyMMdd",
