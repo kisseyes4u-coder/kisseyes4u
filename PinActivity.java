@@ -10285,6 +10285,15 @@ public class PinActivity extends AppCompatActivity {
                             et2.setTextColor(Color.parseColor("#222222"));
                             et2.setSingleLine(true);
                             et2.setGravity(Gravity.CENTER_VERTICAL);
+                            et2.setCursorVisible(true);
+                            // 커서 색상: 보라색으로 눈에 잘 보이게
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                android.graphics.drawable.GradientDrawable cursorDrawable =
+                                        new android.graphics.drawable.GradientDrawable();
+                                cursorDrawable.setColor(Color.parseColor("#6C5CE7"));
+                                cursorDrawable.setSize(dpToPx(2), (int)(et2.getTextSize()));
+                                et2.setTextCursorDrawable(cursorDrawable);
+                            }
                             et2.setBackgroundTintList(
                                     android.content.res.ColorStateList.valueOf(
                                             Color.parseColor("#9B8EC4")));
