@@ -165,20 +165,71 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 자동 새로고침 ──────────────────────────────────────
     private android.os.Handler refreshHandler = new android.os.Handler();
-    private android.graphics.Bitmap busIconBitmap = null;
+    private android.graphics.Bitmap busIconBitmap = null;      // 빨간색 착색 (타임라인용)
+    private android.graphics.Bitmap busIconWhiteBitmap = null; // 흰색 (헤더용)
 
-    /** assets/bus.png 로드 (최초 1회 캐시) */
+    /** assets/bus.png 로드 - 빨간색 착색 버전 (타임라인 빨간박스용) */
     private android.graphics.Bitmap getBusIcon() {
         if (busIconBitmap == null) {
             try {
-                android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
-                opts.inSampleSize = 1;
-                busIconBitmap = android.graphics.BitmapFactory.decodeStream(
-                        getAssets().open("bus.png"), null, opts);
+                android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                        getAssets().open("bus.png"));
+                if (raw != null) {
+                    android.graphics.Bitmap result = raw.copy(android.graphics.Bitmap.Config.ARGB_8888, true);
+                    int w = result.getWidth(), h = result.getHeight();
+                    int[] pixels = new int[w * h];
+                    result.getPixels(pixels, 0, w, 0, 0, w, h);
+                    for (int i = 0; i < pixels.length; i++) {
+                        int r2 = (pixels[i] >> 16) & 0xFF;
+                        int g2 = (pixels[i] >> 8)  & 0xFF;
+                        int b2 =  pixels[i]         & 0xFF;
+                        int brightness = (r2 + g2 + b2) / 3;
+                        if (brightness > 128) {
+                            pixels[i] = (brightness << 24) | 0x00E74C3C; // 빨간색
+                        } else {
+                            pixels[i] = 0x00000000; // 투명
+                        }
+                    }
+                    result.setPixels(pixels, 0, w, 0, 0, w, h);
+                    busIconBitmap = result;
+                    raw.recycle();
+                }
             } catch (Exception ignored) {}
         }
         return busIconBitmap;
     }
+
+    /** assets/bus.png 로드 - 흰색 버전 (파란 헤더 배경용) */
+    private android.graphics.Bitmap getBusIconWhite() {
+        if (busIconWhiteBitmap == null) {
+            try {
+                android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                        getAssets().open("bus.png"));
+                if (raw != null) {
+                    android.graphics.Bitmap result = raw.copy(android.graphics.Bitmap.Config.ARGB_8888, true);
+                    int w = result.getWidth(), h = result.getHeight();
+                    int[] pixels = new int[w * h];
+                    result.getPixels(pixels, 0, w, 0, 0, w, h);
+                    for (int i = 0; i < pixels.length; i++) {
+                        int r2 = (pixels[i] >> 16) & 0xFF;
+                        int g2 = (pixels[i] >> 8)  & 0xFF;
+                        int b2 =  pixels[i]         & 0xFF;
+                        int brightness = (r2 + g2 + b2) / 3;
+                        if (brightness > 128) {
+                            pixels[i] = (brightness << 24) | 0x00FFFFFF; // 흰색
+                        } else {
+                            pixels[i] = 0x00000000; // 투명
+                        }
+                    }
+                    result.setPixels(pixels, 0, w, 0, 0, w, h);
+                    busIconWhiteBitmap = result;
+                    raw.recycle();
+                }
+            } catch (Exception ignored) {}
+        }
+        return busIconWhiteBitmap;
+    }
+
     private android.os.Handler busRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable busRefreshRunnable = null;
     private Runnable refreshRunnable;
@@ -9495,7 +9546,7 @@ public class PinActivity extends AppCompatActivity {
         headerBar.setLayoutParams(hbLp);
 
         android.widget.ImageView ivHeaderIcon = new android.widget.ImageView(this);
-        android.graphics.Bitmap busHdrBmp = getBusIcon();
+        android.graphics.Bitmap busHdrBmp = getBusIconWhite();
         if (busHdrBmp != null) {
             ivHeaderIcon.setImageBitmap(busHdrBmp);
         } else {
