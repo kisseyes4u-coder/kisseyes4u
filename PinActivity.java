@@ -10997,10 +10997,18 @@ public class PinActivity extends AppCompatActivity {
                 fShortNo = sn.length()>4 ? sn.substring(sn.length()-4) : sn;
             } else { fShortNo = ""; }
 
+            // 정류소 행
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.TOP);
+            row.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            final boolean fFirst2=isFirst, fLast2=isLast, fIsReturn=isReturn;
+
+            // ── 타임라인 FrameLayout (세로줄 + 원 + 버스오버레이) ──
             android.widget.FrameLayout tlFrame = new android.widget.FrameLayout(this);
             tlFrame.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
 
-            // 세로줄 전용 View (항상 연파랑 #AED6F1)
+            // 세로줄 View (항상 연파랑)
             android.view.View lineView = new android.view.View(this) {
                 @Override protected void onDraw(android.graphics.Canvas canvas) {
                     super.onDraw(canvas);
@@ -11021,27 +11029,23 @@ public class PinActivity extends AppCompatActivity {
                     android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
             tlFrame.addView(lineView);
 
-            // 원 + 화살표 View (원: 회차이후=빨강, 나머지=파랑 / 화살표: 항상 파랑)
+            // 원 + 화살표 View
             android.view.View circleView = new android.view.View(this) {
                 @Override protected void onDraw(android.graphics.Canvas canvas) {
                     super.onDraw(canvas);
                     int w=getWidth(), h=getHeight(); float cx=w/2f, cr=dpToPx(9);
                     String circleColor = fIsReturn ? "#E74C3C" : "#0984E3";
-                    // 원 뒤 세로줄 가리기
                     android.graphics.Paint bgPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                     bgPaint.setColor(Color.parseColor("#F2F4F8"));
                     canvas.drawRect(cx-cr-dpToPx(2), h/2f-cr-dpToPx(1), cx+cr+dpToPx(2), h/2f+cr+dpToPx(1), bgPaint);
-                    // 원 테두리
                     android.graphics.Paint cPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                     cPaint.setColor(Color.parseColor(circleColor));
                     cPaint.setStyle(android.graphics.Paint.Style.STROKE);
                     cPaint.setStrokeWidth(dpToPx(1));
                     canvas.drawCircle(cx, h/2f, cr, cPaint);
-                    // 원 내부 흰색
                     android.graphics.Paint wPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                     wPaint.setColor(Color.WHITE);
                     canvas.drawCircle(cx, h/2f, cr-dpToPx(1), wPaint);
-                    // 화살표: 항상 파랑 #0984E3
                     android.graphics.Paint vPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                     vPaint.setColor(Color.parseColor("#0984E3"));
                     vPaint.setStyle(android.graphics.Paint.Style.STROKE);
@@ -11055,33 +11059,29 @@ public class PinActivity extends AppCompatActivity {
                     canvas.drawPath(vPath, vPaint);
                 }
             };
-            android.widget.FrameLayout.LayoutParams cvLp = new android.widget.FrameLayout.LayoutParams(
+            circleView.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
                     android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
-            circleView.setLayoutParams(cvLp);
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
             tlFrame.addView(circleView);
 
-            // 버스 오버레이: hasBus일 때 tlFrame 위에 겹쳐서 표시 (별도 행 없음)
+            // 버스 오버레이: hasBus일 때 tlFrame 위에 겹침
             if (hasBus) {
                 android.view.View busOverlay = new android.view.View(this) {
                     @Override protected void onDraw(android.graphics.Canvas canvas) {
                         int w=getWidth(), h=getHeight();
-                        float cx = dpToPx(20); // tlFrame 40dp의 중앙
+                        float cx = dpToPx(20);
                         float boxW=dpToPx(24), imgH=dpToPx(20), numH=dpToPx(10), gap=dpToPx(1);
                         float totalH = imgH + gap + numH;
                         float startY = h/2f - totalH/2f - dpToPx(2);
                         float left = cx - boxW/2f;
-                        // 세로줄 배경 덮기
                         android.graphics.Paint bgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         bgP.setColor(Color.parseColor("#F2F4F8"));
                         canvas.drawRect(left-dpToPx(1), startY-dpToPx(1), left+boxW+dpToPx(1), startY+totalH+dpToPx(1), bgP);
-                        // 버스 이미지
                         android.graphics.Bitmap bmp = getBusIcon();
                         if (bmp != null) {
                             android.graphics.Paint imgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.FILTER_BITMAP_FLAG);
                             canvas.drawBitmap(bmp, null, new android.graphics.RectF(left, startY, left+boxW, startY+imgH), imgP);
                         }
-                        // 번호
                         if (!fShortNo.isEmpty()) {
                             android.graphics.Paint np2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                             np2.setColor(Color.parseColor("#E74C3C")); np2.setTextSize(dpToPx(8));
@@ -11090,13 +11090,13 @@ public class PinActivity extends AppCompatActivity {
                         }
                     }
                 };
-                android.widget.FrameLayout.LayoutParams boLp = new android.widget.FrameLayout.LayoutParams(
+                busOverlay.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
                         android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
-                busOverlay.setLayoutParams(boLp);
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
                 tlFrame.addView(busOverlay);
             }
             row.addView(tlFrame);
+
 
             LinearLayout stopInfo = new LinearLayout(this);
             stopInfo.setOrientation(LinearLayout.VERTICAL); stopInfo.setGravity(Gravity.CENTER_VERTICAL);
