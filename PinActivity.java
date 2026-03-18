@@ -10881,8 +10881,18 @@ public class PinActivity extends AppCompatActivity {
         rbLp.setMargins(0,0,0,dpToPx(4)); runBanner.setLayoutParams(rbLp);
         View rbSpace = new View(this);
         rbSpace.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); runBanner.addView(rbSpace);
+        // 버스 이미지
+        android.widget.ImageView ivRunBus = new android.widget.ImageView(this);
+        android.graphics.Bitmap runBusBmp = getBusIcon();
+        if (runBusBmp != null) ivRunBus.setImageBitmap(runBusBmp);
+        LinearLayout.LayoutParams rbImgLp = new LinearLayout.LayoutParams(dpToPx(20), dpToPx(20));
+        rbImgLp.setMargins(0, 0, dpToPx(4), 0);
+        rbImgLp.gravity = Gravity.CENTER_VERTICAL;
+        ivRunBus.setLayoutParams(rbImgLp);
+        ivRunBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        runBanner.addView(ivRunBus);
         TextView tvRunFull = new TextView(this);
-        tvRunFull.setText("\uD83D\uDE8C 현재  ");
+        tvRunFull.setText("현재  ");
         tvRunFull.setTextColor(Color.parseColor("#555555"));
         tvRunFull.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13)); runBanner.addView(tvRunFull);
         TextView tvRunCnt = new TextView(this);
@@ -10995,30 +11005,22 @@ public class PinActivity extends AppCompatActivity {
                         android.graphics.Paint lp2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         lp2.setColor(Color.parseColor("#AED6F1")); lp2.setStrokeWidth(dpToPx(2));
                         canvas.drawLine(cx,0,cx,h,lp2);
-                        float boxW=dpToPx(28),emojiH=dpToPx(26),numH=dpToPx(16),gap=dpToPx(2);
-                        float totalH=emojiH+gap+numH, startY=h/2f-totalH/2f, left=cx-boxW/2f, r=dpToPx(4);
-                        android.graphics.Paint borderP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                        borderP.setColor(Color.parseColor("#E74C3C")); borderP.setStyle(android.graphics.Paint.Style.STROKE); borderP.setStrokeWidth(dpToPx(2));
-                        android.graphics.Paint fillP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                        fillP.setColor(Color.WHITE); fillP.setStyle(android.graphics.Paint.Style.FILL);
-                        android.graphics.RectF emojiRect = new android.graphics.RectF(left,startY,left+boxW,startY+emojiH);
-                        canvas.drawRoundRect(emojiRect,r,r,fillP); canvas.drawRoundRect(emojiRect,r,r,borderP);
-                        // 버스 이미지 그리기
+                        float boxW=dpToPx(28), emojiH=dpToPx(26), numH=dpToPx(14), gap=dpToPx(1);
+                        float totalH=emojiH+gap+numH, startY=h/2f-totalH/2f, left=cx-boxW/2f;
+                        // 버스 이미지 (테두리 없이 그대로)
                         android.graphics.Bitmap bmp = getBusIcon();
                         if (bmp != null) {
                             android.graphics.Paint imgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.FILTER_BITMAP_FLAG);
-                            float pad = dpToPx(2);
-                            android.graphics.RectF dst = new android.graphics.RectF(left+pad, startY+pad, left+boxW-pad, startY+emojiH-pad);
+                            android.graphics.RectF dst = new android.graphics.RectF(left, startY, left+boxW, startY+emojiH);
                             canvas.drawBitmap(bmp, null, dst, imgP);
                         } else {
                             android.graphics.Paint tp2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                             tp2.setTextSize(dpToPx(13)); tp2.setTextAlign(android.graphics.Paint.Align.CENTER);
                             canvas.drawText("\uD83D\uDE8C", cx, startY+emojiH*0.72f+dpToPx(2), tp2);
                         }
+                        // 번호 (테두리 없이 텍스트만)
                         if (!fShortNo.isEmpty()) {
                             float numY=startY+emojiH+gap;
-                            android.graphics.RectF numRect = new android.graphics.RectF(left,numY,left+boxW,numY+numH);
-                            canvas.drawRoundRect(numRect,r,r,fillP); canvas.drawRoundRect(numRect,r,r,borderP);
                             android.graphics.Paint np2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                             np2.setColor(Color.parseColor("#E74C3C")); np2.setTextSize(dpToPx(8));
                             np2.setTextAlign(android.graphics.Paint.Align.CENTER); np2.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -14283,7 +14285,7 @@ public class PinActivity extends AppCompatActivity {
             rCardLp.setMargins(0, 0, routeColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             rCard.setLayoutParams(rCardLp);
 
-            // 오른쪽 위: 설정 + 알림 버튼 행
+            // 오른쪽 위: 버스이미지 + 설정 + 알림 버튼 행
             final String fRKey = rKey;
 
             LinearLayout iconBtnRow = new LinearLayout(this);
@@ -14291,6 +14293,22 @@ public class PinActivity extends AppCompatActivity {
             iconBtnRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
             iconBtnRow.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            // 버스 이미지 (설정 왼쪽)
+            android.widget.ImageView ivFavBus = new android.widget.ImageView(this);
+            android.graphics.Bitmap favBusBmp = getBusIcon();
+            if (favBusBmp != null) ivFavBus.setImageBitmap(favBusBmp);
+            LinearLayout.LayoutParams favBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
+            favBusLp.setMargins(0, 0, dpToPx(6), 0);
+            favBusLp.gravity = Gravity.CENTER_VERTICAL;
+            ivFavBus.setLayoutParams(favBusLp);
+            ivFavBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            // 버스 이미지는 왼쪽 공간 차지용 - Gravity.START
+            LinearLayout busImgWrapper = new LinearLayout(this);
+            busImgWrapper.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            busImgWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            busImgWrapper.addView(ivFavBus);
+            iconBtnRow.addView(busImgWrapper);
 
             // 설정 버튼 (왼쪽)
             TextView tvGear = new TextView(this);
