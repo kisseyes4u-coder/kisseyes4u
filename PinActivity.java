@@ -9785,8 +9785,12 @@ public class PinActivity extends AppCompatActivity {
                         }
                         row.addView(stopInfo);
 
-                        // 즐겨찾기 버튼
-                        final String favKey = "fav_stop_" + s[0];
+                        // 즐겨찾기 버튼 (키: routeId_nodeId → 노선별 독립)
+                        final String favKey = "fav_stop_" + routeId + "_" + s[0];
+                        final String favNameKey    = "fav_stop_name_"    + routeId + "_" + s[0];
+                        final String favNoKey      = "fav_stop_no_"      + routeId + "_" + s[0];
+                        final String favRouteKey   = "fav_stop_route_"   + routeId + "_" + s[0];
+                        final String favRouteIdKey = "fav_stop_routeid_" + routeId + "_" + s[0];
                         boolean isFav = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
                                 .getBoolean(favKey, false);
                         TextView tvStar = new TextView(this);
@@ -9822,10 +9826,10 @@ public class PinActivity extends AppCompatActivity {
                             boolean nowFav = !wasFav;
                             getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
                                     .putBoolean(favKey, nowFav)
-                                    .putString("fav_stop_name_"    + nodeId2, stopName)
-                                    .putString("fav_stop_no_"      + nodeId2, stopNo)
-                                    .putString("fav_stop_route_"   + nodeId2, routeNo)
-                                    .putString("fav_stop_routeid_" + nodeId2, routeId)
+                                    .putString(favNameKey,    stopName)
+                                    .putString(favNoKey,      stopNo)
+                                    .putString(favRouteKey,   routeNo)
+                                    .putString(favRouteIdKey, routeId)
                                     .apply();
                             android.graphics.drawable.GradientDrawable newBg =
                                     new android.graphics.drawable.GradientDrawable();
@@ -12719,16 +12723,18 @@ public class PinActivity extends AppCompatActivity {
         busFavSection = favSection;
         favSection.removeAllViews();
         android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-        java.util.List<String> favNodeIds = new java.util.ArrayList<>();
+        // 키: fav_stop_routeId_nodeId (boolean=true인 것만)
+        java.util.List<String> favKeys = new java.util.ArrayList<>();
         for (java.util.Map.Entry<String, ?> e : prefs.getAll().entrySet()) {
-            if (e.getKey().startsWith("fav_stop_") && !e.getKey().contains("_name_")
-                    && !e.getKey().contains("_no_") && !e.getKey().contains("_route_")) {
+            String k = e.getKey();
+            if (k.startsWith("fav_stop_") && !k.contains("_name_")
+                    && !k.contains("_no_") && !k.contains("_route_")) {
                 if (Boolean.TRUE.equals(e.getValue())) {
-                    favNodeIds.add(e.getKey().substring("fav_stop_".length()));
+                    favKeys.add(k.substring("fav_stop_".length())); // "routeId_nodeId"
                 }
             }
         }
-        if (favNodeIds.isEmpty()) return;
+        if (favKeys.isEmpty()) return;
 
         // 즐겨찾기 타이틀
         TextView tvFavTitle = new TextView(this);
@@ -12742,11 +12748,12 @@ public class PinActivity extends AppCompatActivity {
         tvFavTitle.setLayoutParams(ttLp);
         favSection.addView(tvFavTitle);
 
-        for (String nodeId : favNodeIds) {
-            String stopName  = prefs.getString("fav_stop_name_"    + nodeId, nodeId);
-            String stopNo    = prefs.getString("fav_stop_no_"      + nodeId, "");
-            String routeNo   = prefs.getString("fav_stop_route_"   + nodeId, "");
-            String routeId   = prefs.getString("fav_stop_routeid_" + nodeId, "");
+        for (String compositeKey : favKeys) {
+            // compositeKey = "routeId_nodeId"
+            String stopName = prefs.getString("fav_stop_name_"    + compositeKey, compositeKey);
+            String stopNo   = prefs.getString("fav_stop_no_"      + compositeKey, "");
+            String routeNo  = prefs.getString("fav_stop_route_"   + compositeKey, "");
+            String routeId  = prefs.getString("fav_stop_routeid_" + compositeKey, "");
 
             // 카드: 버스이모지 + 노선번호 + 정류소명
             LinearLayout card = new LinearLayout(this);
@@ -12793,8 +12800,9 @@ public class PinActivity extends AppCompatActivity {
             card.addView(textArea);
 
             // 즐겨찾기 버튼
-            final String favKey = "fav_stop_" + nodeId;
-            final String fNodeId = nodeId, fStopName = stopName, fRouteNo = routeNo;
+            final String favKey2 = "fav_stop_" + compositeKey;
+            final String fCompositeKey = compositeKey;
+            final String fNodeId = compositeKey, fStopName = stopName, fRouteNo = routeNo;
             TextView tvStar2 = new TextView(this);
             tvStar2.setText("즐겨찾기");
             tvStar2.setTextColor(Color.WHITE);
@@ -12812,11 +12820,11 @@ public class PinActivity extends AppCompatActivity {
             star2Lp.gravity = Gravity.CENTER_VERTICAL;
             tvStar2.setLayoutParams(star2Lp);
             tvStar2.setOnClickListener(v2 -> {
-                prefs.edit().remove(favKey)
-                        .remove("fav_stop_name_"    + fNodeId)
-                        .remove("fav_stop_no_"      + fNodeId)
-                        .remove("fav_stop_route_"   + fNodeId)
-                        .remove("fav_stop_routeid_" + fNodeId).apply();
+                prefs.edit().remove(favKey2)
+                        .remove("fav_stop_name_"    + fCompositeKey)
+                        .remove("fav_stop_no_"      + fCompositeKey)
+                        .remove("fav_stop_route_"   + fCompositeKey)
+                        .remove("fav_stop_routeid_" + fCompositeKey).apply();
                 android.widget.Toast.makeText(this, fStopName + " 즐겨찾기 해제",
                         android.widget.Toast.LENGTH_SHORT).show();
                 refreshBusFavorites(favSection, resultContainer);
@@ -12852,8 +12860,6 @@ public class PinActivity extends AppCompatActivity {
                             for (String item : xml.split("<item>")) {
                                 if (tag(item, "routeno").equals(fRouteNo)) {
                                     rid = tag(item, "routeid");
-                                    // routeId 저장
-                                    prefs.edit().putString("fav_stop_routeid_" + fNodeId, rid).apply();
                                     break;
                                 }
                             }
