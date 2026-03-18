@@ -10840,9 +10840,12 @@ public class PinActivity extends AppCompatActivity {
         container.addView(runBanner);
 
         // ── 타임라인 ──────────────────────────────────────
-        int turnOrdInt = -1;
-        try { if (turnOrd != null && !turnOrd.isEmpty()) turnOrdInt = Integer.parseInt(turnOrd); } catch (Exception ig) {}
-        final int fTurnOrd = turnOrdInt;
+        // 회차 지점: 정류소 번호(s[3])가 비어있는 곳이 딱 한 곳 (기점/종점 제외)
+        int turnIdx = -1;
+        for (int i = 1; i < stops.size() - 1; i++) {
+            if (stops.get(i)[3].isEmpty()) { turnIdx = i; break; }
+        }
+        final int fTurnIdx = turnIdx;
 
         for (int si = 0; si < stops.size(); si++) {
             String[] s = stops.get(si);
@@ -10850,11 +10853,9 @@ public class PinActivity extends AppCompatActivity {
             boolean hasBus  = busOrdSet.contains(s[2]);
             String vehicleNo = hasBus ? fBusVehicle.getOrDefault(s[2],"") : "";
 
-            // 회차 지점 여부
-            int stopOrd = -1;
-            try { stopOrd = Integer.parseInt(s[2]); } catch (Exception ig) {}
-            boolean isTurn = fTurnOrd > 0 && stopOrd == fTurnOrd;
-            boolean isReturn = fTurnOrd > 0 && stopOrd > fTurnOrd; // 회차 이후 (복귀 구간)
+            // 회차 지점 여부 (정류소번호 없는 곳)
+            boolean isTurn   = (fTurnIdx > 0 && si == fTurnIdx);
+            boolean isReturn = (fTurnIdx > 0 && si >= fTurnIdx); // 회차 포함 이후 (복귀 구간)
 
             // 회차 지점이면 유턴 화살표 행 삽입
             if (isTurn && si > 0) {
