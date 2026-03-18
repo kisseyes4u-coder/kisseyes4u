@@ -136,7 +136,10 @@ public class PinActivity extends AppCompatActivity {
     private LinearLayout busResultContainer = null;
     private LinearLayout busFavSection2 = null;
     private android.widget.EditText busEtSearch = null;
-    private TextView splashLoadingTv = null; // 스플래시 로딩 텍스트 (외부 접근용)
+    private TextView splashLoadingTv = null;
+    private android.widget.ProgressBar splashProgressBar = null;
+    private TextView splashProgressTv = null;
+    private LinearLayout splashProgressArea = null;
 
     // ── UI 참조 (잔액화면 갱신용) ──────────────────────────
     private LinearLayout msgContainer       = null;
@@ -295,10 +298,12 @@ public class PinActivity extends AppCompatActivity {
             uploadFcmTokenIfNeeded();
             if (busDbNeedsUpdate()) {
                 if (splashLoadingTv != null) splashLoadingTv.setText("버스 데이터 다운로드 중...");
+                showSplashProgress();
                 downloadBusRouteDb(() -> {
+                    hideSplashProgress();
                     ownerMenuBuilder.build();
                     checkAccessibilityService();
-                });
+                }, pct -> updateSplashProgress(pct));
             } else {
                 ownerMenuBuilder.build();
                 checkAccessibilityService();
@@ -2433,6 +2438,57 @@ public class PinActivity extends AppCompatActivity {
         tvLoading.setLayoutParams(loadLp);
         center.addView(tvLoading);
 
+        // 다운로드 프로그레스 영역 (초기 숨김)
+        LinearLayout progressArea = new LinearLayout(this);
+        progressArea.setOrientation(LinearLayout.VERTICAL);
+        progressArea.setGravity(Gravity.CENTER);
+        progressArea.setVisibility(android.view.View.GONE);
+        LinearLayout.LayoutParams paLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        paLp.setMargins(dpToPx(40), dpToPx(16), dpToPx(40), 0);
+        progressArea.setLayoutParams(paLp);
+
+        // 프로그레스바
+        android.widget.ProgressBar progressBar = new android.widget.ProgressBar(
+                this, null, android.R.attr.progressBarStyleHorizontal);
+        progressBar.setMax(100);
+        progressBar.setProgress(0);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            progressBar.setProgressTintList(
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#6C5CE7")));
+            progressBar.setProgressBackgroundTintList(
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#E0D9F5")));
+        }
+        progressBar.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(8)));
+        progressArea.addView(progressBar);
+        splashProgressBar = progressBar;
+
+        // 퍼센트 텍스트
+        TextView tvPercent = new TextView(this);
+        tvPercent.setText("0%");
+        tvPercent.setTextColor(Color.parseColor("#A89CD0"));
+        tvPercent.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 12);
+        tvPercent.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams pctLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        pctLp.setMargins(0, dpToPx(6), 0, 0);
+        tvPercent.setLayoutParams(pctLp);
+        progressArea.addView(tvPercent);
+        splashProgressTv = tvPercent;
+
+        center.addView(progressArea);
+        splashProgressArea = progressArea;
+        tvLoading.setText("로그인 중...");
+        tvLoading.setTextColor(Color.parseColor("#A89CD0"));
+        tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
+        tvLoading.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams loadLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        loadLp.setMargins(0, dpToPx(12), 0, 0);
+        tvLoading.setLayoutParams(loadLp);
+        center.addView(tvLoading);
+
         splash.addView(center);
         setContentView(splash);
     }
@@ -2444,11 +2500,32 @@ public class PinActivity extends AppCompatActivity {
         } catch (Exception e) { return "1.0"; }
     }
 
+    private void showSplashProgress() {
+        if (splashProgressArea != null)
+            splashProgressArea.setVisibility(android.view.View.VISIBLE);
+        if (splashProgressBar != null) splashProgressBar.setProgress(0);
+        if (splashProgressTv  != null) splashProgressTv.setText("0%");
+    }
+
+    private void updateSplashProgress(int pct) {
+        if (splashProgressBar != null) splashProgressBar.setProgress(pct);
+        if (splashProgressTv  != null) splashProgressTv.setText(pct + "%");
+    }
+
+    private void hideSplashProgress() {
+        if (splashProgressArea != null)
+            splashProgressArea.setVisibility(android.view.View.GONE);
+    }
+
     private void checkVersionThenShowMenu() {
         // 버스 DB 다운로드 필요하면 먼저 처리 후 메뉴 진입
         if (busDbNeedsUpdate()) {
             if (splashLoadingTv != null) splashLoadingTv.setText("버스 데이터 다운로드 중...");
-            downloadBusRouteDb(() -> doCheckVersionThenShowMenu());
+            showSplashProgress();
+            downloadBusRouteDb(() -> {
+                hideSplashProgress();
+                doCheckVersionThenShowMenu();
+            }, pct -> updateSplashProgress(pct));
         } else {
             doCheckVersionThenShowMenu();
         }
@@ -12794,11 +12871,30 @@ public class PinActivity extends AppCompatActivity {
 
     /** 대전 전체 노선 + 정류장 DB 다운로드 후 로컬 저장 */
     private void downloadBusRouteDb(Runnable onDone) {
+        downloadBusRouteDb(onDone, null);
+    }
+
+    private void downloadBusRouteDb(Runnable onDone, java.util.function.Consumer<Integer> onProgress) {
         new Thread(() -> {
             try {
+                // ── 전체 개수 미리 파악 ────────────────────────
+                // 노선: 첫 페이지 totalCount
+                String firstRouteXml = httpGet(BUS_BASE2 + "BusRouteInfoInqireService/getRouteNoList"
+                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                        + "&routeNo=&numOfRows=1&pageNo=1&_type=xml");
+                int totalRoute = 0;
+                try { totalRoute = Integer.parseInt(tag(firstRouteXml,"totalCount")); } catch(Exception ig){}
+                // 정류장: 첫 페이지 totalCount
+                String firstStopXml = httpGet(BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
+                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                        + "&nodeNm=&numOfRows=1&pageNo=1&_type=xml");
+                int totalStop = 0;
+                try { totalStop = Integer.parseInt(tag(firstStopXml,"totalCount")); } catch(Exception ig){}
+                final int grandTotal = Math.max(totalRoute + totalStop, 1);
+
                 // ① 노선 목록
                 StringBuilder sbRoute = new StringBuilder();
-                int page = 1;
+                int page = 1, doneRoute = 0;
                 while (true) {
                     String url = BUS_BASE2 + "BusRouteInfoInqireService/getRouteNoList"
                             + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
@@ -12815,14 +12911,17 @@ public class PinActivity extends AppCompatActivity {
                                .append(tag(item,"routetp"));
                         count++;
                     }
+                    doneRoute += count;
+                    final int pct1 = (int)(doneRoute * 50.0 / Math.max(totalRoute, 1));
+                    if (onProgress != null) runOnUiThread(() -> onProgress.accept(Math.min(pct1, 50)));
                     if (count < 100) break;
                     page++;
                     if (page > 20) break;
                 }
 
-                // ② 정류장 목록 (가나다 순으로 모든 정류장 다운로드)
+                // ② 정류장 목록
                 StringBuilder sbStop = new StringBuilder();
-                int sPage = 1;
+                int sPage = 1, doneStop = 0;
                 while (true) {
                     String url2 = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
                             + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
@@ -12837,18 +12936,22 @@ public class PinActivity extends AppCompatActivity {
                               .append(tag(item,"nodeno"));
                         cnt2++;
                     }
+                    doneStop += cnt2;
+                    final int pct2 = 50 + (int)(doneStop * 50.0 / Math.max(totalStop, 1));
+                    if (onProgress != null) runOnUiThread(() -> onProgress.accept(Math.min(pct2, 99)));
                     if (cnt2 < 100) break;
                     sPage++;
-                    if (sPage > 100) break; // 대전 정류장 최대 ~수천개
+                    if (sPage > 100) break;
                 }
 
                 String today = new java.text.SimpleDateFormat("yyyyMMdd",
                         java.util.Locale.getDefault()).format(new java.util.Date());
                 getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
-                        .putString(BUS_DB_KEY,   sbRoute.toString())
-                        .putString("all_stops",  sbStop.toString())
-                        .putString(BUS_DB_VER,   today)
+                        .putString(BUS_DB_KEY,  sbRoute.toString())
+                        .putString("all_stops", sbStop.toString())
+                        .putString(BUS_DB_VER,  today)
                         .apply();
+                if (onProgress != null) runOnUiThread(() -> onProgress.accept(100));
                 if (onDone != null) runOnUiThread(onDone);
             } catch (Exception ignored) {
                 if (onDone != null) runOnUiThread(onDone);
