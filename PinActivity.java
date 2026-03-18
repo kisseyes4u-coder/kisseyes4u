@@ -9527,51 +9527,71 @@ public class PinActivity extends AppCompatActivity {
 
                         // ── 버스가 이 정류소 위에 있으면 버스 행 먼저 ──
                         if (hasBus) {
-                            // 차량번호에서 숫자 4자리만 추출 (예: 대전75자1234 → 1234)
                             String shortNo = vehicleNo.replaceAll("[^0-9]", "");
                             if (shortNo.length() > 4) shortNo = shortNo.substring(shortNo.length() - 4);
+                            final String fShortNo = shortNo;
 
                             LinearLayout busRow = new LinearLayout(this);
                             busRow.setOrientation(LinearLayout.HORIZONTAL);
                             busRow.setGravity(Gravity.CENTER_VERTICAL);
                             busRow.setLayoutParams(new LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(32)));
+                                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(52)));
 
-                            // 타임라인 열: 선 + 버스 이모지 오버레이
-                            final String fShortNo = shortNo;
+                            // 타임라인 열: 선 + 버스 박스 오버레이
                             android.view.View busTimeline = new android.view.View(this) {
                                 @Override protected void onDraw(android.graphics.Canvas canvas) {
                                     super.onDraw(canvas);
                                     int w = getWidth(), h = getHeight();
                                     float cx = w / 2f;
+
                                     // 세로선
                                     android.graphics.Paint lp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                                     lp.setColor(Color.parseColor("#CCCCCC"));
                                     lp.setStrokeWidth(dpToPx(3));
                                     canvas.drawLine(cx, 0, cx, h, lp);
-                                    // 버스 이모지 텍스트
+
+                                    // 빨간 테두리 박스
+                                    float bw = dpToPx(30), bh = dpToPx(40);
+                                    float left = cx - bw/2f, top = h/2f - bh/2f;
+                                    android.graphics.Paint borderPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                                    borderPaint.setColor(Color.parseColor("#E74C3C"));
+                                    borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                                    borderPaint.setStrokeWidth(dpToPx(2));
+                                    float r = dpToPx(4);
+                                    canvas.drawRoundRect(left, top, left+bw, top+bh, r, r, borderPaint);
+
+                                    // 흰 배경
+                                    android.graphics.Paint fillPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                                    fillPaint.setColor(Color.WHITE);
+                                    fillPaint.setStyle(android.graphics.Paint.Style.FILL);
+                                    canvas.drawRoundRect(left+dpToPx(1), top+dpToPx(1),
+                                            left+bw-dpToPx(1), top+bh-dpToPx(1), r, r, fillPaint);
+
+                                    // 버스 이모지
                                     android.graphics.Paint tp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                    tp.setTextSize(dpToPx(18));
+                                    tp.setTextSize(dpToPx(14));
                                     tp.setTextAlign(android.graphics.Paint.Align.CENTER);
-                                    canvas.drawText("🚌", cx, h / 2f + dpToPx(7), tp);
+                                    canvas.drawText("🚌", cx, top + bh * 0.45f + dpToPx(5), tp);
+
+                                    // 숫자
+                                    if (!fShortNo.isEmpty()) {
+                                        android.graphics.Paint np = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                                        np.setColor(Color.parseColor("#E74C3C"));
+                                        np.setTextSize(dpToPx(9));
+                                        np.setTextAlign(android.graphics.Paint.Align.CENTER);
+                                        np.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                                        canvas.drawText(fShortNo, cx, top + bh - dpToPx(4), np);
+                                    }
                                 }
                             };
-                            busTimeline.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
+                            busTimeline.setLayoutParams(new LinearLayout.LayoutParams(
+                                    dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
                             busRow.addView(busTimeline);
 
-                            // 차량번호 4자리
-                            if (!shortNo.isEmpty()) {
-                                TextView tvVehicle = new TextView(this);
-                                tvVehicle.setText(shortNo);
-                                tvVehicle.setTextColor(Color.parseColor("#2C3E50"));
-                                tvVehicle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                                tvVehicle.setTypeface(null, android.graphics.Typeface.BOLD);
-                                LinearLayout.LayoutParams vLp = new LinearLayout.LayoutParams(
-                                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                                vLp.setMargins(dpToPx(8), 0, 0, 0);
-                                tvVehicle.setLayoutParams(vLp);
-                                busRow.addView(tvVehicle);
-                            }
+                            // 오른쪽 여백 채우기
+                            View busSpace = new View(this);
+                            busSpace.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                            busRow.addView(busSpace);
                             container.addView(busRow);
                         }
 
@@ -9582,43 +9602,47 @@ public class PinActivity extends AppCompatActivity {
                         row.setLayoutParams(new LinearLayout.LayoutParams(
                                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-                        final boolean fFirst2 = isFirst, fLast2 = isLast, fBus = hasBus;
+                        final boolean fFirst2 = isFirst, fLast2 = isLast;
                         android.view.View timeline = new android.view.View(this) {
                             @Override protected void onDraw(android.graphics.Canvas canvas) {
                                 super.onDraw(canvas);
                                 int w = getWidth(), h = getHeight();
-                                int cx = w / 2;
-                                int cr = dpToPx(9);
+                                float cx = w / 2f;
+                                float cr = dpToPx(9);
 
+                                // 세로선
                                 android.graphics.Paint lPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                lPaint.setColor(Color.parseColor("#CCCCCC"));
-                                lPaint.setStrokeWidth(dpToPx(3));
+                                lPaint.setColor(Color.parseColor("#BBBBBB"));
+                                lPaint.setStrokeWidth(dpToPx(2));
                                 if (!fFirst2) canvas.drawLine(cx, 0, cx, h/2f - cr, lPaint);
                                 if (!fLast2)  canvas.drawLine(cx, h/2f + cr, cx, h, lPaint);
 
-                                // 원 테두리
+                                // 얇은 원 테두리
                                 android.graphics.Paint cPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                cPaint.setColor(Color.parseColor("#0984E3"));
+                                cPaint.setColor(Color.parseColor("#AAAAAA"));
                                 cPaint.setStyle(android.graphics.Paint.Style.STROKE);
-                                cPaint.setStrokeWidth(dpToPx(2));
+                                cPaint.setStrokeWidth(dpToPx(1));
                                 canvas.drawCircle(cx, h/2f, cr, cPaint);
 
-                                // 원 안 채우기
-                                android.graphics.Paint fPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                fPaint.setColor(Color.WHITE);
-                                canvas.drawCircle(cx, h/2f, cr - dpToPx(2), fPaint);
+                                // 원 안 흰 배경
+                                android.graphics.Paint wPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                                wPaint.setColor(Color.WHITE);
+                                canvas.drawCircle(cx, h/2f, cr - dpToPx(1), wPaint);
 
-                                // 아래 화살표 ▼
-                                android.graphics.Paint aPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                aPaint.setColor(Color.parseColor("#0984E3"));
-                                float ar = dpToPx(4);
-                                float ay = h/2f;
-                                android.graphics.Path path = new android.graphics.Path();
-                                path.moveTo(cx - ar, ay - ar*0.7f);
-                                path.lineTo(cx + ar, ay - ar*0.7f);
-                                path.lineTo(cx,      ay + ar*0.7f);
-                                path.close();
-                                canvas.drawPath(path, aPaint);
+                                // V 표시 (얇게)
+                                android.graphics.Paint vPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                                vPaint.setColor(Color.parseColor("#888888"));
+                                vPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                                vPaint.setStrokeWidth(dpToPx(1.2f));
+                                vPaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                                float vSize = dpToPx(4);
+                                float vy = h/2f;
+                                // V: 왼쪽 위 → 중앙 아래 → 오른쪽 위
+                                android.graphics.Path vPath = new android.graphics.Path();
+                                vPath.moveTo(cx - vSize, vy - vSize*0.5f);
+                                vPath.lineTo(cx, vy + vSize*0.5f);
+                                vPath.lineTo(cx + vSize, vy - vSize*0.5f);
+                                canvas.drawPath(vPath, vPaint);
                             }
                         };
                         timeline.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
@@ -9684,14 +9708,12 @@ public class PinActivity extends AppCompatActivity {
                             divRow.setLayoutParams(new LinearLayout.LayoutParams(
                                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-                            // 선 이어주는 투명 뷰
-                            final boolean fLastD = isLast;
                             android.view.View divLine = new android.view.View(this) {
                                 @Override protected void onDraw(android.graphics.Canvas canvas) {
                                     super.onDraw(canvas);
                                     android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                    p.setColor(Color.parseColor("#CCCCCC"));
-                                    p.setStrokeWidth(dpToPx(3));
+                                    p.setColor(Color.parseColor("#BBBBBB"));
+                                    p.setStrokeWidth(dpToPx(2));
                                     canvas.drawLine(getWidth()/2f, 0, getWidth()/2f, getHeight(), p);
                                 }
                             };
@@ -9699,7 +9721,7 @@ public class PinActivity extends AppCompatActivity {
                             divRow.addView(divLine);
 
                             View divider2 = new View(this);
-                            divider2.setBackgroundColor(Color.parseColor("#F0F0F0"));
+                            divider2.setBackgroundColor(Color.parseColor("#CCCCCC"));
                             LinearLayout.LayoutParams dvLp = new LinearLayout.LayoutParams(0, dpToPx(1), 1f);
                             dvLp.setMargins(dpToPx(6), 0, 0, 0);
                             divider2.setLayoutParams(dvLp);
