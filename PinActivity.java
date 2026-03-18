@@ -165,6 +165,20 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 자동 새로고침 ──────────────────────────────────────
     private android.os.Handler refreshHandler = new android.os.Handler();
+    private android.graphics.Bitmap busIconBitmap = null;
+
+    /** assets/bus.png 로드 (최초 1회 캐시) */
+    private android.graphics.Bitmap getBusIcon() {
+        if (busIconBitmap == null) {
+            try {
+                android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
+                opts.inSampleSize = 1;
+                busIconBitmap = android.graphics.BitmapFactory.decodeStream(
+                        getAssets().open("bus.png"), null, opts);
+            } catch (Exception ignored) {}
+        }
+        return busIconBitmap;
+    }
     private android.os.Handler busRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable busRefreshRunnable = null;
     private Runnable refreshRunnable;
@@ -9480,11 +9494,19 @@ public class PinActivity extends AppCompatActivity {
         hbLp.setMargins(0, 0, 0, dpToPx(0));
         headerBar.setLayoutParams(hbLp);
 
-        TextView tvHeaderIcon = new TextView(this);
-        tvHeaderIcon.setText("🚌");
-        tvHeaderIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
-        tvHeaderIcon.setPadding(0, 0, dpToPx(10), 0);
-        headerBar.addView(tvHeaderIcon);
+        android.widget.ImageView ivHeaderIcon = new android.widget.ImageView(this);
+        android.graphics.Bitmap busHdrBmp = getBusIcon();
+        if (busHdrBmp != null) {
+            ivHeaderIcon.setImageBitmap(busHdrBmp);
+        } else {
+            ivHeaderIcon.setImageResource(android.R.drawable.ic_menu_directions);
+        }
+        ivHeaderIcon.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams hIconLp = new LinearLayout.LayoutParams(dpToPx(30), dpToPx(30));
+        hIconLp.setMargins(0, 0, dpToPx(10), 0);
+        hIconLp.gravity = Gravity.CENTER_VERTICAL;
+        ivHeaderIcon.setLayoutParams(hIconLp);
+        headerBar.addView(ivHeaderIcon);
 
         LinearLayout headerTxt = new LinearLayout(this);
         headerTxt.setOrientation(LinearLayout.VERTICAL);
@@ -10930,9 +10952,18 @@ public class PinActivity extends AppCompatActivity {
                         fillP.setColor(Color.WHITE); fillP.setStyle(android.graphics.Paint.Style.FILL);
                         android.graphics.RectF emojiRect = new android.graphics.RectF(left,startY,left+boxW,startY+emojiH);
                         canvas.drawRoundRect(emojiRect,r,r,fillP); canvas.drawRoundRect(emojiRect,r,r,borderP);
-                        android.graphics.Paint tp2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                        tp2.setTextSize(dpToPx(13)); tp2.setTextAlign(android.graphics.Paint.Align.CENTER);
-                        canvas.drawText("\uD83D\uDE8C", cx, startY+emojiH*0.72f+dpToPx(2), tp2);
+                        // 버스 이미지 그리기
+                        android.graphics.Bitmap bmp = getBusIcon();
+                        if (bmp != null) {
+                            android.graphics.Paint imgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.FILTER_BITMAP_FLAG);
+                            float pad = dpToPx(2);
+                            android.graphics.RectF dst = new android.graphics.RectF(left+pad, startY+pad, left+boxW-pad, startY+emojiH-pad);
+                            canvas.drawBitmap(bmp, null, dst, imgP);
+                        } else {
+                            android.graphics.Paint tp2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                            tp2.setTextSize(dpToPx(13)); tp2.setTextAlign(android.graphics.Paint.Align.CENTER);
+                            canvas.drawText("\uD83D\uDE8C", cx, startY+emojiH*0.72f+dpToPx(2), tp2);
+                        }
                         if (!fShortNo.isEmpty()) {
                             float numY=startY+emojiH+gap;
                             android.graphics.RectF numRect = new android.graphics.RectF(left,numY,left+boxW,numY+numH);
