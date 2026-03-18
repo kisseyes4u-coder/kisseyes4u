@@ -13551,37 +13551,78 @@ public class PinActivity extends AppCompatActivity {
     private void buildAndUploadStopDb(Runnable onDone, ProgressCallback onProgress) {
         new Thread(() -> {
             try {
-                // 초성×중성 304개 prefix
                 int[] choIdxArr = {0,2,3,5,6,7,9,11,12,14,15,16,17,18};
-                java.util.Set<String> seen = new java.util.HashSet<>();
-                StringBuilder jsonSb = new StringBuilder("[");
                 int total = choIdxArr.length * 21 + 10;
-                int done = 0;
 
-                for (int ci : choIdxArr) {
-                    for (int ji = 0; ji < 21; ji++) {
-                        String prefix = String.valueOf((char)(0xAC00 + ci*21*28 + ji*28));
-                        fetchStopsForPrefix(prefix, seen, jsonSb);
-                        done++;
-                        final int pct = (int)(done * 100.0 / total);
-                        if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct,99)));
-                    }
+                // ── 전체 prefix 목록 생성 ──
+                java.util.List<String> allPrefixes = new java.util.ArrayList<>();
+                for (int ci : choIdxArr)
+                    for (int ji = 0; ji < 21; ji++)
+                        allPrefixes.add(String.valueOf((char)(0xAC00 + ci*21*28 + ji*28)));
+                for (int d = 0; d < 10; d++)
+                    allPrefixes.add(String.valueOf(d));
+
+                // ── 병렬 수집 (4스레드) ──
+                java.util.concurrent.ExecutorService pool =
+                        java.util.concurrent.Executors.newFixedThreadPool(4);
+                // 결과를 안전하게 모을 동시성 맵
+                java.util.concurrent.ConcurrentHashMap<String, String[]> resultMap =
+                        new java.util.concurrent.ConcurrentHashMap<>();
+                java.util.concurrent.atomic.AtomicInteger doneCount =
+                        new java.util.concurrent.atomic.AtomicInteger(0);
+
+                java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
+                for (String prefix : allPrefixes) {
+                    futures.add(pool.submit(() -> {
+                        int page = 1;
+                        while (true) {
+                            try {
+                                String url = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
+                                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                        + "&nodeNm=" + java.net.URLEncoder.encode(prefix, "UTF-8")
+                                        + "&numOfRows=100&pageNo=" + page + "&_type=xml";
+                                String xml = httpGet(url);
+                                int cnt = 0;
+                                for (String item : xml.split("<item>")) {
+                                    if (!item.contains("<nodeid>")) continue;
+                                    String id = tag(item,"nodeid");
+                                    String nm = tag(item,"nodenm");
+                                    String no = tag(item,"nodeno");
+                                    if (!id.isEmpty())
+                                        resultMap.put(id, new String[]{id, nm, no});
+                                    cnt++;
+                                }
+                                if (cnt < 100) break;
+                                page++;
+                                if (page > 20) break;
+                            } catch (Exception ignored) { break; }
+                        }
+                        int d = doneCount.incrementAndGet();
+                        final int pct = (int)(d * 99.0 / total);
+                        if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(pct));
+                    }));
                 }
-                for (int d = 0; d < 10; d++) {
-                    fetchStopsForPrefix(String.valueOf(d), seen, jsonSb);
-                    done++;
+
+                // 모든 작업 완료 대기
+                pool.shutdown();
+                pool.awaitTermination(10, java.util.concurrent.TimeUnit.MINUTES);
+
+                // ── JSON 조립 ──
+                StringBuilder jsonSb = new StringBuilder("[");
+                boolean first = true;
+                for (String[] s : resultMap.values()) {
+                    if (!first) jsonSb.append(',');
+                    jsonSb.append("{\"id\":\"").append(s[0])
+                          .append("\",\"nm\":\"").append(s[1].replace("\"","\\\""))
+                          .append("\",\"no\":\"").append(s[2]).append("\"}");
+                    first = false;
                 }
-                if (jsonSb.length() > 1 && jsonSb.charAt(jsonSb.length()-1) == ',')
-                    jsonSb.deleteCharAt(jsonSb.length()-1);
                 jsonSb.append("]");
 
                 String json = jsonSb.toString();
-                // Drive 업로드
                 new DriveUploadHelper(this).uploadFileSync(json, STOP_DB_FILE);
-                // 로컬 캐시 저장
                 getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
                         .putString("stop_json_cache", json).apply();
-                // 메모리 로드
                 loadStopJsonToMemory(json);
 
                 if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(100));
@@ -13592,32 +13633,6 @@ public class PinActivity extends AppCompatActivity {
         }).start();
     }
 
-    private void fetchStopsForPrefix(String prefix, java.util.Set<String> seen, StringBuilder jsonSb) {
-        int page = 1;
-        while (true) {
-            try {
-                String url = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
-                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                        + "&nodeNm=" + java.net.URLEncoder.encode(prefix, "UTF-8")
-                        + "&numOfRows=100&pageNo=" + page + "&_type=xml";
-                String xml = httpGet(url);
-                int cnt = 0;
-                for (String item : xml.split("<item>")) {
-                    if (!item.contains("<nodeid>")) continue;
-                    String id = tag(item,"nodeid"), nm = tag(item,"nodenm"), no = tag(item,"nodeno");
-                    if (id.isEmpty() || seen.contains(id)) continue;
-                    seen.add(id);
-                    if (jsonSb.length() > 1) jsonSb.append(',');
-                    jsonSb.append("{\"id\":\"").append(id).append("\",\"nm\":\"")
-                          .append(nm.replace("\"","\\\"")).append("\",\"no\":\"").append(no).append("\"}");
-                    cnt++;
-                }
-                if (cnt < 100) break;
-                page++;
-                if (page > 20) break;
-            } catch (Exception ignored) { break; }
-        }
-    }
 
     /** 로컬 노선 DB에서 검색 (메모리 우선) */
     private java.util.List<String[]> busSearchLocal(String keyword) {
