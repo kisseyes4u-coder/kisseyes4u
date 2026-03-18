@@ -8927,6 +8927,7 @@ public class PinActivity extends AppCompatActivity {
         });
 
         // ── 통합 검색창 ───────────────────────────────────
+        // ── 탭 + 검색창 영역 ──────────────────────────────
         LinearLayout searchArea = new LinearLayout(this);
         searchArea.setOrientation(LinearLayout.VERTICAL);
         searchArea.setBackgroundColor(Color.parseColor("#F2F4F8"));
@@ -8935,6 +8936,71 @@ public class PinActivity extends AppCompatActivity {
         saLp.setMargins(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(4));
         searchArea.setLayoutParams(saLp);
 
+        android.view.inputmethod.InputMethodManager immBus =
+                (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+
+        // 탭 행: [🚌 버스] [🚏 정류장]
+        LinearLayout tabRow = new LinearLayout(this);
+        tabRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams trLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        trLp.setMargins(0, 0, 0, dpToPx(8));
+        tabRow.setLayoutParams(trLp);
+
+        final boolean[] isBusTab = {true}; // true=버스, false=정류장
+
+        TextView tabBus = new TextView(this);
+        tabBus.setText("🚌  버스");
+        tabBus.setGravity(Gravity.CENTER);
+        tabBus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tabBus.setTypeface(null, android.graphics.Typeface.BOLD);
+        tabBus.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+
+        TextView tabStop = new TextView(this);
+        tabStop.setText("🚏  정류장");
+        tabStop.setGravity(Gravity.CENTER);
+        tabStop.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tabStop.setTypeface(null, android.graphics.Typeface.BOLD);
+        tabStop.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+
+        // 탭 스타일 업데이트 함수
+        android.graphics.drawable.GradientDrawable selBg = new android.graphics.drawable.GradientDrawable();
+        selBg.setColor(Color.parseColor("#0984E3"));
+        selBg.setCornerRadius(dpToPx(8));
+        android.graphics.drawable.GradientDrawable unselBg = new android.graphics.drawable.GradientDrawable();
+        unselBg.setColor(Color.WHITE);
+        unselBg.setCornerRadius(dpToPx(8));
+        unselBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+
+        Runnable updateTabStyle = () -> {
+            if (isBusTab[0]) {
+                android.graphics.drawable.GradientDrawable b1 = new android.graphics.drawable.GradientDrawable();
+                b1.setColor(Color.parseColor("#0984E3")); b1.setCornerRadius(dpToPx(8));
+                tabBus.setBackground(b1); tabBus.setTextColor(Color.WHITE);
+                android.graphics.drawable.GradientDrawable b2 = new android.graphics.drawable.GradientDrawable();
+                b2.setColor(Color.WHITE); b2.setCornerRadius(dpToPx(8));
+                b2.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                tabStop.setBackground(b2); tabStop.setTextColor(Color.parseColor("#555555"));
+            } else {
+                android.graphics.drawable.GradientDrawable b1 = new android.graphics.drawable.GradientDrawable();
+                b1.setColor(Color.WHITE); b1.setCornerRadius(dpToPx(8));
+                b1.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                tabBus.setBackground(b1); tabBus.setTextColor(Color.parseColor("#555555"));
+                android.graphics.drawable.GradientDrawable b2 = new android.graphics.drawable.GradientDrawable();
+                b2.setColor(Color.parseColor("#0984E3")); b2.setCornerRadius(dpToPx(8));
+                tabStop.setBackground(b2); tabStop.setTextColor(Color.WHITE);
+            }
+        };
+        updateTabStyle.run();
+
+        LinearLayout.LayoutParams tabLp1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        tabLp1.setMargins(0, 0, dpToPx(6), 0);
+        tabBus.setLayoutParams(tabLp1);
+        tabStop.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        tabRow.addView(tabBus);
+        tabRow.addView(tabStop);
+        searchArea.addView(tabRow);
+
         // 검색창 행
         LinearLayout searchRow = new LinearLayout(this);
         searchRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -8942,20 +9008,15 @@ public class PinActivity extends AppCompatActivity {
         searchRow.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        // EditText + 삭제버튼 wrapper
         RelativeLayout etWrapper = new RelativeLayout(this);
-        LinearLayout.LayoutParams wLp = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        LinearLayout.LayoutParams wLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         wLp.setMargins(0, 0, dpToPx(8), 0);
         etWrapper.setLayoutParams(wLp);
 
-        android.view.inputmethod.InputMethodManager immBus =
-                (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-
         android.widget.EditText etSearch = new android.widget.EditText(this);
         busEtSearch = etSearch;
-        etSearch.setHint("버스번호, 정류장, 장소 검색");
-        etSearch.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        etSearch.setHint("버스 번호 입력");
+        etSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         etSearch.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
         android.graphics.drawable.GradientDrawable eBg = new android.graphics.drawable.GradientDrawable();
         eBg.setColor(Color.WHITE);
@@ -8967,7 +9028,6 @@ public class PinActivity extends AppCompatActivity {
                 RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT));
         etWrapper.addView(etSearch);
 
-        // 삭제 버튼
         TextView btnClear = new TextView(this);
         btnClear.setText("삭제");
         btnClear.setTextColor(Color.WHITE);
@@ -8989,7 +9049,6 @@ public class PinActivity extends AppCompatActivity {
         etWrapper.addView(btnClear);
         searchRow.addView(etWrapper);
 
-        // 검색 버튼
         TextView btnGo = new TextView(this);
         btnGo.setText("검색");
         btnGo.setTextColor(Color.WHITE);
@@ -9004,16 +9063,6 @@ public class PinActivity extends AppCompatActivity {
         searchRow.addView(btnGo);
         searchArea.addView(searchRow);
 
-        // 안내 텍스트
-        TextView tvHint = new TextView(this);
-        tvHint.setText("숫자 입력 시 버스번호, 텍스트 입력 시 정류장·장소 검색");
-        tvHint.setTextColor(Color.parseColor("#AAAAAA"));
-        tvHint.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-        LinearLayout.LayoutParams htLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        htLp.setMargins(dpToPx(4), dpToPx(4), 0, 0);
-        tvHint.setLayoutParams(htLp);
-        searchArea.addView(tvHint);
         busSearchArea = searchArea;
         root.addView(searchArea);
 
@@ -9061,25 +9110,46 @@ public class PinActivity extends AppCompatActivity {
         Runnable doSearch = () -> {
             String kw = etSearch.getText().toString().trim();
             if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
-            // 숫자면 버스번호, 아니면 정류장
-            if (kw.matches("\\d+")) busScreenSearchByNo(kw, resultContainer);
-            else                    busScreenSearchByStop(kw, resultContainer);
+            if (isBusTab[0]) busScreenSearchByNo(kw, resultContainer);
+            else             busScreenSearchByStop(kw, resultContainer);
         };
+
+        // 탭 클릭
+        tabBus.setOnClickListener(v -> {
+            if (!isBusTab[0]) {
+                isBusTab[0] = true;
+                updateTabStyle.run();
+                etSearch.setHint("버스 번호 입력");
+                etSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+                etSearch.setText("");
+                resultContainer.removeAllViews();
+                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+            }
+        });
+        tabStop.setOnClickListener(v -> {
+            if (isBusTab[0]) {
+                isBusTab[0] = false;
+                updateTabStyle.run();
+                etSearch.setHint("정류장 이름 입력");
+                etSearch.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+                etSearch.setText("");
+                resultContainer.removeAllViews();
+                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+            }
+        });
 
         etSearch.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
                 String kw = s.toString().trim();
                 btnClear.setVisibility(kw.isEmpty() ? android.view.View.GONE : android.view.View.VISIBLE);
-                // 입력 있으면 즐겨찾기 숨기기, 없으면 보이기
-                if (busFavSection2 != null) {
-                    busFavSection2.setVisibility(kw.isEmpty()
-                            ? android.view.View.VISIBLE : android.view.View.GONE);
-                }
+                if (busFavSection2 != null)
+                    busFavSection2.setVisibility(kw.isEmpty() ? android.view.View.VISIBLE : android.view.View.GONE);
                 if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
                 if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
                 debounceRunnable[0] = doSearch;
-                debounceHandler.postDelayed(debounceRunnable[0], kw.matches("\\d+") ? 300 : 500);
+                // 버스탭은 숫자라 빠르게, 정류장탭은 300ms 디바운스
+                debounceHandler.postDelayed(debounceRunnable[0], isBusTab[0] ? 200 : 300);
             }
             @Override public void afterTextChanged(android.text.Editable e) {}
         });
@@ -9087,7 +9157,6 @@ public class PinActivity extends AppCompatActivity {
         btnClear.setOnClickListener(v -> {
             etSearch.setText("");
             resultContainer.removeAllViews();
-            // 즐겨찾기 다시 보이기
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             etSearch.requestFocus();
             if (immBus != null) immBus.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
