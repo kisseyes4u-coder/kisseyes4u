@@ -185,7 +185,7 @@ public class PinActivity extends AppCompatActivity {
                         int b2 =  pixels[i]         & 0xFF;
                         int brightness = (r2 + g2 + b2) / 3;
                         if (brightness > 128) {
-                            pixels[i] = (brightness << 24) | 0x00E74C3C; // 빨간색
+                            pixels[i] = (brightness << 24) | 0x00C8BFEF; // 연보라 (돌아가기 버튼색)
                         } else {
                             pixels[i] = 0x00000000; // 투명
                         }
@@ -10952,26 +10952,43 @@ public class PinActivity extends AppCompatActivity {
 
             // 회차 지점이면 유턴 화살표 행 삽입
             if (isTurn && si > 0) {
-                LinearLayout turnRow = new LinearLayout(this);
-                turnRow.setOrientation(LinearLayout.HORIZONTAL);
-                turnRow.setGravity(Gravity.CENTER_VERTICAL);
-                turnRow.setLayoutParams(new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(32)));
+                // ── 회차 행: FrameLayout (세로줄 + 유턴이미지 겹침) ──
+                android.widget.FrameLayout turnFrame = new android.widget.FrameLayout(this);
+                turnFrame.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(40)));
 
-                android.view.View turnLine = new android.view.View(this) {
+                // 세로줄 (연파랑)
+                android.view.View turnLineView = new android.view.View(this) {
                     @Override protected void onDraw(android.graphics.Canvas canvas) {
                         super.onDraw(canvas);
-                        int w = getWidth(), h = getHeight(); float cx = w / 2f;
+                        int w=getWidth(), h=getHeight(); float cx=dpToPx(20);
                         android.graphics.Paint lp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         lp.setColor(Color.parseColor("#AED6F1")); lp.setStrokeWidth(dpToPx(2));
                         canvas.drawLine(cx, 0, cx, h, lp);
-                        // 유턴 화살표 (↩ 모양)
+                    }
+                };
+                turnLineView.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+                turnFrame.addView(turnLineView);
+
+                // 유턴 화살표 오버레이 (busOverlay와 동일 방식)
+                android.view.View turnOverlay = new android.view.View(this) {
+                    @Override protected void onDraw(android.graphics.Canvas canvas) {
+                        int w=getWidth(), h=getHeight();
+                        float cx = dpToPx(20); // 왼쪽 40dp 중앙
+                        float cy = h / 2f;
+                        // 배경 지우기
+                        android.graphics.Paint bgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        bgP.setColor(Color.parseColor("#F2F4F8"));
+                        float r = dpToPx(9);
+                        canvas.drawRect(cx-r-dpToPx(2), cy-r-dpToPx(2), cx+r+dpToPx(2), cy+r+dpToPx(2), bgP);
+                        // 유턴 반원
                         android.graphics.Paint ap = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         ap.setColor(Color.parseColor("#E74C3C")); ap.setStrokeWidth(dpToPx(2));
                         ap.setStyle(android.graphics.Paint.Style.STROKE);
                         ap.setStrokeCap(android.graphics.Paint.Cap.ROUND);
-                        float r = dpToPx(7), cy = h / 2f;
-                        android.graphics.RectF arc = new android.graphics.RectF(cx - r, cy - r, cx + r, cy + r);
+                        android.graphics.RectF arc = new android.graphics.RectF(cx-r, cy-r, cx+r, cy+r);
                         canvas.drawArc(arc, 270, 180, false, ap);
                         // 화살표 머리
                         android.graphics.Paint hp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
@@ -10985,19 +11002,26 @@ public class PinActivity extends AppCompatActivity {
                         canvas.drawPath(arrow, hp);
                     }
                 };
-                turnLine.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
-                turnRow.addView(turnLine);
+                turnOverlay.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+                turnFrame.addView(turnOverlay);
 
+                // 회차 텍스트
                 TextView tvTurn = new TextView(this);
                 tvTurn.setText("↩  회차");
                 tvTurn.setTextColor(Color.parseColor("#E74C3C"));
                 tvTurn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                 tvTurn.setTypeface(null, android.graphics.Typeface.BOLD);
-                LinearLayout.LayoutParams tvTurnLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                tvTurnLp.setMargins(dpToPx(6), 0, 0, 0);
+                android.widget.FrameLayout.LayoutParams tvTurnLp = new android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                        android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
+                tvTurnLp.leftMargin = dpToPx(48);
+                tvTurnLp.gravity = Gravity.CENTER_VERTICAL;
                 tvTurn.setLayoutParams(tvTurnLp);
-                turnRow.addView(tvTurn);
-                container.addView(turnRow);
+                turnFrame.addView(tvTurn);
+
+                container.addView(turnFrame);
             }
 
             // 버스 번호 (hasBus 시 사용)
@@ -14416,7 +14440,7 @@ public class PinActivity extends AppCompatActivity {
             // 버스 번호
             TextView tvRNo = new TextView(this);
             tvRNo.setText(rNo + "번");
-            tvRNo.setTextColor(Color.parseColor("#0984E3"));
+            tvRNo.setTextColor(Color.parseColor("#C8BFEF"));
             tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
             tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
             LinearLayout.LayoutParams rNoLp = new LinearLayout.LayoutParams(
