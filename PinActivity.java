@@ -8734,35 +8734,27 @@ public class PinActivity extends AppCompatActivity {
         isOnMenuScreen    = false;
         isOnBalanceScreen = false;
 
-        // ── 루트 ──────────────────────────────────────────
-        RelativeLayout root = new RelativeLayout(this);
+        // ── 루트: LinearLayout VERTICAL (월별 통계와 동일) ─
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.parseColor("#F2F4F8"));
-
-        // ── topLayout: inset 처리 + 헤더 포함 (스크롤 안) ─
-        LinearLayout topLayout = new LinearLayout(this);
-        topLayout.setOrientation(LinearLayout.VERTICAL);
-        topLayout.setBackgroundColor(Color.parseColor("#F2F4F8"));
-        topLayout.setPadding(0, dpToPx(4), 0, 0);
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(topLayout, (v, insets) -> {
+        root.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
+        // 상단 statusBar inset → root에 직접 적용
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
             int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
-            v.setPadding(0, top + dpToPx(4), 0, 0);
+            root.setPadding(0, top, 0, 0);
             return insets;
         });
-        topLayout.setId(View.generateViewId());
-        int topId = topLayout.getId();
-        RelativeLayout.LayoutParams topLp = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
-        topLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        topLayout.setLayoutParams(topLp);
 
-        // 헤더 그라디언트 바 (스크롤과 함께 사라짐)
-        LinearLayout headerBar = new LinearLayout(this);
+        // ── 헤더 바 (1.8초 후 자동 사라짐) ───────────────
+        final LinearLayout headerBar = new LinearLayout(this);
         headerBar.setOrientation(LinearLayout.HORIZONTAL);
         headerBar.setGravity(Gravity.CENTER_VERTICAL);
         android.graphics.drawable.GradientDrawable hGrad = new android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
                 new int[]{Color.parseColor("#0984E3"), Color.parseColor("#74B9FF")});
-        hGrad.setCornerRadii(new float[]{0,0,0,0,dpToPx(20),dpToPx(20),dpToPx(20),dpToPx(20)});
+        hGrad.setCornerRadii(new float[]{0,0,0,0,dpToPx(16),dpToPx(16),dpToPx(16),dpToPx(16)});
         headerBar.setBackground(hGrad);
         headerBar.setPadding(dpToPx(20), dpToPx(14), dpToPx(20), dpToPx(18));
         LinearLayout.LayoutParams hbLp = new LinearLayout.LayoutParams(
@@ -8796,11 +8788,11 @@ public class PinActivity extends AppCompatActivity {
         tvHeaderSub.setLayoutParams(subLp);
         headerTxt.addView(tvHeaderSub);
         headerBar.addView(headerTxt);
-        topLayout.addView(headerBar);
+        root.addView(headerBar);
 
-        // 1.8초 후 headerBar 자동 사라짐 (통장 잔액과 동일)
+        // 1.8초 후 headerBar 자동 사라짐 (월별 통계/통장잔액과 동일)
         headerBar.post(() -> {
-            final int origHeight = headerBar.getMeasuredHeight() + dpToPx(18);
+            final int origHeight = headerBar.getMeasuredHeight() + dpToPx(12);
             headerBar.postDelayed(() -> {
                 android.animation.ValueAnimator anim =
                         android.animation.ValueAnimator.ofFloat(1f, 0f);
@@ -8811,9 +8803,9 @@ public class PinActivity extends AppCompatActivity {
                     headerBar.setAlpha(f);
                     int h = (int)(origHeight * f);
                     android.view.ViewGroup.LayoutParams vlp = headerBar.getLayoutParams();
-                    vlp.height = Math.max(h - dpToPx(18), 0);
+                    vlp.height = Math.max(h - dpToPx(12), 0);
                     if (vlp instanceof LinearLayout.LayoutParams)
-                        ((LinearLayout.LayoutParams) vlp).bottomMargin = (int)(dpToPx(0) * f);
+                        ((LinearLayout.LayoutParams) vlp).bottomMargin = (int)(dpToPx(12) * f);
                     headerBar.setLayoutParams(vlp);
                     headerBar.requestLayout();
                 });
@@ -8826,17 +8818,13 @@ public class PinActivity extends AppCompatActivity {
             }, 1800);
         });
 
-        // ── 탭 행 (sticky: topLayout 아래 고정) ──────────
+        // ── 탭 행 (헤더 바로 아래, sticky) ───────────────
         LinearLayout tabRow = new LinearLayout(this);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
         tabRow.setGravity(Gravity.CENTER_VERTICAL);
         tabRow.setBackgroundColor(Color.WHITE);
-        tabRow.setId(View.generateViewId());
-        int tabRowId = tabRow.getId();
-        RelativeLayout.LayoutParams tabRlLp = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, dpToPx(48));
-        tabRlLp.addRule(RelativeLayout.BELOW, topId);
-        tabRow.setLayoutParams(tabRlLp);
+        tabRow.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48)));
 
         String[] tabLabels = {"🚌 버스번호", "🚏 정류장", "📍 장소"};
         TextView[] tabs = new TextView[3];
@@ -8859,44 +8847,18 @@ public class PinActivity extends AppCompatActivity {
             }
             tabRow.addView(tabs[i]);
         }
+        root.addView(tabRow);
 
-        // ── 하단 돌아가기 버튼 (고정) ─────────────────────
-        TextView btnBack = new TextView(this);
-        btnBack.setText("← 돌아가기");
-        btnBack.setTextColor(Color.parseColor("#4A3DBF"));
-        btnBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14);
-        btnBack.setTypeface(null, android.graphics.Typeface.BOLD);
-        btnBack.setGravity(Gravity.CENTER);
-        btnBack.setBackground(makeShadowCardDrawable("#C8BFEF", 14, 6));
-        btnBack.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-        btnBack.setId(View.generateViewId());
-        int backId = btnBack.getId();
-        RelativeLayout.LayoutParams backLp = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, dpToPx(50));
-        backLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        backLp.setMargins(dpToPx(16), 0, dpToPx(16), dpToPx(10));
-        btnBack.setLayoutParams(backLp);
-        btnBack.setOnClickListener(v -> {
-            isOnSubScreen = false;
-            if (isOwner) ownerMenuBuilder.build();
-            else userMenuBuilder.build(false);
-        });
-
-        // ── 스크롤 (탭 아래 ~ 돌아가기 위) ──────────────
+        // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
         ScrollView sv = new ScrollView(this);
-        sv.setClipToPadding(false);
-        RelativeLayout.LayoutParams svLp = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT);
-        svLp.addRule(RelativeLayout.BELOW, tabRowId);
-        svLp.addRule(RelativeLayout.ABOVE, backId);
-        sv.setLayoutParams(svLp);
-
+        sv.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         LinearLayout svInner = new LinearLayout(this);
         svInner.setOrientation(LinearLayout.VERTICAL);
         svInner.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
         sv.addView(svInner);
 
-        // ── 3개 콘텐츠 패널 ────────────────────────────────
+        // 3개 콘텐츠 패널
         for (int i = 0; i < 3; i++) {
             contentPanels[i] = new LinearLayout(this);
             contentPanels[i].setOrientation(LinearLayout.VERTICAL);
@@ -8910,8 +8872,9 @@ public class PinActivity extends AppCompatActivity {
             buildSearchPanel(contentPanels[i], resultContainer, i);
             svInner.addView(contentPanels[i]);
         }
+        root.addView(sv);
 
-        // 탭 클릭 처리
+        // ── 탭 클릭 처리 ──────────────────────────────────
         for (int i = 0; i < 3; i++) {
             final int idx = i;
             tabs[i].setOnClickListener(v -> {
@@ -8933,10 +8896,35 @@ public class PinActivity extends AppCompatActivity {
             });
         }
 
-        root.addView(topLayout);
-        root.addView(tabRow);
-        root.addView(btnBack);
-        root.addView(sv);
+        // ── 하단 돌아가기 버튼 + navigationBar inset ──────
+        LinearLayout btnBar = new LinearLayout(this);
+        btnBar.setOrientation(LinearLayout.HORIZONTAL);
+        btnBar.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        // 하단 navBar inset 동적 적용 (월별 통계와 동일)
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(btnBar, (v, insets) -> {
+            int bot = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars()).bottom;
+            btnBar.setPadding(dpToPx(16), dpToPx(6), dpToPx(16), dpToPx(6) + bot);
+            return insets;
+        });
+
+        Button btnBack = new Button(this);
+        btnBack.setText("← 돌아가기");
+        btnBack.setBackground(makeShadowCardDrawable("#C8BFEF", 14, 6));
+        btnBack.setTextColor(Color.parseColor("#4A3DBF"));
+        btnBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14);
+        btnBack.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnBack.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+        btnBack.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50)));
+        btnBack.setOnClickListener(v -> {
+            isOnSubScreen = false;
+            if (isOwner) ownerMenuBuilder.build();
+            else userMenuBuilder.build(false);
+        });
+        btnBar.addView(btnBack);
+        root.addView(btnBar);
+
         setContentView(root);
     }
 
