@@ -200,26 +200,26 @@ public class PinActivity extends AppCompatActivity {
         return busIconPurpleBitmap;
     }
 
-    /** assets/bus.png 로드 - 빨간색 아이콘 + 흰색 배경 (타임라인 버스 위치용) */
+    /** assets/bus.png 로드 - 검정 배경 투명화 + 흰색 픽셀 → 빨간색 (타임라인 버스 위치용) */
     private android.graphics.Bitmap getBusIcon() {
         if (busIconBitmap == null) {
             try {
                 android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
                         getAssets().open("bus.png"));
                 if (raw != null) {
-                    int w = raw.getWidth(), h = raw.getHeight();
-                    android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                    android.graphics.Bitmap result = raw.copy(android.graphics.Bitmap.Config.ARGB_8888, true);
+                    int w = result.getWidth(), h = result.getHeight();
                     int[] pixels = new int[w * h];
-                    raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                    result.getPixels(pixels, 0, w, 0, 0, w, h);
                     for (int i = 0; i < pixels.length; i++) {
                         int r2 = (pixels[i] >> 16) & 0xFF;
                         int g2 = (pixels[i] >> 8)  & 0xFF;
                         int b2 =  pixels[i]         & 0xFF;
                         int brightness = (r2 + g2 + b2) / 3;
                         if (brightness > 128) {
-                            pixels[i] = 0xFFE74C3C; // 빨간색
+                            pixels[i] = (brightness << 24) | 0x00E74C3C; // 빨간색
                         } else {
-                            pixels[i] = 0xFFFFFFFF; // 흰색 배경
+                            pixels[i] = 0x00000000; // 투명
                         }
                     }
                     result.setPixels(pixels, 0, w, 0, 0, w, h);
