@@ -10622,6 +10622,22 @@ public class PinActivity extends AppCompatActivity {
                         // 커스텀 버튼 클릭 연결
                         btnCancel.setOnClickListener(bv2 -> dlgHolder[0].dismiss());
                         btnSave.setOnClickListener(bv2 -> {
+                            // 입력값 있는지 먼저 확인
+                            boolean hasAny = false;
+                            for (int mi2 = 0; mi2 < 5; mi2++) {
+                                if (!etItems[mi2].getText().toString().trim().isEmpty()) {
+                                    hasAny = true;
+                                    break;
+                                }
+                            }
+                            if (!hasAny) {
+                                new android.app.AlertDialog.Builder(this,
+                                        android.R.style.Theme_Material_Light_Dialog_Alert)
+                                        .setMessage("입력 내용이 없습니다.")
+                                        .setPositiveButton("확인", null)
+                                        .show();
+                                return;
+                            }
                             new android.app.AlertDialog.Builder(this,
                                     android.R.style.Theme_Material_Light_Dialog_Alert)
                                     .setMessage("저장하시겠습니까?")
