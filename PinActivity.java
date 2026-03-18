@@ -3634,11 +3634,7 @@ public class PinActivity extends AppCompatActivity {
         btnBusManage.setBackground(btnBusBg);
         btnBusManage.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        btnBusManage.setOnClickListener(v -> showConfirmDialog("🚏", "정류장 DB 업데이트", "정류장 DB를 업데이트 하시겠습니까?
-
-대전 전체 정류장을 수집하여
-Drive에 업로드합니다.
-수 분이 소요됩니다.", () -> {
+        btnBusManage.setOnClickListener(v -> showConfirmDialog("🚏", "정류장 DB 업데이트", "정류장 DB를 업데이트 하시겠습니까?\n\n대전 전체 정류장을 수집하여\nDrive에 업로드합니다.\n수 분이 소요됩니다.", () -> {
             // ── 프로그레스 다이얼로그 ──
             android.app.Dialog dlg = new android.app.Dialog(this,
                     android.R.style.Theme_Material_Light_Dialog_Alert);
@@ -9194,11 +9190,7 @@ Drive에 업로드합니다.
         btnStopRef[0] = btnStop;
         btnBgRef[0] = btnStopBg;
 
-        btnStop.setOnClickListener(v -> showConfirmDialog("🚏", "정류장 DB 업데이트", "정류장 DB를 업데이트 하시겠습니까?
-
-대전 전체 정류장을 수집하여
-Drive에 업로드합니다.
-수 분이 소요됩니다.", () -> {
+        btnStop.setOnClickListener(v -> showConfirmDialog("🚏", "정류장 DB 업데이트", "정류장 DB를 업데이트 하시겠습니까?\n\n대전 전체 정류장을 수집하여\nDrive에 업로드합니다.\n수 분이 소요됩니다.", () -> {
                     btnStop.setText("⏳ 수집 중... (수분 소요)");
                     btnStopBg.setColor(Color.parseColor("#AAAAAA"));
                     btnStop.setEnabled(false);
