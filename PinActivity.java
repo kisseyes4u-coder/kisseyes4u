@@ -200,26 +200,26 @@ public class PinActivity extends AppCompatActivity {
         return busIconPurpleBitmap;
     }
 
-    /** assets/bus.png 로드 - 빨간색 착색 버전 (타임라인 빨간박스용) */
+    /** assets/bus.png 로드 - 빨간색 아이콘 + 흰색 배경 (타임라인 버스 위치용) */
     private android.graphics.Bitmap getBusIcon() {
         if (busIconBitmap == null) {
             try {
                 android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
                         getAssets().open("bus.png"));
                 if (raw != null) {
-                    android.graphics.Bitmap result = raw.copy(android.graphics.Bitmap.Config.ARGB_8888, true);
-                    int w = result.getWidth(), h = result.getHeight();
+                    int w = raw.getWidth(), h = raw.getHeight();
+                    android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
                     int[] pixels = new int[w * h];
-                    result.getPixels(pixels, 0, w, 0, 0, w, h);
+                    raw.getPixels(pixels, 0, w, 0, 0, w, h);
                     for (int i = 0; i < pixels.length; i++) {
                         int r2 = (pixels[i] >> 16) & 0xFF;
                         int g2 = (pixels[i] >> 8)  & 0xFF;
                         int b2 =  pixels[i]         & 0xFF;
                         int brightness = (r2 + g2 + b2) / 3;
                         if (brightness > 128) {
-                            pixels[i] = (brightness << 24) | 0x006C3FA0; // 진한 보라
+                            pixels[i] = 0xFFE74C3C; // 빨간색
                         } else {
-                            pixels[i] = 0x00000000; // 투명
+                            pixels[i] = 0xFFFFFFFF; // 흰색 배경
                         }
                     }
                     result.setPixels(pixels, 0, w, 0, 0, w, h);
@@ -10984,10 +10984,10 @@ public class PinActivity extends AppCompatActivity {
 
             // 회차 지점이면 유턴 화살표 행 삽입
             if (isTurn && si > 0) {
-                // ── 회차 행: FrameLayout (세로줄 + "↩ 회차" 텍스트 겹침, 별도 행 없음) ──
+                // ── 회차 행: FrameLayout (세로줄 + "회차" 텍스트 겹침, 별도 행 없음) ──
                 android.widget.FrameLayout turnFrame = new android.widget.FrameLayout(this);
                 turnFrame.setLayoutParams(new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(36)));
+                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(32)));
 
                 // 세로줄 (연파랑)
                 android.view.View turnLineView = new android.view.View(this) {
@@ -11004,17 +11004,17 @@ public class PinActivity extends AppCompatActivity {
                         android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
                 turnFrame.addView(turnLineView);
 
-                // "↩ 회차" 텍스트를 타임라인 선 위에 겹침 (배경으로 선 가림)
+                // "회차" 텍스트 - 왼쪽 40dp 영역에 배경으로 줄 가리고 겹침
                 TextView tvTurn = new TextView(this);
-                tvTurn.setText("↩ 회차");
+                tvTurn.setText("회차");
                 tvTurn.setTextColor(Color.parseColor("#E74C3C"));
-                tvTurn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                tvTurn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
                 tvTurn.setTypeface(null, android.graphics.Typeface.BOLD);
                 tvTurn.setGravity(Gravity.CENTER);
                 tvTurn.setBackgroundColor(Color.parseColor("#F2F4F8"));
                 android.widget.FrameLayout.LayoutParams tvTurnLp = new android.widget.FrameLayout.LayoutParams(
-                        dpToPx(40), android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
-                tvTurnLp.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
+                        dpToPx(40), android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
+                tvTurnLp.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
                 tvTurn.setLayoutParams(tvTurnLp);
                 turnFrame.addView(tvTurn);
 
