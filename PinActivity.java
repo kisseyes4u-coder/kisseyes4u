@@ -186,7 +186,7 @@ public class PinActivity extends AppCompatActivity {
                         int b2 =  pixels[i]         & 0xFF;
                         int brightness = (r2 + g2 + b2) / 3;
                         if (brightness > 128) {
-                            pixels[i] = 0xFFE57373; // 연한 빨간색
+                            pixels[i] = 0xFF6C3FA0; // 진한 보라
                         } else {
                             pixels[i] = 0xFFFFFFFF; // 흰색 배경
                         }
@@ -10983,44 +10983,6 @@ public class PinActivity extends AppCompatActivity {
             boolean isReturn = (fTurnIdx > 0 && si >= fTurnIdx); // 회차 포함 이후 (복귀 구간)
 
             // 회차 지점이면 유턴 화살표 행 삽입
-            if (isTurn && si > 0) {
-                // ── 회차 행: FrameLayout (세로줄 + "회차" 텍스트 겹침, 별도 행 없음) ──
-                android.widget.FrameLayout turnFrame = new android.widget.FrameLayout(this);
-                turnFrame.setLayoutParams(new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(32)));
-
-                // 세로줄 (연파랑)
-                android.view.View turnLineView = new android.view.View(this) {
-                    @Override protected void onDraw(android.graphics.Canvas canvas) {
-                        super.onDraw(canvas);
-                        float cx = dpToPx(20);
-                        android.graphics.Paint lp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                        lp.setColor(Color.parseColor("#AED6F1")); lp.setStrokeWidth(dpToPx(2));
-                        canvas.drawLine(cx, 0, cx, getHeight(), lp);
-                    }
-                };
-                turnLineView.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
-                turnFrame.addView(turnLineView);
-
-                // "회차" 텍스트 - 왼쪽 40dp 영역에 배경으로 줄 가리고 겹침
-                TextView tvTurn = new TextView(this);
-                tvTurn.setText("회차");
-                tvTurn.setTextColor(Color.parseColor("#E74C3C"));
-                tvTurn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
-                tvTurn.setTypeface(null, android.graphics.Typeface.BOLD);
-                tvTurn.setGravity(Gravity.CENTER);
-                tvTurn.setBackgroundColor(Color.parseColor("#F2F4F8"));
-                android.widget.FrameLayout.LayoutParams tvTurnLp = new android.widget.FrameLayout.LayoutParams(
-                        dpToPx(40), android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
-                tvTurnLp.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
-                tvTurn.setLayoutParams(tvTurnLp);
-                turnFrame.addView(tvTurn);
-
-                container.addView(turnFrame);
-            }
-
             // 버스 번호 (hasBus 시 사용)
             final String fShortNo;
             if (hasBus) {
@@ -11094,6 +11056,22 @@ public class PinActivity extends AppCompatActivity {
                     android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
                     android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
             tlFrame.addView(circleView);
+
+            // 회차 오버레이: isTurn일 때 tlFrame 위에 겹침 (별도 행 없음)
+            if (isTurn) {
+                TextView tvTurn = new TextView(this);
+                tvTurn.setText("회차");
+                tvTurn.setTextColor(Color.parseColor("#E74C3C"));
+                tvTurn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                tvTurn.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvTurn.setGravity(Gravity.CENTER);
+                tvTurn.setBackgroundColor(Color.parseColor("#F2F4F8"));
+                android.widget.FrameLayout.LayoutParams tvTurnLp = new android.widget.FrameLayout.LayoutParams(
+                        dpToPx(40), android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
+                tvTurnLp.gravity = Gravity.START;
+                tvTurn.setLayoutParams(tvTurnLp);
+                tlFrame.addView(tvTurn);
+            }
 
             // 버스 오버레이: hasBus일 때 tlFrame 위에 겹침
             if (hasBus) {
