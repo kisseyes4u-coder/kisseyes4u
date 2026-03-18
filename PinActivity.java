@@ -134,8 +134,17 @@ public class PinActivity extends AppCompatActivity {
     // ── 버스 검색 화면 ─────────────────────────────────────
     private LinearLayout busSearchArea = null;
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
-    private java.util.List<String[]> routeDbList = null; // [routeid, routeno, startNm, endNm, routetp]
-    private java.util.List<String[]> stopDbList  = null; // [nodeid, nodenm, nodeno]
+    // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
+    private java.util.List<String[]> routeDbList = null;
+    private java.util.List<String[]> stopDbList  = null; // 미사용 (세션 캐시로 대체)
+    // 정류장 검색 세션 캐시 (keyword → 결과 리스트, 앱 실행 중 유지)
+    @SuppressWarnings("serial")
+    private final java.util.Map<String, java.util.List<String[]>> stopSearchCache =
+            new java.util.LinkedHashMap<String, java.util.List<String[]>>(32, 0.75f, true) {
+                @Override protected boolean removeEldestEntry(java.util.Map.Entry<String, java.util.List<String[]>> e) {
+                    return size() > 30;
+                }
+            };
     private LinearLayout busResultContainer = null;
     private LinearLayout busFavSection2 = null;
     private android.widget.EditText busEtSearch = null;
@@ -9599,53 +9608,48 @@ public class PinActivity extends AppCompatActivity {
     private void busScreenSearchByStop(String keyword, LinearLayout container) {
         container.removeAllViews();
 
-        // 메모리 DB 있으면 백그라운드에서 검색 후 UI 업데이트
-        if (stopDbList != null) {
-            new Thread(() -> {
-                java.util.List<String[]> result = new java.util.ArrayList<>();
-                String kw = keyword.toLowerCase();
-                for (String[] p : stopDbList) {
-                    if (p[1].toLowerCase().contains(kw)) {
-                        result.add(p);
-                        if (result.size() >= 30) break;
-                    }
-                }
-                runOnUiThread(() -> {
-                    container.removeAllViews();
-                    if (result.isEmpty()) {
-                        TextView tv = new TextView(this);
-                        tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
-                        tv.setTextColor(Color.parseColor("#AAAAAA"));
-                        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                        container.addView(tv);
-                    } else {
-                        renderStopCards(result, keyword, container);
-                    }
-                });
-            }).start();
+        // 세션 캐시 hit → 즉시 표시
+        java.util.List<String[]> cached = stopSearchCache.get(keyword);
+        if (cached != null) {
+            if (cached.isEmpty()) {
+                TextView tv = new TextView(this);
+                tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
+                tv.setTextColor(Color.parseColor("#AAAAAA"));
+                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                container.addView(tv);
+            } else {
+                renderStopCards(cached, keyword, container);
+            }
             return;
         }
 
-        // 메모리 DB 없으면 API 검색
+        // 캐시 없으면 API 호출
         TextView tvL = new TextView(this); tvL.setText("정류소 검색 중...");
-        tvL.setTextColor(Color.parseColor("#AAAAAA")); tvL.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12)); container.addView(tvL);
+        tvL.setTextColor(Color.parseColor("#AAAAAA"));
+        tvL.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+        container.addView(tvL);
         new Thread(() -> {
             try {
                 String url = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
                         + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
                         + "&nodeNm=" + java.net.URLEncoder.encode(keyword, "UTF-8")
-                        + "&numOfRows=20&pageNo=1&_type=xml";
+                        + "&numOfRows=30&pageNo=1&_type=xml";
                 String xml = httpGet(url);
                 java.util.List<String[]> stops = new java.util.ArrayList<>();
                 for (String item : xml.split("<item>")) {
                     if (!item.contains("<nodeid>")) continue;
                     stops.add(new String[]{tag(item,"nodeid"), tag(item,"nodenm"), tag(item,"nodeno")});
                 }
+                // 세션 캐시 저장
+                stopSearchCache.put(keyword, stops);
                 runOnUiThread(() -> {
                     container.removeAllViews();
                     if (stops.isEmpty()) {
-                        TextView tv = new TextView(this); tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
-                        tv.setTextColor(Color.parseColor("#AAAAAA")); tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12)); container.addView(tv);
+                        TextView tv = new TextView(this);
+                        tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
+                        tv.setTextColor(Color.parseColor("#AAAAAA"));
+                        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                        container.addView(tv);
                     } else {
                         renderStopCards(stops, keyword, container);
                     }
@@ -9653,7 +9657,9 @@ public class PinActivity extends AppCompatActivity {
             } catch (Exception e) {
                 runOnUiThread(() -> { container.removeAllViews();
                     TextView tv = new TextView(this); tv.setText("검색 실패: " + e.getMessage());
-                    tv.setTextColor(Color.parseColor("#E74C3C")); tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11)); container.addView(tv); });
+                    tv.setTextColor(Color.parseColor("#E74C3C"));
+                    tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                    container.addView(tv); });
             }
         }).start();
     }
@@ -12941,8 +12947,8 @@ public class PinActivity extends AppCompatActivity {
     private static final String BUS_DB_KEY    = "all_routes";
     private static final String BUS_DB_VER    = "db_version";
     private static final String BUS_DB_SCHEMA = "db_schema";
-    private static final int    BUS_DB_SCHEMA_VER = 2; // prefix 304개 버전
-    // 로컬 DB: "routeid|routeno|startnodenm|endnodenm|routetp;..." 형식
+    private static final int    BUS_DB_SCHEMA_VER = 3; // 정류장 DB 제거 버전
+    // 로컬 DB: 노선만 저장, 정류장은 세션 캐시로 처리
 
     /** SharedPreferences DB를 메모리에 로드 (앱 시작 시 1회) */
     private void loadBusDbToMemory() {
@@ -13068,70 +13074,11 @@ public class PinActivity extends AppCompatActivity {
                     if (page > 20) break;
                 }
 
-                // ② 정류장 목록 - 초성/숫자 prefix별로 나눠서 전체 수집
-                // (nodeNm 빈값 전체조회가 API에서 지원 안 돼서 prefix 분할)
-                StringBuilder sbStop = new StringBuilder();
-                java.util.Set<String> stopIdSet = new java.util.HashSet<>();
-                String[] prefixes = {
-                    "가", "개", "갸", "걔", "거", "게", "겨", "계", "고", "과", "괘", "괴", "교", "구",
-                    "궈", "궤", "귀", "규", "그", "긔", "기", "나", "내", "냐", "냬", "너", "네", "녀",
-                    "녜", "노", "놔", "놰", "뇌", "뇨", "누", "눠", "눼", "뉘", "뉴", "느", "늬", "니",
-                    "다", "대", "댜", "댸", "더", "데", "뎌", "뎨", "도", "돠", "돼", "되", "됴", "두",
-                    "둬", "뒈", "뒤", "듀", "드", "듸", "디", "라", "래", "랴", "럐", "러", "레", "려",
-                    "례", "로", "롸", "뢔", "뢰", "료", "루", "뤄", "뤠", "뤼", "류", "르", "릐", "리",
-                    "마", "매", "먀", "먜", "머", "메", "며", "몌", "모", "뫄", "뫠", "뫼", "묘", "무",
-                    "뭐", "뭬", "뮈", "뮤", "므", "믜", "미", "바", "배", "뱌", "뱨", "버", "베", "벼",
-                    "볘", "보", "봐", "봬", "뵈", "뵤", "부", "붜", "붸", "뷔", "뷰", "브", "븨", "비",
-                    "사", "새", "샤", "섀", "서", "세", "셔", "셰", "소", "솨", "쇄", "쇠", "쇼", "수",
-                    "숴", "쉐", "쉬", "슈", "스", "싀", "시", "아", "애", "야", "얘", "어", "에", "여",
-                    "예", "오", "와", "왜", "외", "요", "우", "워", "웨", "위", "유", "으", "의", "이",
-                    "자", "재", "쟈", "쟤", "저", "제", "져", "졔", "조", "좌", "좨", "죄", "죠", "주",
-                    "줘", "줴", "쥐", "쥬", "즈", "즤", "지", "차", "채", "챠", "챼", "처", "체", "쳐",
-                    "쳬", "초", "촤", "쵀", "최", "쵸", "추", "춰", "췌", "취", "츄", "츠", "츼", "치",
-                    "카", "캐", "캬", "컈", "커", "케", "켜", "켸", "코", "콰", "쾌", "쾨", "쿄", "쿠",
-                    "쿼", "퀘", "퀴", "큐", "크", "킈", "키", "타", "태", "탸", "턔", "터", "테", "텨",
-                    "톄", "토", "톼", "퇘", "퇴", "툐", "투", "퉈", "퉤", "튀", "튜", "트", "틔", "티",
-                    "파", "패", "퍄", "퍠", "퍼", "페", "펴", "폐", "포", "퐈", "퐤", "푀", "표", "푸",
-                    "풔", "풰", "퓌", "퓨", "프", "픠", "피", "하", "해", "햐", "햬", "허", "헤", "혀",
-                    "혜", "호", "화", "홰", "회", "효", "후", "훠", "훼", "휘", "휴", "흐", "희", "히",
-                    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
-                };
-                for (int pi = 0; pi < prefixes.length; pi++) {
-                    String prefix = prefixes[pi];
-                    int sp = 1;
-                    while (true) {
-                        try {
-                            String url2 = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
-                                    + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                                    + "&nodeNm=" + java.net.URLEncoder.encode(prefix, "UTF-8")
-                                    + "&numOfRows=100&pageNo=" + sp + "&_type=xml";
-                            String xml2 = httpGet(url2);
-                            int cnt2 = 0;
-                            for (String item : xml2.split("<item>")) {
-                                if (!item.contains("<nodeid>")) continue;
-                                String nid = tag(item,"nodeid");
-                                if (stopIdSet.contains(nid)) continue;
-                                stopIdSet.add(nid);
-                                if (sbStop.length() > 0) sbStop.append(";");
-                                sbStop.append(nid).append("|")
-                                      .append(tag(item,"nodenm")).append("|")
-                                      .append(tag(item,"nodeno"));
-                                cnt2++;
-                            }
-                            if (cnt2 < 100) break;
-                            sp++;
-                            if (sp > 20) break;
-                        } catch (Exception ignored) { break; }
-                    }
-                    final int pct2 = 50 + (int)((pi + 1) * 50.0 / prefixes.length);
-                    if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct2, 99)));
-                }
 
                 String today = new java.text.SimpleDateFormat("yyyyMMdd",
                         java.util.Locale.getDefault()).format(new java.util.Date());
                 getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
-                        .putString(BUS_DB_KEY,  sbRoute.toString())
-                        .putString("all_stops", sbStop.toString())
+                        .putString(BUS_DB_KEY, sbRoute.toString())
                         .putString(BUS_DB_VER,  today)
                         .putInt(BUS_DB_SCHEMA,  BUS_DB_SCHEMA_VER)
                         .apply();
@@ -13147,8 +13094,6 @@ public class PinActivity extends AppCompatActivity {
     private boolean busDbNeedsUpdate() {
         android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
         if (!p.contains(BUS_DB_KEY) || p.getString(BUS_DB_KEY,"").isEmpty()) return true;
-        if (p.getString("all_stops","").isEmpty()) return true;
-        // 스키마 버전 변경 시 강제 재다운로드
         if (p.getInt(BUS_DB_SCHEMA, 0) < BUS_DB_SCHEMA_VER) return true;
         String saved = p.getString(BUS_DB_VER, "");
         String today = new java.text.SimpleDateFormat("yyyyMMdd",
