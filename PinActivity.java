@@ -10606,6 +10606,7 @@ public class PinActivity extends AppCompatActivity {
         tvRouteNo.setText(routeNo);
         tvRouteNo.setTextColor(Color.parseColor("#1A1A2E"));
         tvRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
+        tvRouteNo.setShadowLayer(5f, 0f, 2f, 0x50000000);
         tvRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
         topHeader.addView(tvRouteNo);
 
@@ -10839,8 +10840,9 @@ public class PinActivity extends AppCompatActivity {
         for (int qi = 0; qi < 4; qi++) {
             LinearLayout qCard = new LinearLayout(this);
             qCard.setOrientation(LinearLayout.VERTICAL); qCard.setGravity(Gravity.CENTER);
-            qCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
+            qCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 5));
             qCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+            qCard.setElevation(dpToPx(2));
             qCard.setPadding(dpToPx(4), dpToPx(10), dpToPx(4), dpToPx(10));
             LinearLayout.LayoutParams qcLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
             qcLp.setMargins(0, 0, qi < 3 ? dpToPx(6) : 0, 0); qCard.setLayoutParams(qcLp);
@@ -10876,8 +10878,9 @@ public class PinActivity extends AppCompatActivity {
             boolean isCur = direction.equals(dirKeys[d]);
             LinearLayout dc = new LinearLayout(this);
             dc.setOrientation(LinearLayout.VERTICAL); dc.setGravity(Gravity.CENTER);
-            dc.setBackground(makeShadowCardDrawable(isCur?"#0984E3":"#FFFFFF",10,4));
+            dc.setBackground(makeShadowCardDrawable(isCur?"#0984E3":"#FFFFFF",10,6));
             dc.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+            dc.setElevation(dpToPx(3));
             dc.setPadding(dpToPx(8),dpToPx(12),dpToPx(8),dpToPx(12));
             LinearLayout.LayoutParams dcLp = new LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1f);
             dcLp.setMargins(0,0,d==0?dpToPx(8):0,0); dc.setLayoutParams(dcLp);
@@ -10885,6 +10888,7 @@ public class PinActivity extends AppCompatActivity {
             tvDir.setText(dirLabels[d]);
             tvDir.setTextColor(isCur?Color.WHITE:Color.parseColor("#1A1A2E"));
             tvDir.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+            tvDir.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
             tvDir.setTypeface(null,isCur?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
             tvDir.setGravity(Gravity.CENTER); tvDir.setSingleLine(true);
             tvDir.setEllipsize(android.text.TextUtils.TruncateAt.END); dc.addView(tvDir);
@@ -10892,6 +10896,7 @@ public class PinActivity extends AppCompatActivity {
             tvTime.setText(fStF + " ~ " + fEtF);
             tvTime.setTextColor(isCur?Color.parseColor("#D6EAF8"):Color.parseColor("#AAAAAA"));
             tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+            tvTime.setShadowLayer(3f, 0f, 1f, 0x25000000);
             tvTime.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams tLp2 = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -11114,6 +11119,7 @@ public class PinActivity extends AppCompatActivity {
             TextView tvName = new TextView(this);
             tvName.setText(s[1]); tvName.setTextColor(Color.parseColor("#1A1A2E"));
             tvName.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+            tvName.setShadowLayer(3f, 0f, 1f, 0x30000000);
             tvName.setTypeface(null,(isFirst||isLast)?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
             stopInfo.addView(tvName);
             if (!s[3].isEmpty()) {
@@ -14368,26 +14374,46 @@ public class PinActivity extends AppCompatActivity {
             gearLp.setMargins(0, 0, dpToPx(5), 0);
             tvGear.setLayoutParams(gearLp);
             tvGear.setOnClickListener(v2 -> {
-                String[] options = {"메모 수정", "즐겨찾기 해제"};
+                String[] options = {"수정", "삭제", "취소"};
                 new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
                     .setTitle(rNo + "번 설정")
                     .setItems(options, (d, which) -> {
                         if (which == 0) {
-                            android.widget.Toast.makeText(this, "메모 수정 (준비중)",
-                                    android.widget.Toast.LENGTH_SHORT).show();
-                        } else {
-                            showConfirmDialog("🗑", rNo + "번 즐겨찾기 해제",
+                            // 수정 - 메모 수정 다이얼로그
+                            android.widget.EditText etMemo = new android.widget.EditText(this);
+                            etMemo.setHint("메모를 입력하세요");
+                            etMemo.setText(prefs.getString("fav_route_memo_" + fRKey, ""));
+                            etMemo.setSingleLine(false); etMemo.setMaxLines(3);
+                            etMemo.setPadding(dpToPx(16), dpToPx(12), dpToPx(16), dpToPx(12));
+                            setBlackCursor(etMemo);
+                            new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                                .setTitle(rNo + "번 메모 수정")
+                                .setView(etMemo)
+                                .setPositiveButton("저장", (d2, w2) -> {
+                                    String memo = etMemo.getText().toString().trim();
+                                    prefs.edit().putString("fav_route_memo_" + fRKey, memo).apply();
+                                    android.widget.Toast.makeText(this, "메모가 저장되었습니다",
+                                            android.widget.Toast.LENGTH_SHORT).show();
+                                    refreshBusFavorites(favSection, resultContainer);
+                                })
+                                .setNegativeButton("취소", null)
+                                .show();
+                        } else if (which == 1) {
+                            // 삭제 - 즐겨찾기 삭제
+                            showConfirmDialog("🗑", rNo + "번 즐겨찾기 삭제",
                                     "즐겨찾기에서 삭제하시겠습니까?", () -> {
                                 prefs.edit().remove("fav_route_" + fRKey)
                                         .remove("fav_route_no_"     + fRKey)
                                         .remove("fav_route_dir_"    + fRKey)
                                         .remove("fav_route_id_"     + fRKey)
-                                        .remove("fav_route_dirkey_" + fRKey).apply();
-                                android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 해제",
+                                        .remove("fav_route_dirkey_" + fRKey)
+                                        .remove("fav_route_memo_"   + fRKey).apply();
+                                android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 삭제",
                                         android.widget.Toast.LENGTH_SHORT).show();
                                 refreshBusFavorites(favSection, resultContainer);
                             });
                         }
+                        // which == 2: 취소 - 아무것도 안 함
                     }).show();
             });
             iconBtnRow.addView(tvGear);
@@ -14417,6 +14443,7 @@ public class PinActivity extends AppCompatActivity {
             tvRNo.setText(rNo + "번");
             tvRNo.setTextColor(Color.parseColor("#6C3FA0"));
             tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
+            tvRNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
             tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
             LinearLayout.LayoutParams rNoLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
