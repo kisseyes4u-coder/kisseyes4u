@@ -10750,7 +10750,41 @@ public class PinActivity extends AppCompatActivity {
         }
         fixedArea.addView(dirRow);
 
-        // ── 구분선 ────────────────────────────────────────
+        // ── 퀵 메뉴 (홈 추가/운행정보/지도/주변정류장) ────
+        LinearLayout quickMenu = new LinearLayout(this);
+        quickMenu.setOrientation(LinearLayout.HORIZONTAL);
+        quickMenu.setClipChildren(false); quickMenu.setClipToPadding(false);
+        LinearLayout.LayoutParams qmLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        qmLp.setMargins(dpToPx(12), 0, dpToPx(12), dpToPx(8));
+        quickMenu.setLayoutParams(qmLp);
+        String[] qLabels = {"홈 추가", "운행정보", "지도", "주변정류장"};
+        for (int qi = 0; qi < 4; qi++) {
+            LinearLayout qCard = new LinearLayout(this);
+            qCard.setOrientation(LinearLayout.VERTICAL); qCard.setGravity(Gravity.CENTER);
+            qCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
+            qCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+            qCard.setPadding(dpToPx(4), dpToPx(10), dpToPx(4), dpToPx(10));
+            LinearLayout.LayoutParams qcLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            qcLp.setMargins(0, 0, qi < 3 ? dpToPx(6) : 0, 0); qCard.setLayoutParams(qcLp);
+            TextView tvQLabel = new TextView(this);
+            tvQLabel.setText(qLabels[qi]); tvQLabel.setGravity(Gravity.CENTER);
+            tvQLabel.setTextColor(Color.parseColor("#1A1A2E"));
+            tvQLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvQLabel.setTypeface(null, android.graphics.Typeface.BOLD);
+            qCard.addView(tvQLabel);
+            if (qi == 1) {
+                qCard.setOnClickListener(v2 -> {
+                    String msg = "노선번호: " + routeNo + "번\n기점: " + fStartNm + "\n종점: " + fEndNm
+                            + "\n첫차: " + fStF + "\n막차: " + fEtF
+                            + "\n배차간격: " + (fInterval.isEmpty() ? "-" : fInterval + "분");
+                    new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                            .setTitle("\u23f1 운행 정보").setMessage(msg).setPositiveButton("확인", null).show();
+                });
+            }
+            quickMenu.addView(qCard);
+        }
+        fixedArea.addView(quickMenu);
         View divider = new View(this);
         divider.setBackgroundColor(Color.parseColor("#E8E8E8"));
         divider.setLayoutParams(new LinearLayout.LayoutParams(
