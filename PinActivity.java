@@ -11331,6 +11331,7 @@ public class PinActivity extends AppCompatActivity {
                     while ((line = br.readLine()) != null) sb.append(line);
                     br.close();
                     String xml = sb.toString();
+                    android.util.Log.d("BUS_API", "page=" + page + " xml길이=" + xml.length() + " 앞200=" + xml.substring(0, Math.min(200, xml.length())));
 
                     // 총 페이지 수 파악
                     int itemPageCnt = 1;
