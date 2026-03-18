@@ -314,13 +314,17 @@ public class PinActivity extends AppCompatActivity {
                 downloadBusRouteDb(() -> {
                     hideSplashProgress();
                     loadBusDbToMemory();
-                    ownerMenuBuilder.build();
-                    checkAccessibilityService();
+                    loadStopDbFromDriveIfNeeded(() -> {
+                        ownerMenuBuilder.build();
+                        checkAccessibilityService();
+                    });
                 }, pct -> updateSplashProgress(pct));
             } else {
-                ownerMenuBuilder.build();
                 loadBusDbToMemory();
-                checkAccessibilityService();
+                loadStopDbFromDriveIfNeeded(() -> {
+                    ownerMenuBuilder.build();
+                    checkAccessibilityService();
+                });
             }
         } else {
             uploadFcmTokenIfNeeded();
@@ -2523,18 +2527,46 @@ public class PinActivity extends AppCompatActivity {
     }
 
     private void checkVersionThenShowMenu() {
-        // 버스 DB 다운로드 필요하면 먼저 처리 후 메뉴 진입
         if (busDbNeedsUpdate()) {
             if (splashLoadingTv != null) splashLoadingTv.setText("버스 노선 데이터 다운로드 중...");
             showSplashProgress();
             downloadBusRouteDb(() -> {
                 hideSplashProgress();
                 loadBusDbToMemory();
-                doCheckVersionThenShowMenu();
+                loadStopDbFromDriveIfNeeded(() -> doCheckVersionThenShowMenu());
             }, pct -> updateSplashProgress(pct));
         } else {
             loadBusDbToMemory();
-            doCheckVersionThenShowMenu();
+            loadStopDbFromDriveIfNeeded(() -> doCheckVersionThenShowMenu());
+        }
+    }
+
+    /** Drive에서 dj_stops.json 다운로드 (없으면 패스) */
+    private void loadStopDbFromDriveIfNeeded(Runnable onDone) {
+        android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
+        String cached = p.getString("stop_json_cache", "");
+        if (!cached.isEmpty()) {
+            if (stopDbList == null) loadStopJsonToMemory(cached);
+            if (onDone != null) onDone.run();
+            return;
+        }
+        if (splashLoadingTv != null) splashLoadingTv.setText("정류장 데이터 로딩 중...");
+        try {
+            DriveReadHelper reader = new DriveReadHelper(this);
+            reader.readFile(STOP_DB_FILE, new DriveReadHelper.ReadCallback() {
+                @Override public void onSuccess(String content) {
+                    if (!content.isEmpty()) {
+                        p.edit().putString("stop_json_cache", content).apply();
+                        loadStopJsonToMemory(content);
+                    }
+                    if (onDone != null) runOnUiThread(onDone);
+                }
+                @Override public void onFailure(String error) {
+                    if (onDone != null) runOnUiThread(onDone);
+                }
+            });
+        } catch (Exception e) {
+            if (onDone != null) onDone.run();
         }
     }
 
@@ -9112,6 +9144,46 @@ public class PinActivity extends AppCompatActivity {
 
         root.addView(sv);
 
+        // ── 오너 전용: 정류장 DB 업데이트 버튼 ────────────
+        if (isOwner) {
+            LinearLayout ownerBar = new LinearLayout(this);
+            ownerBar.setOrientation(LinearLayout.HORIZONTAL);
+            ownerBar.setGravity(Gravity.CENTER);
+            ownerBar.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), 0);
+            ownerBar.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            TextView btnStopDb = new TextView(this);
+            String stopStatus = stopDbList != null && !stopDbList.isEmpty()
+                    ? "🚏 정류장 DB: " + stopDbList.size() + "개 ✓ (업데이트)"
+                    : "🚏 정류장 DB 생성 (최초 1회)";
+            btnStopDb.setText(stopStatus);
+            btnStopDb.setTextColor(Color.parseColor("#0984E3"));
+            btnStopDb.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            btnStopDb.setGravity(Gravity.CENTER);
+            btnStopDb.setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8));
+            android.graphics.drawable.GradientDrawable sdbBg = new android.graphics.drawable.GradientDrawable();
+            sdbBg.setColor(Color.parseColor("#EBF5FB")); sdbBg.setCornerRadius(dpToPx(8));
+            sdbBg.setStroke(dpToPx(1), Color.parseColor("#AED6F1"));
+            btnStopDb.setBackground(sdbBg);
+            btnStopDb.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            btnStopDb.setOnClickListener(v -> {
+                btnStopDb.setText("⏳ 수집 중... (수분 소요)");
+                btnStopDb.setEnabled(false);
+                buildAndUploadStopDb(() -> {
+                    int cnt = stopDbList != null ? stopDbList.size() : 0;
+                    btnStopDb.setText("🚏 정류장 DB: " + cnt + "개 ✓ (업데이트)");
+                    btnStopDb.setEnabled(true);
+                    android.widget.Toast.makeText(this,
+                            "정류장 DB " + cnt + "개 Drive 업로드 완료!",
+                            android.widget.Toast.LENGTH_LONG).show();
+                }, null);
+            });
+            ownerBar.addView(btnStopDb);
+            root.addView(ownerBar);
+        }
+
+
         // ── 검색 로직 ─────────────────────────────────────
         android.os.Handler debounceHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         Runnable[] debounceRunnable = {null};
@@ -9156,20 +9228,11 @@ public class PinActivity extends AppCompatActivity {
                     busFavSection2.setVisibility(kw.isEmpty() ? android.view.View.VISIBLE : android.view.View.GONE);
                 if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
                 if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
-                // 정류장 탭: 마지막 글자가 불완전한 한글(자음만/모음만)이면 검색 대기
-                if (!isBusTab[0] && kw.length() > 0) {
-                    char last = kw.charAt(kw.length() - 1);
-                    // 자음 단독(ㄱ~ㅎ) 또는 모음 단독(ㅏ~ㅣ)이면 입력 중으로 판단
-                    if ((last >= 0x3131 && last <= 0x314E) || (last >= 0x314F && last <= 0x3163)) {
-                        return; // 아직 입력 중, 검색 안 함
-                    }
-                    // 한글 조합 중인 글자 (받침 없는 상태의 마지막 글자 체크는 어렵지만
-                    // 최소 2글자 이상일 때만 검색)
-                    if (kw.length() < 2) return;
+                // 버스탭(숫자)은 200ms 자동검색, 정류장탭은 검색버튼/엔터에서만
+                if (isBusTab[0]) {
+                    debounceRunnable[0] = doSearch;
+                    debounceHandler.postDelayed(debounceRunnable[0], 200);
                 }
-                debounceRunnable[0] = doSearch;
-                // 버스: 200ms, 정류장: 600ms (타이핑 완료 기다리기)
-                debounceHandler.postDelayed(debounceRunnable[0], isBusTab[0] ? 200 : 600);
             }
             @Override public void afterTextChanged(android.text.Editable e) {}
         });
@@ -9619,7 +9682,34 @@ public class PinActivity extends AppCompatActivity {
     private void busScreenSearchByStop(String keyword, LinearLayout container) {
         container.removeAllViews();
 
-        // 세션 캐시 hit → 즉시 표시
+        // ① 메모리 DB (Drive에서 받은 파일) → 즉시 백그라운드 검색
+        if (stopDbList != null && !stopDbList.isEmpty()) {
+            new Thread(() -> {
+                java.util.List<String[]> result = new java.util.ArrayList<>();
+                String kw = keyword.toLowerCase();
+                for (String[] p : stopDbList) {
+                    if (p[1].toLowerCase().contains(kw)) {
+                        result.add(p);
+                        if (result.size() >= 30) break;
+                    }
+                }
+                runOnUiThread(() -> {
+                    container.removeAllViews();
+                    if (result.isEmpty()) {
+                        TextView tv = new TextView(this);
+                        tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
+                        tv.setTextColor(Color.parseColor("#AAAAAA"));
+                        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                        container.addView(tv);
+                    } else {
+                        renderStopCards(result, keyword, container);
+                    }
+                });
+            }).start();
+            return;
+        }
+
+        // ② 세션 캐시 hit → 즉시 표시
         java.util.List<String[]> cached = stopSearchCache.get(keyword);
         if (cached != null) {
             if (cached.isEmpty()) {
@@ -9634,7 +9724,7 @@ public class PinActivity extends AppCompatActivity {
             return;
         }
 
-        // 캐시 없으면 API 호출
+        // ③ API 호출 + 세션 캐시 저장
         TextView tvL = new TextView(this); tvL.setText("정류소 검색 중...");
         tvL.setTextColor(Color.parseColor("#AAAAAA"));
         tvL.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
@@ -9651,7 +9741,6 @@ public class PinActivity extends AppCompatActivity {
                     if (!item.contains("<nodeid>")) continue;
                     stops.add(new String[]{tag(item,"nodeid"), tag(item,"nodenm"), tag(item,"nodeno")});
                 }
-                // 세션 캐시 저장
                 stopSearchCache.put(keyword, stops);
                 runOnUiThread(() -> {
                     container.removeAllViews();
@@ -12958,14 +13047,14 @@ public class PinActivity extends AppCompatActivity {
     private static final String BUS_DB_KEY    = "all_routes";
     private static final String BUS_DB_VER    = "db_version";
     private static final String BUS_DB_SCHEMA = "db_schema";
-    private static final int    BUS_DB_SCHEMA_VER = 3; // 정류장 DB 제거 버전
-    // 로컬 DB: 노선만 저장, 정류장은 세션 캐시로 처리
+    private static final int    BUS_DB_SCHEMA_VER = 3;
+    private static final String STOP_DB_FILE  = "dj_stops.json"; // Drive 정류장 파일
 
     /** SharedPreferences DB를 메모리에 로드 (앱 시작 시 1회) */
     private void loadBusDbToMemory() {
         new Thread(() -> {
             android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
-            // 노선
+            // 노선 (로컬 SharedPreferences)
             String rawRoute = p.getString(BUS_DB_KEY, "");
             java.util.List<String[]> rList = new java.util.ArrayList<>();
             if (!rawRoute.isEmpty()) {
@@ -12974,18 +13063,116 @@ public class PinActivity extends AppCompatActivity {
                     if (parts.length >= 5) rList.add(parts);
                 }
             }
-            // 정류장
-            String rawStop = p.getString("all_stops", "");
-            java.util.List<String[]> sList = new java.util.ArrayList<>();
-            if (!rawStop.isEmpty()) {
-                for (String line : rawStop.split(";")) {
-                    String[] parts = line.split("\\|", -1);
-                    if (parts.length >= 3) sList.add(parts);
-                }
-            }
             routeDbList = rList;
-            stopDbList  = sList;
+
+            // 정류장 (Drive dj_stops.json 로컬 캐시)
+            String stopJson = p.getString("stop_json_cache", "");
+            if (!stopJson.isEmpty()) {
+                loadStopJsonToMemory(stopJson);
+            }
         }).start();
+    }
+
+    /** JSON 문자열 → stopDbList 파싱 */
+    private void loadStopJsonToMemory(String json) {
+        try {
+            java.util.List<String[]> sList = new java.util.ArrayList<>();
+            // JSON 배열: [{"id":"...","nm":"...","no":"..."},...]
+            int i = 0;
+            while (true) {
+                int s = json.indexOf('{', i);
+                int e = json.indexOf('}', s);
+                if (s < 0 || e < 0) break;
+                String obj = json.substring(s, e+1);
+                String id = jsonVal(obj, "id");
+                String nm = jsonVal(obj, "nm");
+                String no = jsonVal(obj, "no");
+                if (!id.isEmpty() && !nm.isEmpty()) sList.add(new String[]{id, nm, no});
+                i = e + 1;
+            }
+            stopDbList = sList;
+        } catch (Exception ignored) {}
+    }
+
+    private String jsonVal(String obj, String key) {
+        String k = "\"" + key + "\":\"";
+        int s = obj.indexOf(k);
+        if (s < 0) return "";
+        s += k.length();
+        int e = obj.indexOf('"', s);
+        return e < 0 ? "" : obj.substring(s, e);
+    }
+
+    /** 오너 전용: 대전 정류장 전체 수집 → Drive 업로드 */
+    private void buildAndUploadStopDb(Runnable onDone, ProgressCallback onProgress) {
+        new Thread(() -> {
+            try {
+                // 초성×중성 304개 prefix
+                int[] choIdxArr = {0,2,3,5,6,7,9,11,12,14,15,16,17,18};
+                java.util.Set<String> seen = new java.util.HashSet<>();
+                StringBuilder jsonSb = new StringBuilder("[");
+                int total = choIdxArr.length * 21 + 10;
+                int done = 0;
+
+                for (int ci : choIdxArr) {
+                    for (int ji = 0; ji < 21; ji++) {
+                        String prefix = String.valueOf((char)(0xAC00 + ci*21*28 + ji*28));
+                        fetchStopsForPrefix(prefix, seen, jsonSb);
+                        done++;
+                        final int pct = (int)(done * 100.0 / total);
+                        if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct,99)));
+                    }
+                }
+                for (int d = 0; d < 10; d++) {
+                    fetchStopsForPrefix(String.valueOf(d), seen, jsonSb);
+                    done++;
+                }
+                if (jsonSb.length() > 1 && jsonSb.charAt(jsonSb.length()-1) == ',')
+                    jsonSb.deleteCharAt(jsonSb.length()-1);
+                jsonSb.append("]");
+
+                String json = jsonSb.toString();
+                // Drive 업로드
+                new DriveUploadHelper(this).uploadFileSync(json, STOP_DB_FILE);
+                // 로컬 캐시 저장
+                getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
+                        .putString("stop_json_cache", json).apply();
+                // 메모리 로드
+                loadStopJsonToMemory(json);
+
+                if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(100));
+                if (onDone != null) runOnUiThread(onDone);
+            } catch (Exception e) {
+                if (onDone != null) runOnUiThread(onDone);
+            }
+        }).start();
+    }
+
+    private void fetchStopsForPrefix(String prefix, java.util.Set<String> seen, StringBuilder jsonSb) {
+        int page = 1;
+        while (true) {
+            try {
+                String url = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
+                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                        + "&nodeNm=" + java.net.URLEncoder.encode(prefix, "UTF-8")
+                        + "&numOfRows=100&pageNo=" + page + "&_type=xml";
+                String xml = httpGet(url);
+                int cnt = 0;
+                for (String item : xml.split("<item>")) {
+                    if (!item.contains("<nodeid>")) continue;
+                    String id = tag(item,"nodeid"), nm = tag(item,"nodenm"), no = tag(item,"nodeno");
+                    if (id.isEmpty() || seen.contains(id)) continue;
+                    seen.add(id);
+                    if (jsonSb.length() > 1) jsonSb.append(',');
+                    jsonSb.append("{\"id\":\"").append(id).append("\",\"nm\":\"")
+                          .append(nm.replace("\"","\\\"")).append("\",\"no\":\"").append(no).append("\"}");
+                    cnt++;
+                }
+                if (cnt < 100) break;
+                page++;
+                if (page > 20) break;
+            } catch (Exception ignored) { break; }
+        }
     }
 
     /** 로컬 노선 DB에서 검색 (메모리 우선) */
