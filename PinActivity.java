@@ -8818,110 +8818,164 @@ public class PinActivity extends AppCompatActivity {
             }, 1800);
         });
 
-        // ── 탭 카드 행 (통장 잔액 카드와 동일한 파스텔↔진한색 스타일) ──
-        // 색상 정의: [진한색, 파스텔 배경]
-        String[][] tabColors = {
-                {"#0984E3", "#EBF5FB"},   // 버스번호 - 파란색
-                {"#E67E22", "#FEF9E7"},   // 정류장   - 주황색
-                {"#27AE60", "#EAFAF1"},   // 장소     - 초록색
-        };
-        String[] tabLabels = {"🚌 버스번호", "🚏 정류장", "📍 장소"};
-        LinearLayout[] tabCards = new LinearLayout[3];
-        TextView[] tabTvs = new TextView[3];
-        LinearLayout[] contentPanels = new LinearLayout[3];
-
-        LinearLayout tabRow = new LinearLayout(this);
-        tabRow.setOrientation(LinearLayout.HORIZONTAL);
-        tabRow.setBackgroundColor(Color.parseColor("#F2F4F8"));
-        tabRow.setClipChildren(false);
-        tabRow.setClipToPadding(false);
-        LinearLayout.LayoutParams tabRowLp = new LinearLayout.LayoutParams(
+        // ── 통합 검색창 ───────────────────────────────────
+        LinearLayout searchArea = new LinearLayout(this);
+        searchArea.setOrientation(LinearLayout.VERTICAL);
+        searchArea.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        LinearLayout.LayoutParams saLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        tabRowLp.setMargins(dpToPx(10), dpToPx(8), dpToPx(10), dpToPx(6));
-        tabRow.setLayoutParams(tabRowLp);
+        saLp.setMargins(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(4));
+        searchArea.setLayoutParams(saLp);
 
-        for (int i = 0; i < 3; i++) {
-            final int idx = i;
-            LinearLayout card = new LinearLayout(this);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setGravity(Gravity.CENTER);
-            card.setClipChildren(false);
-            card.setClipToPadding(false);
-            boolean initSel = (i == 0);
-            card.setBackground(makeShadowCardDrawable(
-                    initSel ? tabColors[i][0] : tabColors[i][1], 14, 5));
-            card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-            card.setPadding(dpToPx(6), dpToPx(16), dpToPx(6), dpToPx(16));
-            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            int mr = (i < 2) ? dpToPx(8) : 0;
-            cp.setMargins(0, 0, mr, 0);
-            card.setLayoutParams(cp);
+        // 검색창 행
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setOrientation(LinearLayout.HORIZONTAL);
+        searchRow.setGravity(Gravity.CENTER_VERTICAL);
+        searchRow.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-            TextView tv = new TextView(this);
-            tv.setText(tabLabels[i]);
-            tv.setGravity(Gravity.CENTER);
-            tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
-            tv.setTypeface(null, android.graphics.Typeface.BOLD);
-            tv.setTextColor(initSel ? Color.WHITE : Color.parseColor(tabColors[i][0]));
-            card.addView(tv);
+        // EditText + 삭제버튼 wrapper
+        RelativeLayout etWrapper = new RelativeLayout(this);
+        LinearLayout.LayoutParams wLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        wLp.setMargins(0, 0, dpToPx(8), 0);
+        etWrapper.setLayoutParams(wLp);
 
-            tabCards[i] = card;
-            tabTvs[i] = tv;
-            tabRow.addView(card);
-        }
-        root.addView(tabRow);
+        android.view.inputmethod.InputMethodManager immBus =
+                (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+
+        android.widget.EditText etSearch = new android.widget.EditText(this);
+        etSearch.setHint("버스번호, 정류장, 장소 검색");
+        etSearch.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        etSearch.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        android.graphics.drawable.GradientDrawable eBg = new android.graphics.drawable.GradientDrawable();
+        eBg.setColor(Color.WHITE);
+        eBg.setCornerRadius(dpToPx(10));
+        eBg.setStroke(dpToPx(1), Color.parseColor("#C8BFEF"));
+        etSearch.setBackground(eBg);
+        etSearch.setPadding(dpToPx(14), dpToPx(12), dpToPx(54), dpToPx(12));
+        etSearch.setLayoutParams(new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT));
+        etWrapper.addView(etSearch);
+
+        // 삭제 버튼
+        TextView btnClear = new TextView(this);
+        btnClear.setText("삭제");
+        btnClear.setTextColor(Color.WHITE);
+        btnClear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+        btnClear.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnClear.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable clrBg = new android.graphics.drawable.GradientDrawable();
+        clrBg.setColor(Color.parseColor("#E74C3C"));
+        clrBg.setCornerRadius(dpToPx(4));
+        btnClear.setBackground(clrBg);
+        btnClear.setPadding(dpToPx(6), dpToPx(3), dpToPx(6), dpToPx(3));
+        btnClear.setVisibility(android.view.View.GONE);
+        RelativeLayout.LayoutParams xLp = new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
+        xLp.addRule(RelativeLayout.ALIGN_PARENT_END);
+        xLp.addRule(RelativeLayout.CENTER_VERTICAL);
+        xLp.setMargins(0, 0, dpToPx(8), 0);
+        btnClear.setLayoutParams(xLp);
+        etWrapper.addView(btnClear);
+        searchRow.addView(etWrapper);
+
+        // 검색 버튼
+        TextView btnGo = new TextView(this);
+        btnGo.setText("검색");
+        btnGo.setTextColor(Color.WHITE);
+        btnGo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        btnGo.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnGo.setGravity(Gravity.CENTER);
+        btnGo.setPadding(dpToPx(18), dpToPx(12), dpToPx(18), dpToPx(12));
+        android.graphics.drawable.GradientDrawable goBg = new android.graphics.drawable.GradientDrawable();
+        goBg.setColor(Color.parseColor("#0984E3"));
+        goBg.setCornerRadius(dpToPx(10));
+        btnGo.setBackground(goBg);
+        searchRow.addView(btnGo);
+        searchArea.addView(searchRow);
+
+        // 안내 텍스트
+        TextView tvHint = new TextView(this);
+        tvHint.setText("숫자 입력 시 버스번호, 텍스트 입력 시 정류장·장소 검색");
+        tvHint.setTextColor(Color.parseColor("#AAAAAA"));
+        tvHint.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        LinearLayout.LayoutParams htLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        htLp.setMargins(dpToPx(4), dpToPx(4), 0, 0);
+        tvHint.setLayoutParams(htLp);
+        searchArea.addView(tvHint);
+        root.addView(searchArea);
 
         // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
         ScrollView sv = new ScrollView(this);
         sv.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-        // 스크롤 시 키보드 숨김
         sv.setOnTouchListener((v, event) -> {
             if (event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
-                android.view.inputmethod.InputMethodManager imm2 =
-                        (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-                if (imm2 != null) imm2.hideSoftInputFromWindow(sv.getWindowToken(), 0);
+                if (immBus != null) immBus.hideSoftInputFromWindow(sv.getWindowToken(), 0);
                 if (getCurrentFocus() != null) getCurrentFocus().clearFocus();
             }
             return false;
         });
         LinearLayout svInner = new LinearLayout(this);
         svInner.setOrientation(LinearLayout.VERTICAL);
-        svInner.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
+        svInner.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(12));
         sv.addView(svInner);
 
-        // 3개 콘텐츠 패널
-        for (int i = 0; i < 3; i++) {
-            contentPanels[i] = new LinearLayout(this);
-            contentPanels[i].setOrientation(LinearLayout.VERTICAL);
-            contentPanels[i].setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            contentPanels[i].setVisibility(i == 0 ? android.view.View.VISIBLE : android.view.View.GONE);
-            LinearLayout resultContainer = new LinearLayout(this);
-            resultContainer.setOrientation(LinearLayout.VERTICAL);
-            resultContainer.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            buildSearchPanel(contentPanels[i], resultContainer, i);
-            svInner.addView(contentPanels[i]);
-        }
+        // 결과 컨테이너 (단일)
+        LinearLayout resultContainer = new LinearLayout(this);
+        resultContainer.setOrientation(LinearLayout.VERTICAL);
+        resultContainer.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        svInner.addView(resultContainer);
         root.addView(sv);
 
-        // ── 탭 클릭 처리 (통장 잔액 updateBalCardColors 방식) ──
-        for (int i = 0; i < 3; i++) {
-            final int idx = i;
-            tabCards[i].setOnClickListener(v -> {
-                for (int j = 0; j < 3; j++) {
-                    boolean sel = (j == idx);
-                    tabCards[j].setBackground(makeShadowCardDrawable(
-                            sel ? tabColors[j][0] : tabColors[j][1], 14, 5));
-                    tabCards[j].setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-                    tabTvs[j].setTextColor(sel ? Color.WHITE : Color.parseColor(tabColors[j][0]));
-                    contentPanels[j].setVisibility(sel ? android.view.View.VISIBLE : android.view.View.GONE);
-                }
-                sv.smoothScrollTo(0, 0);
-            });
-        }
+        // ── 검색 로직 ─────────────────────────────────────
+        android.os.Handler debounceHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        Runnable[] debounceRunnable = {null};
+
+        Runnable doSearch = () -> {
+            String kw = etSearch.getText().toString().trim();
+            if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
+            // 숫자면 버스번호, 아니면 정류장
+            if (kw.matches("\\d+")) busScreenSearchByNo(kw, resultContainer);
+            else                    busScreenSearchByStop(kw, resultContainer);
+        };
+
+        etSearch.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                String kw = s.toString().trim();
+                btnClear.setVisibility(kw.isEmpty() ? android.view.View.GONE : android.view.View.VISIBLE);
+                if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
+                if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
+                // 숫자 입력은 실시간, 텍스트는 300ms 디바운스
+                debounceRunnable[0] = doSearch;
+                debounceHandler.postDelayed(debounceRunnable[0], kw.matches("\\d+") ? 300 : 500);
+            }
+            @Override public void afterTextChanged(android.text.Editable e) {}
+        });
+
+        btnClear.setOnClickListener(v -> {
+            etSearch.setText("");
+            resultContainer.removeAllViews();
+            etSearch.requestFocus();
+            if (immBus != null) immBus.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+        });
+
+        btnGo.setOnClickListener(v -> {
+            if (immBus != null) immBus.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
+            etSearch.clearFocus();
+            doSearch.run();
+        });
+
+        etSearch.setOnEditorActionListener((tv2, actionId, event) -> {
+            if (immBus != null) immBus.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
+            etSearch.clearFocus();
+            doSearch.run();
+            return true;
+        });
 
         // ── 하단 돌아가기 버튼 + navigationBar inset ──────
         LinearLayout btnBar = new LinearLayout(this);
