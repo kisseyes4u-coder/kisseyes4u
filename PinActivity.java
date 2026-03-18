@@ -9048,7 +9048,10 @@ public class PinActivity extends AppCompatActivity {
                 java.util.List<String[]> routes = new java.util.ArrayList<>();
                 for (String item : xml.split("<item>")) {
                     if (!item.contains("<routeid>")) continue;
-                    routes.add(new String[]{tag(item,"routeid"), tag(item,"routeno"),
+                    String rno = tag(item, "routeno");
+                    // 입력값으로 시작하는 번호만 포함
+                    if (!rno.startsWith(routeNo)) continue;
+                    routes.add(new String[]{tag(item,"routeid"), rno,
                             tag(item,"startnodenm"), tag(item,"endnodenm")});
                 }
                 runOnUiThread(() -> {
