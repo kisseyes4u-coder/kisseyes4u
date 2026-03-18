@@ -9115,10 +9115,10 @@ public class PinActivity extends AppCompatActivity {
                 for (String item : xml.split("<item>")) {
                     if (!item.contains("<routeid>")) continue;
                     String rno = tag(item, "routeno");
-                    // 입력값으로 시작하는 번호만 포함
                     if (!rno.startsWith(routeNo)) continue;
                     routes.add(new String[]{tag(item,"routeid"), rno,
-                            tag(item,"startnodenm"), tag(item,"endnodenm")});
+                            tag(item,"startnodenm"), tag(item,"endnodenm"),
+                            tag(item,"routetp")}); // 노선유형 추가
                 }
                 runOnUiThread(() -> {
                     container.removeAllViews();
@@ -9127,9 +9127,12 @@ public class PinActivity extends AppCompatActivity {
                         tv.setTextColor(Color.parseColor("#AAAAAA")); tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12)); container.addView(tv);
                     } else {
                         for (String[] r : routes) {
-                            LinearLayout card = makeBusCard(r[1] + "번",
+                            String routeTp = r.length > 4 ? r[4] : "";
+                            LinearLayout card = makeBusCard(
+                                    r[1] + "번",
                                     (r[2].isEmpty()?"기점":r[2]) + "  ↔  " + (r[3].isEmpty()?"종점":r[3]),
-                                    "탭하여 정류소 선택 →", "#0984E3");
+                                    "탭하여 정류소 선택 →", "#0984E3",
+                                    routeTp);
                             card.setOnClickListener(v -> busScreenLoadStops(r[0], r[1], container));
                             container.addView(card);
                         }
@@ -9352,6 +9355,10 @@ public class PinActivity extends AppCompatActivity {
 
     /** 버스 검색 결과 카드 공통 빌더 */
     private LinearLayout makeBusCard(String title, String sub, String tap, String titleColor) {
+        return makeBusCard(title, sub, tap, titleColor, "");
+    }
+
+    private LinearLayout makeBusCard(String title, String sub, String tap, String titleColor, String routeType) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 4));
@@ -9362,12 +9369,42 @@ public class PinActivity extends AppCompatActivity {
         card.setLayoutParams(lp);
         card.setPadding(dpToPx(14), dpToPx(10), dpToPx(14), dpToPx(10));
 
+        // 제목 행 (배지 + 번호)
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        titleRow.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // 노선유형 배지
+        if (!routeType.isEmpty()) {
+            String[] badgeInfo = routeTypeBadge(routeType);
+            TextView tvBadge = new TextView(this);
+            tvBadge.setText(badgeInfo[0]);
+            tvBadge.setTextColor(Color.WHITE);
+            tvBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvBadge.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvBadge.setGravity(Gravity.CENTER);
+            tvBadge.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+            android.graphics.drawable.GradientDrawable badgeBg =
+                    new android.graphics.drawable.GradientDrawable();
+            badgeBg.setColor(Color.parseColor(badgeInfo[1]));
+            badgeBg.setCornerRadius(dpToPx(4));
+            tvBadge.setBackground(badgeBg);
+            LinearLayout.LayoutParams bdLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            bdLp.setMargins(0, 0, dpToPx(6), 0);
+            tvBadge.setLayoutParams(bdLp);
+            titleRow.addView(tvBadge);
+        }
+
         TextView tvT = new TextView(this);
         tvT.setText(title);
         tvT.setTextColor(Color.parseColor(titleColor));
         tvT.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
         tvT.setTypeface(null, android.graphics.Typeface.BOLD);
-        card.addView(tvT);
+        titleRow.addView(tvT);
+        card.addView(titleRow);
 
         if (!sub.isEmpty()) {
             TextView tvS = new TextView(this);
@@ -9391,6 +9428,23 @@ public class PinActivity extends AppCompatActivity {
         tvTap.setLayoutParams(tl);
         card.addView(tvTap);
         return card;
+    }
+
+    /** 노선유형 → [표시명, 배지색] */
+    private String[] routeTypeBadge(String routeType) {
+        if (routeType == null || routeType.isEmpty()) return new String[]{"", "#AAAAAA"};
+        if (routeType.contains("광역"))   return new String[]{"광역", "#8E44AD"};
+        if (routeType.contains("직행"))   return new String[]{"직행", "#C0392B"};
+        if (routeType.contains("급행"))   return new String[]{"급행", "#E74C3C"};
+        if (routeType.contains("마을"))   return new String[]{"마을", "#27AE60"};
+        if (routeType.contains("외곽"))   return new String[]{"외곽", "#E67E22"};
+        if (routeType.contains("순환"))   return new String[]{"순환", "#16A085"};
+        if (routeType.contains("공항"))   return new String[]{"공항", "#2980B9"};
+        if (routeType.contains("좌석"))   return new String[]{"좌석", "#D35400"};
+        if (routeType.contains("도시"))   return new String[]{"도시", "#0984E3"};
+        // 그 외는 앞 2글자
+        String label = routeType.length() > 2 ? routeType.substring(0, 2) : routeType;
+        return new String[]{label, "#636E72"};
     }
 
     private void showMealPlanScreen() {
