@@ -10750,13 +10750,20 @@ public class PinActivity extends AppCompatActivity {
         }
         fixedArea.addView(dirRow);
 
-        // ── 퀵 메뉴 (홈 추가/운행정보/지도/주변정류장) ────
+        // ── 구분선 ────────────────────────────────────────
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.parseColor("#E8E8E8"));
+        divider.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+        container.addView(divider);
+
+        // ── 퀵 메뉴 (홈 추가/운행정보/지도/주변정류장) - 스크롤 영역 ──
         LinearLayout quickMenu = new LinearLayout(this);
         quickMenu.setOrientation(LinearLayout.HORIZONTAL);
         quickMenu.setClipChildren(false); quickMenu.setClipToPadding(false);
         LinearLayout.LayoutParams qmLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        qmLp.setMargins(dpToPx(12), 0, dpToPx(12), dpToPx(8));
+        qmLp.setMargins(0, dpToPx(8), 0, dpToPx(4));
         quickMenu.setLayoutParams(qmLp);
         String[] qLabels = {"홈 추가", "운행정보", "지도", "주변정류장"};
         for (int qi = 0; qi < 4; qi++) {
@@ -10784,12 +10791,7 @@ public class PinActivity extends AppCompatActivity {
             }
             quickMenu.addView(qCard);
         }
-        fixedArea.addView(quickMenu);
-        View divider = new View(this);
-        divider.setBackgroundColor(Color.parseColor("#E8E8E8"));
-        divider.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
-        container.addView(divider);
+        container.addView(quickMenu);
 
         // ── 운행 대수 배너 ────────────────────────────────
         LinearLayout runBanner = new LinearLayout(this);
