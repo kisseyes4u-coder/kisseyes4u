@@ -9465,17 +9465,23 @@ public class PinActivity extends AppCompatActivity {
                     LinearLayout runBanner = new LinearLayout(this);
                     runBanner.setOrientation(LinearLayout.HORIZONTAL);
                     runBanner.setGravity(Gravity.CENTER_VERTICAL);
-                    runBanner.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+                    runBanner.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8));
                     LinearLayout.LayoutParams rbLp = new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                     rbLp.setMargins(0, 0, 0, dpToPx(4));
                     runBanner.setLayoutParams(rbLp);
 
-                    TextView tvBusIco = new TextView(this);
-                    tvBusIco.setText("🚌 현재  ");
-                    tvBusIco.setTextColor(Color.parseColor("#555555"));
-                    tvBusIco.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                    runBanner.addView(tvBusIco);
+                    // 왼쪽 여백 (flex)
+                    View rbSpace = new View(this);
+                    rbSpace.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                    runBanner.addView(rbSpace);
+
+                    // 🚌 현재 X대 운행중
+                    TextView tvRunFull = new TextView(this);
+                    tvRunFull.setText("🚌 현재  ");
+                    tvRunFull.setTextColor(Color.parseColor("#555555"));
+                    tvRunFull.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                    runBanner.addView(tvRunFull);
 
                     TextView tvRunCnt = new TextView(this);
                     tvRunCnt.setText(fRunning + "대");
@@ -9485,13 +9491,12 @@ public class PinActivity extends AppCompatActivity {
                     runBanner.addView(tvRunCnt);
 
                     TextView tvRunTxt = new TextView(this);
-                    tvRunTxt.setText("  운행중");
+                    tvRunTxt.setText("  운행중    ");
                     tvRunTxt.setTextColor(Color.parseColor("#555555"));
                     tvRunTxt.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                    tvRunTxt.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
                     runBanner.addView(tvRunTxt);
 
-                    // 배차시간 버튼
+                    // 배차시간 버튼 (운행중 바로 오른쪽)
                     TextView tvIntervalBtn = new TextView(this);
                     tvIntervalBtn.setText("배차시간 ›");
                     tvIntervalBtn.setTextColor(Color.parseColor("#0984E3"));
@@ -9535,9 +9540,9 @@ public class PinActivity extends AppCompatActivity {
                             busRow.setOrientation(LinearLayout.HORIZONTAL);
                             busRow.setGravity(Gravity.CENTER_VERTICAL);
                             busRow.setLayoutParams(new LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(52)));
+                                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50)));
 
-                            // 타임라인 열: 선 + 버스 박스 오버레이
+                            // 타임라인 열: 선 + 버스박스 + 번호박스
                             android.view.View busTimeline = new android.view.View(this) {
                                 @Override protected void onDraw(android.graphics.Canvas canvas) {
                                     super.onDraw(canvas);
@@ -9546,41 +9551,53 @@ public class PinActivity extends AppCompatActivity {
 
                                     // 세로선
                                     android.graphics.Paint lp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                    lp.setColor(Color.parseColor("#CCCCCC"));
-                                    lp.setStrokeWidth(dpToPx(3));
+                                    lp.setColor(Color.parseColor("#AED6F1"));
+                                    lp.setStrokeWidth(dpToPx(2));
                                     canvas.drawLine(cx, 0, cx, h, lp);
 
-                                    // 빨간 테두리 박스
-                                    float bw = dpToPx(30), bh = dpToPx(40);
-                                    float left = cx - bw/2f, top = h/2f - bh/2f;
-                                    android.graphics.Paint borderPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                    borderPaint.setColor(Color.parseColor("#E74C3C"));
-                                    borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
-                                    borderPaint.setStrokeWidth(dpToPx(2));
-                                    float r = dpToPx(4);
-                                    canvas.drawRoundRect(left, top, left+bw, top+bh, r, r, borderPaint);
+                                    float boxW = dpToPx(28);
+                                    float emojiH = dpToPx(26);
+                                    float numH   = dpToPx(16);
+                                    float gap    = dpToPx(2);
+                                    float totalH = emojiH + gap + numH;
+                                    float startY = h/2f - totalH/2f;
+                                    float left   = cx - boxW/2f;
+                                    float r      = dpToPx(4);
 
-                                    // 흰 배경
-                                    android.graphics.Paint fillPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                    fillPaint.setColor(Color.WHITE);
-                                    fillPaint.setStyle(android.graphics.Paint.Style.FILL);
-                                    canvas.drawRoundRect(left+dpToPx(1), top+dpToPx(1),
-                                            left+bw-dpToPx(1), top+bh-dpToPx(1), r, r, fillPaint);
+                                    android.graphics.Paint borderP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                                    borderP.setColor(Color.parseColor("#E74C3C"));
+                                    borderP.setStyle(android.graphics.Paint.Style.STROKE);
+                                    borderP.setStrokeWidth(dpToPx(2));
 
-                                    // 버스 이모지
+                                    android.graphics.Paint fillP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                                    fillP.setColor(Color.WHITE);
+                                    fillP.setStyle(android.graphics.Paint.Style.FILL);
+
+                                    // 버스 이모지 박스
+                                    android.graphics.RectF emojiRect = new android.graphics.RectF(
+                                            left, startY, left+boxW, startY+emojiH);
+                                    canvas.drawRoundRect(emojiRect, r, r, fillP);
+                                    canvas.drawRoundRect(emojiRect, r, r, borderP);
+
                                     android.graphics.Paint tp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                    tp.setTextSize(dpToPx(14));
+                                    tp.setTextSize(dpToPx(13));
                                     tp.setTextAlign(android.graphics.Paint.Align.CENTER);
-                                    canvas.drawText("🚌", cx, top + bh * 0.45f + dpToPx(5), tp);
+                                    canvas.drawText("🚌", cx, startY + emojiH*0.72f + dpToPx(2), tp);
 
-                                    // 숫자
+                                    // 번호 박스
                                     if (!fShortNo.isEmpty()) {
+                                        float numY = startY + emojiH + gap;
+                                        android.graphics.RectF numRect = new android.graphics.RectF(
+                                                left, numY, left+boxW, numY+numH);
+                                        canvas.drawRoundRect(numRect, r, r, fillP);
+                                        canvas.drawRoundRect(numRect, r, r, borderP);
+
                                         android.graphics.Paint np = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                                         np.setColor(Color.parseColor("#E74C3C"));
-                                        np.setTextSize(dpToPx(9));
+                                        np.setTextSize(dpToPx(8));
                                         np.setTextAlign(android.graphics.Paint.Align.CENTER);
                                         np.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                                        canvas.drawText(fShortNo, cx, top + bh - dpToPx(4), np);
+                                        canvas.drawText(fShortNo, cx, numY + numH*0.72f, np);
                                     }
                                 }
                             };
@@ -9610,16 +9627,16 @@ public class PinActivity extends AppCompatActivity {
                                 float cx = w / 2f;
                                 float cr = dpToPx(9);
 
-                                // 세로선
+                                // 세로선 파란색
                                 android.graphics.Paint lPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                lPaint.setColor(Color.parseColor("#BBBBBB"));
+                                lPaint.setColor(Color.parseColor("#AED6F1"));
                                 lPaint.setStrokeWidth(dpToPx(2));
                                 if (!fFirst2) canvas.drawLine(cx, 0, cx, h/2f - cr, lPaint);
                                 if (!fLast2)  canvas.drawLine(cx, h/2f + cr, cx, h, lPaint);
 
-                                // 얇은 원 테두리
+                                // 얇은 원 테두리 파란색
                                 android.graphics.Paint cPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                cPaint.setColor(Color.parseColor("#AAAAAA"));
+                                cPaint.setColor(Color.parseColor("#0984E3"));
                                 cPaint.setStyle(android.graphics.Paint.Style.STROKE);
                                 cPaint.setStrokeWidth(dpToPx(1));
                                 canvas.drawCircle(cx, h/2f, cr, cPaint);
@@ -9629,15 +9646,14 @@ public class PinActivity extends AppCompatActivity {
                                 wPaint.setColor(Color.WHITE);
                                 canvas.drawCircle(cx, h/2f, cr - dpToPx(1), wPaint);
 
-                                // V 표시 (얇게)
+                                // V 표시 파란색
                                 android.graphics.Paint vPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                                vPaint.setColor(Color.parseColor("#888888"));
+                                vPaint.setColor(Color.parseColor("#0984E3"));
                                 vPaint.setStyle(android.graphics.Paint.Style.STROKE);
                                 vPaint.setStrokeWidth(dpToPx(2));
                                 vPaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
                                 float vSize = dpToPx(4);
                                 float vy = h/2f;
-                                // V: 왼쪽 위 → 중앙 아래 → 오른쪽 위
                                 android.graphics.Path vPath = new android.graphics.Path();
                                 vPath.moveTo(cx - vSize, vy - vSize*0.5f);
                                 vPath.lineTo(cx, vy + vSize*0.5f);
@@ -9663,7 +9679,6 @@ public class PinActivity extends AppCompatActivity {
                         tvName.setTypeface(null, (isFirst||isLast) ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
                         stopInfo.addView(tvName);
 
-                        // 정류소 번호
                         if (!s[3].isEmpty()) {
                             TextView tvNo = new TextView(this);
                             tvNo.setText(s[3]);
@@ -9676,7 +9691,6 @@ public class PinActivity extends AppCompatActivity {
                             stopInfo.addView(tvNo);
                         }
 
-                        // 기점/종점 배지
                         if (isFirst || isLast) {
                             TextView tvTag = new TextView(this);
                             tvTag.setText(isFirst ? "기점" : "종점");
@@ -9696,6 +9710,38 @@ public class PinActivity extends AppCompatActivity {
                             stopInfo.addView(tvTag);
                         }
                         row.addView(stopInfo);
+
+                        // 즐겨찾기 별표 버튼
+                        final String favKey = "fav_stop_" + s[0];
+                        boolean isFav = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                                .getBoolean(favKey, false);
+                        TextView tvStar = new TextView(this);
+                        tvStar.setText(isFav ? "★" : "☆");
+                        tvStar.setTextColor(isFav ? Color.parseColor("#F39C12") : Color.parseColor("#CCCCCC"));
+                        tvStar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
+                        tvStar.setGravity(Gravity.CENTER);
+                        LinearLayout.LayoutParams starLp = new LinearLayout.LayoutParams(
+                                dpToPx(44), LinearLayout.LayoutParams.MATCH_PARENT);
+                        tvStar.setLayoutParams(starLp);
+                        final String stopName = s[1], stopNo = s[3], nodeId2 = s[0];
+                        tvStar.setOnClickListener(v2 -> {
+                            boolean wasFav = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                                    .getBoolean(favKey, false);
+                            boolean nowFav = !wasFav;
+                            getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                                    .putBoolean(favKey, nowFav)
+                                    .putString("fav_stop_name_" + nodeId2, stopName)
+                                    .putString("fav_stop_no_" + nodeId2, stopNo)
+                                    .putString("fav_stop_route_" + nodeId2, routeNo)
+                                    .apply();
+                            tvStar.setText(nowFav ? "★" : "☆");
+                            tvStar.setTextColor(nowFav
+                                    ? Color.parseColor("#F39C12") : Color.parseColor("#CCCCCC"));
+                            android.widget.Toast.makeText(this,
+                                    nowFav ? stopName + " 즐겨찾기 추가" : stopName + " 즐겨찾기 해제",
+                                    android.widget.Toast.LENGTH_SHORT).show();
+                        });
+                        row.addView(tvStar);
 
                         final String nodeId = s[0], nodeNm = s[1];
                         row.setOnClickListener(v -> busScreenLoadArrival(nodeId, nodeNm, routeNo, container));
