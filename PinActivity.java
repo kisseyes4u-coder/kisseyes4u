@@ -3563,11 +3563,32 @@ public class PinActivity extends AppCompatActivity {
         usersContainer.setLayoutParams(ucLp);
         layout.addView(usersContainer);
 
+        TextView tvLoadingUsers = new TextView(this);
+        tvLoadingUsers.setText("불러오는 중...");
+        tvLoadingUsers.setTextColor(Color.parseColor("#888888"));
+        tvLoadingUsers.setTextSize(13);
+        tvLoadingUsers.setPadding(0, dpToPx(8), 0, dpToPx(8));
+
+        String cachedUsers = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                .getString("cached_users_list", null);
+        if (cachedUsers != null && !cachedUsers.isEmpty()) {
+            renderUsersList(usersContainer, cachedUsers);
+        } else {
+            usersContainer.addView(tvLoadingUsers);
+            loadUsersList(usersContainer, tvLoadingUsers);
+        }
+
+        btnRefreshUsers2.setOnClickListener(v -> {
+            usersContainer.removeAllViews();
+            usersContainer.addView(tvLoadingUsers);
+            loadUsersList(usersContainer, tvLoadingUsers);
+        });
+
         // ── 버스 데이터 관리 섹션 ────────────────────────────
         LinearLayout busSecRow = makeSectionTitle("버스 데이터 관리", "#0984E3", TEXT1);
         LinearLayout.LayoutParams busSecLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        busSecLp.setMargins(dpToPx(16), dpToPx(10), dpToPx(16), dpToPx(6));
+        busSecLp.setMargins(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(6));
         busSecRow.setLayoutParams(busSecLp);
         layout.addView(busSecRow);
 
@@ -3581,7 +3602,6 @@ public class PinActivity extends AppCompatActivity {
         bmcLp.setMargins(dpToPx(16), dpToPx(6), dpToPx(16), dpToPx(10));
         busManageCard.setLayoutParams(bmcLp);
 
-        // 노선 DB 상태
         boolean hasRouteDb = routeDbList != null && !routeDbList.isEmpty();
         boolean hasStopDb2 = stopDbList != null && !stopDbList.isEmpty();
 
@@ -3601,7 +3621,6 @@ public class PinActivity extends AppCompatActivity {
         tvStopStatus.setLayoutParams(stLp);
         busManageCard.addView(tvStopStatus);
 
-        // 정류장 DB 업데이트 버튼
         TextView btnBusManage = new TextView(this);
         btnBusManage.setText(hasStopDb2 ? "🚏 정류장 DB 업데이트" : "🚏 정류장 DB 생성 (최초 1회)");
         btnBusManage.setTextColor(Color.WHITE);
@@ -3633,27 +3652,6 @@ public class PinActivity extends AppCompatActivity {
         });
         busManageCard.addView(btnBusManage);
         layout.addView(busManageCard);
-
-        TextView tvLoadingUsers = new TextView(this);
-        tvLoadingUsers.setText("불러오는 중...");
-        tvLoadingUsers.setTextColor(Color.parseColor("#888888"));
-        tvLoadingUsers.setTextSize(13);
-        tvLoadingUsers.setPadding(0, dpToPx(8), 0, dpToPx(8));
-
-        String cachedUsers = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
-                .getString("cached_users_list", null);
-        if (cachedUsers != null && !cachedUsers.isEmpty()) {
-            renderUsersList(usersContainer, cachedUsers);
-        } else {
-            usersContainer.addView(tvLoadingUsers);
-            loadUsersList(usersContainer, tvLoadingUsers);
-        }
-
-        btnRefreshUsers2.setOnClickListener(v -> {
-            usersContainer.removeAllViews();
-            usersContainer.addView(tvLoadingUsers);
-            loadUsersList(usersContainer, tvLoadingUsers);
-        });
 
         layout.setPadding(0, 0, 0, dpToPx(40));
 
