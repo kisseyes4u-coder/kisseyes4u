@@ -9254,7 +9254,6 @@ public class PinActivity extends AppCompatActivity {
     private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container,
                                      String direction, String routeType) {
         container.removeAllViews();
-        // 검색창 숨기기
         if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
         TextView tvL = new TextView(this); tvL.setText("노선 정보 불러오는 중...");
         tvL.setTextColor(Color.parseColor("#AAAAAA"));
@@ -9266,22 +9265,50 @@ public class PinActivity extends AppCompatActivity {
         if (immStop != null) immStop.hideSoftInputFromWindow(container.getWindowToken(), 0);
         if (getCurrentFocus() != null) getCurrentFocus().clearFocus();
 
+        // ── 캐시 키 ────────────────────────────────────────
+        final String CACHE_PREF = "bus_cache";
+        final String cKey = "route_" + routeId; // 캐시 접두어
+
         new Thread(() -> {
             try {
-                // ① 노선 상세정보
-                String infoXml = httpGet(BUS_BASE2 + "BusRouteInfoInqireService/getRouteInfoIem"
-                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                        + "&routeId=" + routeId + "&_type=xml");
-                String startNm   = tag(infoXml, "startnodenm");
-                String endNm     = tag(infoXml, "endnodenm");
-                String startTime = tag(infoXml, "startvehicletime");
-                String endTime   = tag(infoXml, "endvehicletime");
-                String interval  = tag(infoXml, "intervaltime");
-                String rTp       = routeType.isEmpty() ? tag(infoXml, "routetp") : routeType;
+                android.content.SharedPreferences cache =
+                        getSharedPreferences(CACHE_PREF, MODE_PRIVATE);
+
+                // ① 노선 상세정보 (캐시 우선)
+                String startNm, endNm, startTime, endTime, interval, rTp;
+                if (cache.contains(cKey + "_startNm")) {
+                    // 캐시 hit
+                    startNm   = cache.getString(cKey + "_startNm",   "기점");
+                    endNm     = cache.getString(cKey + "_endNm",     "종점");
+                    startTime = cache.getString(cKey + "_startTime", "");
+                    endTime   = cache.getString(cKey + "_endTime",   "");
+                    interval  = cache.getString(cKey + "_interval",  "");
+                    rTp       = routeType.isEmpty() ? cache.getString(cKey + "_rTp", "") : routeType;
+                } else {
+                    // 캐시 miss → API 호출 후 저장
+                    String infoXml = httpGet(BUS_BASE2 + "BusRouteInfoInqireService/getRouteInfoIem"
+                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                            + "&routeId=" + routeId + "&_type=xml");
+                    startNm   = tag(infoXml, "startnodenm");
+                    endNm     = tag(infoXml, "endnodenm");
+                    startTime = tag(infoXml, "startvehicletime");
+                    endTime   = tag(infoXml, "endvehicletime");
+                    interval  = tag(infoXml, "intervaltime");
+                    rTp       = routeType.isEmpty() ? tag(infoXml, "routetp") : routeType;
+                    // 캐시 저장
+                    cache.edit()
+                            .putString(cKey + "_startNm",   startNm)
+                            .putString(cKey + "_endNm",     endNm)
+                            .putString(cKey + "_startTime", startTime)
+                            .putString(cKey + "_endTime",   endTime)
+                            .putString(cKey + "_interval",  interval)
+                            .putString(cKey + "_rTp",       rTp)
+                            .apply();
+                }
                 String stF = startTime.length()==4 ? startTime.substring(0,2)+":"+startTime.substring(2) : startTime;
                 String etF = endTime.length()==4   ? endTime.substring(0,2)+":"+endTime.substring(2)   : endTime;
 
-                // ② 버스 위치
+                // ② 버스 위치 (항상 실시간)
                 String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
                         + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
                         + "&routeId=" + routeId + "&numOfRows=50&pageNo=1&_type=xml");
@@ -9298,17 +9325,33 @@ public class PinActivity extends AppCompatActivity {
                     }
                 }
 
-                // ③ 정류소 목록
-                String stXml = httpGet(BUS_BASE2 + "BusRouteInfoInqireService/getRouteAcctoThrghSttnList"
-                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                        + "&routeId=" + routeId + "&numOfRows=100&pageNo=1&_type=xml");
+                // ③ 정류소 목록 (캐시 우선)
                 java.util.List<String[]> stops = new java.util.ArrayList<>();
-                for (String item : stXml.split("<item>")) {
-                    if (!item.contains("<nodeid>")) continue;
-                    stops.add(new String[]{tag(item,"nodeid"),tag(item,"nodenm"),tag(item,"nodeord"),tag(item,"nodeno")});
+                String cachedStops = cache.getString(cKey + "_stops", "");
+                if (!cachedStops.isEmpty()) {
+                    // 캐시 hit: "nodeid|nodenm|nodeord|nodeno;..." 형식
+                    for (String line : cachedStops.split(";")) {
+                        String[] parts = line.split("\\|", -1);
+                        if (parts.length == 4) stops.add(parts);
+                    }
+                } else {
+                    // 캐시 miss → API 호출 후 저장
+                    String stXml = httpGet(BUS_BASE2 + "BusRouteInfoInqireService/getRouteAcctoThrghSttnList"
+                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                            + "&routeId=" + routeId + "&numOfRows=100&pageNo=1&_type=xml");
+                    StringBuilder sb = new StringBuilder();
+                    for (String item : stXml.split("<item>")) {
+                        if (!item.contains("<nodeid>")) continue;
+                        String[] stop = {tag(item,"nodeid"),tag(item,"nodenm"),
+                                tag(item,"nodeord"),tag(item,"nodeno")};
+                        stops.add(stop);
+                        if (sb.length() > 0) sb.append(";");
+                        sb.append(stop[0]).append("|").append(stop[1]).append("|")
+                          .append(stop[2]).append("|").append(stop[3]);
+                    }
+                    cache.edit().putString(cKey + "_stops", sb.toString()).apply();
                 }
 
-                // 방향에 따라 정류소 순서 결정
                 boolean isReverse = "reverse".equals(direction);
                 if (isReverse) java.util.Collections.reverse(stops);
 
@@ -9779,9 +9822,10 @@ public class PinActivity extends AppCompatActivity {
                             boolean nowFav = !wasFav;
                             getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
                                     .putBoolean(favKey, nowFav)
-                                    .putString("fav_stop_name_" + nodeId2, stopName)
-                                    .putString("fav_stop_no_" + nodeId2, stopNo)
-                                    .putString("fav_stop_route_" + nodeId2, routeNo)
+                                    .putString("fav_stop_name_"    + nodeId2, stopName)
+                                    .putString("fav_stop_no_"      + nodeId2, stopNo)
+                                    .putString("fav_stop_route_"   + nodeId2, routeNo)
+                                    .putString("fav_stop_routeid_" + nodeId2, routeId)
                                     .apply();
                             android.graphics.drawable.GradientDrawable newBg =
                                     new android.graphics.drawable.GradientDrawable();
@@ -12699,9 +12743,10 @@ public class PinActivity extends AppCompatActivity {
         favSection.addView(tvFavTitle);
 
         for (String nodeId : favNodeIds) {
-            String stopName  = prefs.getString("fav_stop_name_"  + nodeId, nodeId);
-            String stopNo    = prefs.getString("fav_stop_no_"    + nodeId, "");
-            String routeNo   = prefs.getString("fav_stop_route_" + nodeId, "");
+            String stopName  = prefs.getString("fav_stop_name_"    + nodeId, nodeId);
+            String stopNo    = prefs.getString("fav_stop_no_"      + nodeId, "");
+            String routeNo   = prefs.getString("fav_stop_route_"   + nodeId, "");
+            String routeId   = prefs.getString("fav_stop_routeid_" + nodeId, "");
 
             // 카드: 버스이모지 + 노선번호 + 정류소명
             LinearLayout card = new LinearLayout(this);
@@ -12720,7 +12765,6 @@ public class PinActivity extends AppCompatActivity {
             iconArea.setOrientation(LinearLayout.VERTICAL);
             iconArea.setGravity(Gravity.CENTER);
             iconArea.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(50), dpToPx(50)));
-
             TextView tvBusIcon = new TextView(this);
             tvBusIcon.setText("🚌");
             tvBusIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 24);
@@ -12733,8 +12777,6 @@ public class PinActivity extends AppCompatActivity {
             textArea.setOrientation(LinearLayout.VERTICAL);
             textArea.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             textArea.setPadding(dpToPx(8), 0, 0, 0);
-
-            // 노선번호
             if (!routeNo.isEmpty()) {
                 TextView tvRoute = new TextView(this);
                 tvRoute.setText(routeNo + "번");
@@ -12743,8 +12785,6 @@ public class PinActivity extends AppCompatActivity {
                 tvRoute.setTypeface(null, android.graphics.Typeface.BOLD);
                 textArea.addView(tvRoute);
             }
-
-            // 정류소명
             TextView tvStopName = new TextView(this);
             tvStopName.setText(stopName);
             tvStopName.setTextColor(Color.parseColor("#555555"));
@@ -12752,7 +12792,7 @@ public class PinActivity extends AppCompatActivity {
             textArea.addView(tvStopName);
             card.addView(textArea);
 
-            // 즐겨찾기 별 (채워진)
+            // 즐겨찾기 버튼
             final String favKey = "fav_stop_" + nodeId;
             final String fNodeId = nodeId, fStopName = stopName, fRouteNo = routeNo;
             TextView tvStar2 = new TextView(this);
@@ -12773,65 +12813,69 @@ public class PinActivity extends AppCompatActivity {
             tvStar2.setLayoutParams(star2Lp);
             tvStar2.setOnClickListener(v2 -> {
                 prefs.edit().remove(favKey)
-                        .remove("fav_stop_name_" + fNodeId)
-                        .remove("fav_stop_no_" + fNodeId)
-                        .remove("fav_stop_route_" + fNodeId).apply();
+                        .remove("fav_stop_name_"    + fNodeId)
+                        .remove("fav_stop_no_"      + fNodeId)
+                        .remove("fav_stop_route_"   + fNodeId)
+                        .remove("fav_stop_routeid_" + fNodeId).apply();
                 android.widget.Toast.makeText(this, fStopName + " 즐겨찾기 해제",
                         android.widget.Toast.LENGTH_SHORT).show();
                 refreshBusFavorites(favSection, resultContainer);
             });
             card.addView(tvStar2);
 
-            // 카드 탭 → 해당 노선 타임라인으로 이동 (routeId 검색 후 이동)
+            // 카드 탭 → 캐시된 routeId로 바로 타임라인 이동
+            final String fRouteId = routeId;
             card.setOnClickListener(v2 -> {
                 if (fRouteNo.isEmpty()) return;
                 resultContainer.removeAllViews();
-                TextView tvLoading = new TextView(this);
-                tvLoading.setText(fRouteNo + "번 노선 불러오는 중...");
-                tvLoading.setTextColor(Color.parseColor("#AAAAAA"));
-                tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                resultContainer.addView(tvLoading);
-                // 검색창 + 즐겨찾기 숨기기
                 if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
-                new Thread(() -> {
-                    try {
-                        String url = BUS_BASE2 + "BusRouteInfoInqireService/getRouteNoList"
-                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                                + "&routeNo=" + java.net.URLEncoder.encode(fRouteNo, "UTF-8")
-                                + "&numOfRows=20&pageNo=1&_type=xml";
-                        String xml = httpGet(url);
-                        String routeId = "";
-                        for (String item : xml.split("<item>")) {
-                            String rno = tag(item, "routeno");
-                            if (rno.equals(fRouteNo)) {
-                                routeId = tag(item, "routeid");
-                                break;
+
+                if (!fRouteId.isEmpty()) {
+                    // routeId 있으면 바로 이동 (캐시도 있을 가능성 높음)
+                    busScreenLoadStops(fRouteId, fRouteNo, resultContainer);
+                } else {
+                    // routeId 없으면 API로 조회 (구버전 즐겨찾기 호환)
+                    TextView tvLoading = new TextView(this);
+                    tvLoading.setText(fRouteNo + "번 노선 불러오는 중...");
+                    tvLoading.setTextColor(Color.parseColor("#AAAAAA"));
+                    tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    resultContainer.addView(tvLoading);
+                    new Thread(() -> {
+                        try {
+                            String url = BUS_BASE2 + "BusRouteInfoInqireService/getRouteNoList"
+                                    + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                    + "&routeNo=" + java.net.URLEncoder.encode(fRouteNo, "UTF-8")
+                                    + "&numOfRows=20&pageNo=1&_type=xml";
+                            String xml = httpGet(url);
+                            String rid = "";
+                            for (String item : xml.split("<item>")) {
+                                if (tag(item, "routeno").equals(fRouteNo)) {
+                                    rid = tag(item, "routeid");
+                                    // routeId 저장
+                                    prefs.edit().putString("fav_stop_routeid_" + fNodeId, rid).apply();
+                                    break;
+                                }
                             }
-                        }
-                        final String fRouteId = routeId;
-                        runOnUiThread(() -> {
-                            if (fRouteId.isEmpty()) {
+                            final String finalRid = rid;
+                            runOnUiThread(() -> {
+                                if (finalRid.isEmpty()) {
+                                    if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                                    if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                                    resultContainer.removeAllViews();
+                                } else {
+                                    busScreenLoadStops(finalRid, fRouteNo, resultContainer);
+                                }
+                            });
+                        } catch (Exception e) {
+                            runOnUiThread(() -> {
                                 if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
                                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
                                 resultContainer.removeAllViews();
-                                TextView tv = new TextView(this);
-                                tv.setText(fRouteNo + "번 노선을 찾을 수 없습니다");
-                                tv.setTextColor(Color.parseColor("#AAAAAA"));
-                                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                                resultContainer.addView(tv);
-                            } else {
-                                busScreenLoadStops(fRouteId, fRouteNo, resultContainer);
-                            }
-                        });
-                    } catch (Exception e) {
-                        runOnUiThread(() -> {
-                            if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-                            if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                            resultContainer.removeAllViews();
-                        });
-                    }
-                }).start();
+                            });
+                        }
+                    }).start();
+                }
             });
 
             favSection.addView(card);
