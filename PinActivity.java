@@ -9325,7 +9325,7 @@ public class PinActivity extends AppCompatActivity {
                     btnBack2.setOnClickListener(v -> {
                         if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
                         if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                        busScreenSearchByNo(routeNo, container);
+                        container.removeAllViews();
                     });
                     topHeader.addView(btnBack2);
 
@@ -12740,8 +12740,9 @@ public class PinActivity extends AppCompatActivity {
                 tvLoading.setTextColor(Color.parseColor("#AAAAAA"));
                 tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                 resultContainer.addView(tvLoading);
-                // 검색창 숨기기
+                // 검색창 + 즐겨찾기 숨기기
                 if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
+                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
                 new Thread(() -> {
                     try {
                         String url = BUS_BASE2 + "BusRouteInfoInqireService/getRouteNoList"
@@ -12761,6 +12762,7 @@ public class PinActivity extends AppCompatActivity {
                         runOnUiThread(() -> {
                             if (fRouteId.isEmpty()) {
                                 if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
                                 resultContainer.removeAllViews();
                                 TextView tv = new TextView(this);
                                 tv.setText(fRouteNo + "번 노선을 찾을 수 없습니다");
@@ -12774,6 +12776,7 @@ public class PinActivity extends AppCompatActivity {
                     } catch (Exception e) {
                         runOnUiThread(() -> {
                             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                            if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
                             resultContainer.removeAllViews();
                         });
                     }
