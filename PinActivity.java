@@ -131,6 +131,9 @@ public class PinActivity extends AppCompatActivity {
     private List<Integer> selectedIdx   = new ArrayList<>();
     private List<Integer> pendingSelectIdx = new ArrayList<>();
 
+    // ── 버스 검색 화면 ─────────────────────────────────────
+    private LinearLayout busSearchArea = null; // 검색창 영역 (노선 진입 시 숨김/복원용)
+
     // ── UI 참조 (잔액화면 갱신용) ──────────────────────────
     private LinearLayout msgContainer       = null;
     private ScrollView   msgScrollView      = null;
@@ -8905,6 +8908,7 @@ public class PinActivity extends AppCompatActivity {
         htLp.setMargins(dpToPx(4), dpToPx(4), 0, 0);
         tvHint.setLayoutParams(htLp);
         searchArea.addView(tvHint);
+        busSearchArea = searchArea;
         root.addView(searchArea);
 
         // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
@@ -9208,6 +9212,8 @@ public class PinActivity extends AppCompatActivity {
     private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container,
                                      String direction, String routeType) {
         container.removeAllViews();
+        // 검색창 숨기기
+        if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
         TextView tvL = new TextView(this); tvL.setText("노선 정보 불러오는 중...");
         tvL.setTextColor(Color.parseColor("#AAAAAA"));
         tvL.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
@@ -9282,7 +9288,10 @@ public class PinActivity extends AppCompatActivity {
                     btnBack2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
                     btnBack2.setTypeface(null, android.graphics.Typeface.BOLD);
                     btnBack2.setPadding(0, 0, dpToPx(8), 0);
-                    btnBack2.setOnClickListener(v -> busScreenSearchByNo(routeNo, container));
+                    btnBack2.setOnClickListener(v -> {
+                        if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                        busScreenSearchByNo(routeNo, container);
+                    });
                     topHeader.addView(btnBack2);
 
                     String[] badge = routeTypeBadge(fRTp);
