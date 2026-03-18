@@ -14054,7 +14054,7 @@ public class PinActivity extends AppCompatActivity {
             tvRNo.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             topRow.addView(tvRNo);
 
-            // ⚙️ 설정 버튼 + 🔔 알림 버튼
+            // 알림 버튼 + 설정 버튼
             final String fRKey = rKey;
 
             LinearLayout iconBtnRow = new LinearLayout(this);
@@ -14065,45 +14065,52 @@ public class PinActivity extends AppCompatActivity {
             ibrLp.gravity = Gravity.CENTER_VERTICAL;
             iconBtnRow.setLayoutParams(ibrLp);
 
-            // 🔔 알림 버튼
+            // 알림 버튼 (왼쪽)
             TextView tvBell = new TextView(this);
-            tvBell.setText("🔔");
-            tvBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
+            tvBell.setText("알림");
+            tvBell.setTextColor(Color.parseColor("#5BA9F0"));
+            tvBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvBell.setTypeface(null, android.graphics.Typeface.BOLD);
             tvBell.setGravity(Gravity.CENTER);
-            tvBell.setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4));
+            tvBell.setPadding(dpToPx(10), dpToPx(5), dpToPx(10), dpToPx(5));
+            android.graphics.drawable.GradientDrawable bellBg = new android.graphics.drawable.GradientDrawable();
+            bellBg.setColor(Color.parseColor("#EBF5FB"));
+            bellBg.setCornerRadius(dpToPx(6));
+            bellBg.setStroke(dpToPx(1), Color.parseColor("#5BA9F0"));
+            tvBell.setBackground(bellBg);
             LinearLayout.LayoutParams bellLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            bellLp.setMargins(0, 0, dpToPx(4), 0);
+            bellLp.setMargins(0, 0, dpToPx(5), 0);
             tvBell.setLayoutParams(bellLp);
-            tvBell.setOnClickListener(v2 -> {
-                android.widget.Toast.makeText(this, rNo + "번 알림 (준비중)",
-                        android.widget.Toast.LENGTH_SHORT).show();
-            });
+            tvBell.setOnClickListener(v2 -> android.widget.Toast.makeText(this,
+                    rNo + "번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
             iconBtnRow.addView(tvBell);
 
-            // ⚙️ 설정 버튼
+            // 설정 버튼 (오른쪽)
             TextView tvGear = new TextView(this);
-            tvGear.setText("⚙️");
-            tvGear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
+            tvGear.setText("설정");
+            tvGear.setTextColor(Color.parseColor("#888888"));
+            tvGear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvGear.setTypeface(null, android.graphics.Typeface.BOLD);
             tvGear.setGravity(Gravity.CENTER);
-            tvGear.setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4));
+            tvGear.setPadding(dpToPx(10), dpToPx(5), dpToPx(10), dpToPx(5));
+            android.graphics.drawable.GradientDrawable gearBg = new android.graphics.drawable.GradientDrawable();
+            gearBg.setColor(Color.parseColor("#F0F0F0"));
+            gearBg.setCornerRadius(dpToPx(6));
+            gearBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+            tvGear.setBackground(gearBg);
             tvGear.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             tvGear.setOnClickListener(v2 -> {
-                // 설정: 즐겨찾기 해제 or 메모 수정 선택
                 String[] options = {"메모 수정", "즐겨찾기 해제"};
                 new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
                     .setTitle(rNo + "번 설정")
                     .setItems(options, (d, which) -> {
                         if (which == 0) {
-                            // 메모 수정 → 즐겨찾기 다이얼로그 재사용
-                            showConfirmDialog("⚙️", rNo + "번 메모 수정",
-                                    "즐겨찾기 메모를 수정하시겠습니까?", () ->
-                                    android.widget.Toast.makeText(this, "메모 수정 (준비중)",
-                                            android.widget.Toast.LENGTH_SHORT).show());
+                            android.widget.Toast.makeText(this, "메모 수정 (준비중)",
+                                    android.widget.Toast.LENGTH_SHORT).show();
                         } else {
-                            // 즐겨찾기 해제
-                            showConfirmDialog("⚙️", rNo + "번 즐겨찾기 해제",
+                            showConfirmDialog("🗑", rNo + "번 즐겨찾기 해제",
                                     "즐겨찾기에서 삭제하시겠습니까?", () -> {
                                 prefs.edit().remove("fav_route_" + fRKey)
                                         .remove("fav_route_no_"     + fRKey)
