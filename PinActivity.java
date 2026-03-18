@@ -186,7 +186,7 @@ public class PinActivity extends AppCompatActivity {
                         int b2 =  pixels[i]         & 0xFF;
                         int brightness = (r2 + g2 + b2) / 3;
                         if (brightness > 128) {
-                            pixels[i] = 0xFF6C3FA0; // 진한 보라 (불투명)
+                            pixels[i] = 0xFFE57373; // 연한 빨간색
                         } else {
                             pixels[i] = 0xFFFFFFFF; // 흰색 배경
                         }
