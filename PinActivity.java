@@ -2479,15 +2479,6 @@ public class PinActivity extends AppCompatActivity {
 
         center.addView(progressArea);
         splashProgressArea = progressArea;
-        tvLoading.setText("로그인 중...");
-        tvLoading.setTextColor(Color.parseColor("#A89CD0"));
-        tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
-        tvLoading.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams loadingLp2 = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        loadingLp2.setMargins(0, dpToPx(12), 0, 0);
-        tvLoading.setLayoutParams(loadLp);
-        center.addView(tvLoading);
 
         splash.addView(center);
         setContentView(splash);
