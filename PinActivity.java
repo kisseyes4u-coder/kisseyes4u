@@ -14054,34 +14054,71 @@ public class PinActivity extends AppCompatActivity {
             tvRNo.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             topRow.addView(tvRNo);
 
-            // 즐겨찾기 해제 버튼 (크게)
+            // ⚙️ 설정 버튼 + 🔔 알림 버튼
             final String fRKey = rKey;
-            TextView tvRStar = new TextView(this);
-            tvRStar.setText("즐겨찾기");
-            tvRStar.setTextColor(Color.WHITE);
-            tvRStar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-            tvRStar.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvRStar.setGravity(Gravity.CENTER);
-            tvRStar.setPadding(dpToPx(10), dpToPx(6), dpToPx(10), dpToPx(6));
-            android.graphics.drawable.GradientDrawable rStarBg = new android.graphics.drawable.GradientDrawable();
-            rStarBg.setColor(Color.parseColor("#F39C12"));
-            rStarBg.setCornerRadius(dpToPx(6));
-            tvRStar.setBackground(rStarBg);
-            LinearLayout.LayoutParams rStarLp = new LinearLayout.LayoutParams(
+
+            LinearLayout iconBtnRow = new LinearLayout(this);
+            iconBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+            iconBtnRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams ibrLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            rStarLp.gravity = Gravity.CENTER_VERTICAL;
-            tvRStar.setLayoutParams(rStarLp);
-            tvRStar.setOnClickListener(v2 -> {
-                prefs.edit().remove("fav_route_" + fRKey)
-                        .remove("fav_route_no_"     + fRKey)
-                        .remove("fav_route_dir_"    + fRKey)
-                        .remove("fav_route_id_"     + fRKey)
-                        .remove("fav_route_dirkey_" + fRKey).apply();
-                android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 해제",
+            ibrLp.gravity = Gravity.CENTER_VERTICAL;
+            iconBtnRow.setLayoutParams(ibrLp);
+
+            // 🔔 알림 버튼
+            TextView tvBell = new TextView(this);
+            tvBell.setText("🔔");
+            tvBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
+            tvBell.setGravity(Gravity.CENTER);
+            tvBell.setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4));
+            LinearLayout.LayoutParams bellLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            bellLp.setMargins(0, 0, dpToPx(4), 0);
+            tvBell.setLayoutParams(bellLp);
+            tvBell.setOnClickListener(v2 -> {
+                android.widget.Toast.makeText(this, rNo + "번 알림 (준비중)",
                         android.widget.Toast.LENGTH_SHORT).show();
-                refreshBusFavorites(favSection, resultContainer);
             });
-            topRow.addView(tvRStar);
+            iconBtnRow.addView(tvBell);
+
+            // ⚙️ 설정 버튼
+            TextView tvGear = new TextView(this);
+            tvGear.setText("⚙️");
+            tvGear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
+            tvGear.setGravity(Gravity.CENTER);
+            tvGear.setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4));
+            tvGear.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            tvGear.setOnClickListener(v2 -> {
+                // 설정: 즐겨찾기 해제 or 메모 수정 선택
+                String[] options = {"메모 수정", "즐겨찾기 해제"};
+                new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                    .setTitle(rNo + "번 설정")
+                    .setItems(options, (d, which) -> {
+                        if (which == 0) {
+                            // 메모 수정 → 즐겨찾기 다이얼로그 재사용
+                            showConfirmDialog("⚙️", rNo + "번 메모 수정",
+                                    "즐겨찾기 메모를 수정하시겠습니까?", () ->
+                                    android.widget.Toast.makeText(this, "메모 수정 (준비중)",
+                                            android.widget.Toast.LENGTH_SHORT).show());
+                        } else {
+                            // 즐겨찾기 해제
+                            showConfirmDialog("⚙️", rNo + "번 즐겨찾기 해제",
+                                    "즐겨찾기에서 삭제하시겠습니까?", () -> {
+                                prefs.edit().remove("fav_route_" + fRKey)
+                                        .remove("fav_route_no_"     + fRKey)
+                                        .remove("fav_route_dir_"    + fRKey)
+                                        .remove("fav_route_id_"     + fRKey)
+                                        .remove("fav_route_dirkey_" + fRKey).apply();
+                                android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 해제",
+                                        android.widget.Toast.LENGTH_SHORT).show();
+                                refreshBusFavorites(favSection, resultContainer);
+                            });
+                        }
+                    }).show();
+            });
+            iconBtnRow.addView(tvGear);
+            topRow.addView(iconBtnRow);
             rCard.addView(topRow);
 
             // 메모/방향 (크게)
