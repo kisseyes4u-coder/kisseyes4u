@@ -308,7 +308,9 @@ public class PinActivity extends AppCompatActivity {
                             // 버스 타임라인 화면(검색창 숨겨진 상태)이면 검색 화면으로
                             if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.GONE) {
                                 busSearchArea.setVisibility(android.view.View.VISIBLE);
+                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                                 if (busResultContainer != null) busResultContainer.removeAllViews();
                             } else {
                                 isOnSubScreen = false;
@@ -9859,6 +9861,7 @@ public class PinActivity extends AppCompatActivity {
                 etSearch.setText("");
                 resultContainer.removeAllViews();
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
             }
         });
         tabStop.setOnClickListener(v -> {
@@ -9870,6 +9873,7 @@ public class PinActivity extends AppCompatActivity {
                 etSearch.setText("");
                 resultContainer.removeAllViews();
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
             }
         });
 
@@ -9880,6 +9884,7 @@ public class PinActivity extends AppCompatActivity {
                 btnClear.setVisibility(kw.isEmpty() ? android.view.View.GONE : android.view.View.VISIBLE);
                 if (busFavSection2 != null)
                     busFavSection2.setVisibility(kw.isEmpty() ? android.view.View.VISIBLE : android.view.View.GONE);
+                    if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                 if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
                 if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
                 if (isBusTab[0]) {
@@ -9902,6 +9907,7 @@ public class PinActivity extends AppCompatActivity {
             etSearch.setText("");
             resultContainer.removeAllViews();
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+            if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
             etSearch.requestFocus();
             if (immBus != null) immBus.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
         });
@@ -9944,7 +9950,9 @@ public class PinActivity extends AppCompatActivity {
             // 타임라인 화면(검색창 숨겨진 상태)이면 검색 화면으로 복귀
             if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.GONE) {
                 if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                 if (busResultContainer != null) busResultContainer.removeAllViews();
             } else {
                 isOnSubScreen = false;
@@ -10536,7 +10544,9 @@ public class PinActivity extends AppCompatActivity {
                 busFixedHeader.removeAllViews();
             }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+            if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+            if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
             container.removeAllViews();
         });
         topHeader.addView(btnBack2);
@@ -14679,7 +14689,9 @@ public class PinActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 if (finalRid.isEmpty()) {
                                     if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                                    if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                                     if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                                    if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                                     resultContainer.removeAllViews();
                                 } else {
                                     busScreenLoadStops(finalRid, fRouteNo, resultContainer);
@@ -14688,7 +14700,9 @@ public class PinActivity extends AppCompatActivity {
                         } catch (Exception e) {
                             runOnUiThread(() -> {
                                 if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
                                 resultContainer.removeAllViews();
                             });
                         }
