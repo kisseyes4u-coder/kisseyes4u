@@ -4514,7 +4514,7 @@ public class PinActivity extends AppCompatActivity {
 
         // ── 메뉴 카드들 ───────────────────────────────────────
         String[][] menuItems = {
-                {"🚌", "버스 노선 검색",  "버스번호·정류장·장소로 검색",  "#0984E3", "#EBF5FB"},
+                {"🚌", "버스 데이터 관리",  "노선·정류장 DB 업데이트",       "#0984E3", "#EBF5FB"},
                 {"💰", "통장 잔액 보기",  "계좌별 문자 내역 상세 확인", "#6C5CE7", "#EDE9FF"},
                 {"🥩", "선결제 잔액 보기", "선결제 입출금 내역을 확인합니다", "#27AE60", "#EAFAF1"},
                 {"📊", "월별 지출 통계",  "계좌별 월별 수입/지출 차트",  "#E74C3C", "#FDEDEC"},
@@ -4523,7 +4523,7 @@ public class PinActivity extends AppCompatActivity {
                 {"📋", "경로당 회원명부", "경로당 회원 명단을 확인합니다","#8E44AD", "#F5EEF8"}
         };
         android.view.View.OnClickListener[] menuClicks = {
-                v -> showBusSearchScreen(),
+                v -> showBusDataManageScreen(),
                 v -> showBalanceScreen(),
                 v -> showMeatClubScreen(),
                 v -> showStatsScreen(),
@@ -8876,6 +8876,316 @@ public class PinActivity extends AppCompatActivity {
 
     private void showMemberListScreen() {
         showSingleImageScreen("📋 경로당 회원명부", "경로당 회원 명단을 확인합니다", "nature.png");
+    }
+
+    private void showBusDataManageScreen() {
+        isOnSubScreen = true;
+        isOnMenuScreen = false;
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        root.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
+            root.setPadding(0, top, 0, 0);
+            return insets;
+        });
+
+        // 헤더
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        android.graphics.drawable.GradientDrawable hBg = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{Color.parseColor("#0984E3"), Color.parseColor("#74B9FF")});
+        hBg.setCornerRadii(new float[]{0,0,0,0,dpToPx(16),dpToPx(16),dpToPx(16),dpToPx(16)});
+        header.setBackground(hBg);
+        header.setPadding(dpToPx(20), dpToPx(14), dpToPx(20), dpToPx(18));
+        root.addView(header);
+
+        TextView tvBack = new TextView(this);
+        tvBack.setText("‹");
+        tvBack.setTextColor(Color.WHITE);
+        tvBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
+        tvBack.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvBack.setPadding(0, 0, dpToPx(12), 0);
+        tvBack.setOnClickListener(v -> { isOnSubScreen = false; ownerMenuBuilder.build(); });
+        header.addView(tvBack);
+
+        LinearLayout hTxt = new LinearLayout(this);
+        hTxt.setOrientation(LinearLayout.VERTICAL);
+        hTxt.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("버스 데이터 관리");
+        tvTitle.setTextColor(Color.WHITE);
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        hTxt.addView(tvTitle);
+        TextView tvSub = new TextView(this);
+        tvSub.setText("노선 · 정류장 DB 업데이트");
+        tvSub.setTextColor(Color.parseColor("#D6EAF8"));
+        tvSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        LinearLayout.LayoutParams subLp2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subLp2.setMargins(0, dpToPx(2), 0, 0);
+        tvSub.setLayoutParams(subLp2);
+        hTxt.addView(tvSub);
+        header.addView(hTxt);
+
+        // 컨텐츠
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dpToPx(16), dpToPx(20), dpToPx(16), dpToPx(20));
+        content.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // ── 노선 DB 카드 ──
+        buildDbCard(content, "🚌", "버스 노선 DB",
+                routeDbList != null && !routeDbList.isEmpty()
+                        ? routeDbList.size() + "개 노선 (매일 자동 갱신)"
+                        : "데이터 없음",
+                routeDbList != null && !routeDbList.isEmpty(),
+                "노선 DB는 앱 실행 시 매일 자동으로 갱신됩니다.",
+                false, null);
+
+        // ── 정류장 DB 카드 ──
+        boolean hasStopDb = stopDbList != null && !stopDbList.isEmpty();
+        TextView[] btnStopRef = {null};
+        TextView[] descRef = {null};
+        android.graphics.drawable.GradientDrawable[] btnBgRef = {null};
+
+        LinearLayout stopCard = new LinearLayout(this);
+        stopCard.setOrientation(LinearLayout.VERTICAL);
+        stopCard.setBackground(makeShadowCardDrawable("#FFFFFF", 12, 5));
+        stopCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+        stopCard.setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16));
+        LinearLayout.LayoutParams scLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        scLp.setMargins(0, dpToPx(12), 0, 0);
+        stopCard.setLayoutParams(scLp);
+
+        // 카드 상단: 아이콘 + 제목 + 상태배지
+        LinearLayout stopTop = new LinearLayout(this);
+        stopTop.setOrientation(LinearLayout.HORIZONTAL);
+        stopTop.setGravity(Gravity.CENTER_VERTICAL);
+        stopTop.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        TextView tvStopIcon = new TextView(this);
+        tvStopIcon.setText("🚏");
+        tvStopIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(22));
+        tvStopIcon.setPadding(0, 0, dpToPx(10), 0);
+        stopTop.addView(tvStopIcon);
+
+        LinearLayout stopInfo = new LinearLayout(this);
+        stopInfo.setOrientation(LinearLayout.VERTICAL);
+        stopInfo.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView tvStopTitle = new TextView(this);
+        tvStopTitle.setText("정류장 DB");
+        tvStopTitle.setTextColor(Color.parseColor("#1A1A2E"));
+        tvStopTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvStopTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        stopInfo.addView(tvStopTitle);
+        TextView tvStopCount = new TextView(this);
+        tvStopCount.setText(hasStopDb ? stopDbList.size() + "개 정류장" : "데이터 없음");
+        tvStopCount.setTextColor(Color.parseColor("#555555"));
+        tvStopCount.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+        stopInfo.addView(tvStopCount);
+        stopTop.addView(stopInfo);
+
+        // 상태 배지
+        TextView tvStopBadge = new TextView(this);
+        tvStopBadge.setText(hasStopDb ? "✓ 있음" : "! 없음");
+        tvStopBadge.setTextColor(Color.WHITE);
+        tvStopBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        tvStopBadge.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvStopBadge.setGravity(Gravity.CENTER);
+        tvStopBadge.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
+        android.graphics.drawable.GradientDrawable badgeBg = new android.graphics.drawable.GradientDrawable();
+        badgeBg.setColor(Color.parseColor(hasStopDb ? "#27AE60" : "#E74C3C"));
+        badgeBg.setCornerRadius(dpToPx(6));
+        tvStopBadge.setBackground(badgeBg);
+        stopTop.addView(tvStopBadge);
+        stopCard.addView(stopTop);
+
+        // 구분선
+        View div = new View(this);
+        div.setBackgroundColor(Color.parseColor("#F0F0F0"));
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+        divLp.setMargins(0, dpToPx(12), 0, dpToPx(12));
+        div.setLayoutParams(divLp);
+        stopCard.addView(div);
+
+        // 설명 텍스트
+        TextView tvStopDesc = new TextView(this);
+        tvStopDesc.setText(hasStopDb
+                ? "업데이트 파일이 있습니다.\n버튼을 눌러 정류장 DB를 갱신하세요."
+                : "정류장 DB가 없습니다.\n버튼을 눌러 최초 생성을 진행하세요.");
+        tvStopDesc.setTextColor(Color.parseColor(hasStopDb ? "#E67E22" : "#E74C3C"));
+        tvStopDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+        LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        descLp.setMargins(0, 0, 0, dpToPx(12));
+        tvStopDesc.setLayoutParams(descLp);
+        stopCard.addView(tvStopDesc);
+        descRef[0] = tvStopDesc;
+
+        // 업데이트 버튼 (항상 활성)
+        TextView btnStop = new TextView(this);
+        btnStop.setText(hasStopDb ? "정류장 DB 업데이트" : "정류장 DB 생성");
+        btnStop.setTextColor(Color.WHITE);
+        btnStop.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        btnStop.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnStop.setGravity(Gravity.CENTER);
+        btnStop.setPadding(0, dpToPx(13), 0, dpToPx(13));
+        android.graphics.drawable.GradientDrawable btnStopBg = new android.graphics.drawable.GradientDrawable();
+        btnStopBg.setColor(Color.parseColor("#0984E3"));
+        btnStopBg.setCornerRadius(dpToPx(10));
+        btnStop.setBackground(btnStopBg);
+        btnStop.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        btnStopRef[0] = btnStop;
+        btnBgRef[0] = btnStopBg;
+
+        btnStop.setOnClickListener(v -> {
+            btnStop.setText("⏳ 수집 중... (수분 소요)");
+            btnStopBg.setColor(Color.parseColor("#AAAAAA"));
+            btnStop.setEnabled(false);
+            buildAndUploadStopDb(() -> {
+                int cnt = stopDbList != null ? stopDbList.size() : 0;
+                tvStopCount.setText(cnt + "개 정류장");
+                tvStopBadge.setText("✓ 있음");
+                badgeBg.setColor(Color.parseColor("#27AE60"));
+                tvStopDesc.setText("정류장 DB가 최신 상태입니다.");
+                tvStopDesc.setTextColor(Color.parseColor("#27AE60"));
+                btnStop.setText("정류장 DB 업데이트");
+                btnStopBg.setColor(Color.parseColor("#0984E3"));
+                btnStop.setEnabled(true);
+                android.widget.Toast.makeText(this,
+                        "✓ " + cnt + "개 정류장 DB 업로드 완료!",
+                        android.widget.Toast.LENGTH_LONG).show();
+            }, null);
+        });
+        stopCard.addView(btnStop);
+        content.addView(stopCard);
+
+        root.addView(content);
+
+        // 하단 뒤로가기
+        LinearLayout btnBar = new LinearLayout(this);
+        btnBar.setOrientation(LinearLayout.HORIZONTAL);
+        btnBar.setGravity(Gravity.CENTER);
+        btnBar.setBackgroundColor(Color.WHITE);
+        btnBar.setPadding(dpToPx(16), dpToPx(6), dpToPx(16), dpToPx(6));
+        LinearLayout.LayoutParams bbLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnBar.setLayoutParams(bbLp);
+        TextView btnBackBar = new TextView(this);
+        btnBackBar.setText("← 돌아가기");
+        btnBackBar.setTextColor(Color.parseColor("#0984E3"));
+        btnBackBar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        btnBackBar.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnBackBar.setGravity(Gravity.CENTER);
+        btnBackBar.setPadding(dpToPx(24), dpToPx(12), dpToPx(24), dpToPx(12));
+        btnBackBar.setOnClickListener(v -> { isOnSubScreen = false; ownerMenuBuilder.build(); });
+        btnBar.addView(btnBackBar);
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(btnBar, (v, insets) -> {
+            int bot = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars()).bottom;
+            btnBar.setPadding(dpToPx(16), dpToPx(6), dpToPx(16), dpToPx(6) + bot);
+            return insets;
+        });
+
+        // root를 weight로 구성
+        LinearLayout outerRoot = new LinearLayout(this);
+        outerRoot.setOrientation(LinearLayout.VERTICAL);
+        outerRoot.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(outerRoot, (v, insets) -> {
+            int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
+            outerRoot.setPadding(0, top, 0, 0);
+            return insets;
+        });
+        root.setPadding(0, 0, 0, 0);
+        LinearLayout.LayoutParams rootLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
+        root.setLayoutParams(rootLp);
+        outerRoot.addView(root);
+        outerRoot.addView(btnBar);
+        setContentView(outerRoot);
+    }
+
+    private void buildDbCard(LinearLayout parent, String icon, String title,
+                              String countText, boolean hasData, String desc,
+                              boolean btnEnabled, Runnable onBtnClick) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(makeShadowCardDrawable("#FFFFFF", 12, 5));
+        card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+        card.setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, 0);
+        card.setLayoutParams(lp);
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        TextView tvIcon = new TextView(this);
+        tvIcon.setText(icon);
+        tvIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(22));
+        tvIcon.setPadding(0, 0, dpToPx(10), 0);
+        top.addView(tvIcon);
+
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        info.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView tvTitle2 = new TextView(this);
+        tvTitle2.setText(title);
+        tvTitle2.setTextColor(Color.parseColor("#1A1A2E"));
+        tvTitle2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvTitle2.setTypeface(null, android.graphics.Typeface.BOLD);
+        info.addView(tvTitle2);
+        TextView tvCount = new TextView(this);
+        tvCount.setText(countText);
+        tvCount.setTextColor(Color.parseColor("#555555"));
+        tvCount.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+        info.addView(tvCount);
+        top.addView(info);
+
+        TextView tvBadge2 = new TextView(this);
+        tvBadge2.setText(hasData ? "✓ 있음" : "! 없음");
+        tvBadge2.setTextColor(Color.WHITE);
+        tvBadge2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        tvBadge2.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvBadge2.setGravity(Gravity.CENTER);
+        tvBadge2.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
+        android.graphics.drawable.GradientDrawable b2Bg = new android.graphics.drawable.GradientDrawable();
+        b2Bg.setColor(Color.parseColor(hasData ? "#27AE60" : "#AAAAAA"));
+        b2Bg.setCornerRadius(dpToPx(6));
+        tvBadge2.setBackground(b2Bg);
+        top.addView(tvBadge2);
+        card.addView(top);
+
+        View divider3 = new View(this);
+        divider3.setBackgroundColor(Color.parseColor("#F0F0F0"));
+        LinearLayout.LayoutParams divLp2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+        divLp2.setMargins(0, dpToPx(12), 0, dpToPx(12));
+        divider3.setLayoutParams(divLp2);
+        card.addView(divider3);
+
+        TextView tvDesc2 = new TextView(this);
+        tvDesc2.setText(desc);
+        tvDesc2.setTextColor(Color.parseColor("#888888"));
+        tvDesc2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+        card.addView(tvDesc2);
+
+        parent.addView(card);
     }
 
     private void showBusSearchScreen() {
