@@ -11243,19 +11243,92 @@ public class PinActivity extends AppCompatActivity {
 
     /** 버스 번호 입력 다이얼로그 */
     private void showBusRouteSearchDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
-        builder.setTitle("버스 번호 검색");
+        // 커스텀 레이아웃: EditText + 버튼을 한 컨테이너에
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(dpToPx(20), dpToPx(16), dpToPx(20), dpToPx(12));
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("버스 번호 검색");
+        tvTitle.setTextColor(Color.parseColor("#1A1A2E"));
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        LinearLayout.LayoutParams ttLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        ttLp.setMargins(0, 0, 0, dpToPx(12));
+        tvTitle.setLayoutParams(ttLp);
+        container.addView(tvTitle);
+
         final android.widget.EditText input = new android.widget.EditText(this);
         input.setHint("버스 번호 입력 (예: 104, 802)");
-        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
-        input.setPadding(dpToPx(16), dpToPx(12), dpToPx(16), dpToPx(12));
-        builder.setView(input);
-        builder.setPositiveButton("검색", (dialog, which) -> {
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        android.graphics.drawable.GradientDrawable inputBg = new android.graphics.drawable.GradientDrawable();
+        inputBg.setColor(Color.parseColor("#F5F3FA"));
+        inputBg.setCornerRadius(dpToPx(8));
+        inputBg.setStroke(dpToPx(1), Color.parseColor("#C8BFEF"));
+        input.setBackground(inputBg);
+        input.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+        LinearLayout.LayoutParams inLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        inLp.setMargins(0, 0, 0, dpToPx(16));
+        input.setLayoutParams(inLp);
+        container.addView(input);
+
+        // 버튼 행
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setGravity(Gravity.END);
+        btnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        android.app.AlertDialog[] dialogRef = new android.app.AlertDialog[1];
+
+        // 취소 버튼
+        TextView btnCancel = new TextView(this);
+        btnCancel.setText("취소");
+        btnCancel.setTextColor(Color.parseColor("#888888"));
+        btnCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        btnCancel.setPadding(dpToPx(16), dpToPx(8), dpToPx(16), dpToPx(8));
+        btnCancel.setOnClickListener(v -> { if (dialogRef[0] != null) dialogRef[0].dismiss(); });
+        btnRow.addView(btnCancel);
+
+        // 검색 버튼
+        TextView btnOk = new TextView(this);
+        btnOk.setText("검색");
+        btnOk.setTextColor(Color.WHITE);
+        btnOk.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        btnOk.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnOk.setPadding(dpToPx(20), dpToPx(8), dpToPx(20), dpToPx(8));
+        android.graphics.drawable.GradientDrawable okBg = new android.graphics.drawable.GradientDrawable();
+        okBg.setColor(Color.parseColor("#6C5CE7"));
+        okBg.setCornerRadius(dpToPx(8));
+        btnOk.setBackground(okBg);
+        LinearLayout.LayoutParams okLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        okLp.setMargins(dpToPx(8), 0, 0, 0);
+        btnOk.setLayoutParams(okLp);
+        btnOk.setOnClickListener(v -> {
             String keyword = input.getText().toString().trim();
-            if (!keyword.isEmpty()) searchBusRoute(keyword);
+            if (!keyword.isEmpty()) {
+                if (dialogRef[0] != null) dialogRef[0].dismiss();
+                searchBusRoute(keyword);
+            }
         });
-        builder.setNegativeButton("취소", null);
-        builder.show();
+        btnRow.addView(btnOk);
+        container.addView(btnRow);
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
+                .setView(container)
+                .create();
+        dialogRef[0] = dialog;
+        dialog.show();
+
+        // 키보드 자동 올리기
+        input.requestFocus();
+        android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)
+                getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
     }
 
     /** ① 버스 번호로 노선 조회 */
