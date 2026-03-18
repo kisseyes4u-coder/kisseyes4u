@@ -14371,7 +14371,6 @@ public class PinActivity extends AppCompatActivity {
             card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             card.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
             LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
             card.setLayoutParams(cardLp);
 
