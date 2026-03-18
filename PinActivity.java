@@ -221,9 +221,16 @@ public class PinActivity extends AppCompatActivity {
                                 else userMenuBuilder.build(false);
                             }
                         } else if (isOnSubScreen) {
-                            isOnSubScreen = false;
-                            if (isOwner) ownerMenuBuilder.build();
-                            else userMenuBuilder.build(false);
+                            // 버스 타임라인 화면(검색창 숨겨진 상태)이면 검색 화면으로
+                            if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.GONE) {
+                                busSearchArea.setVisibility(android.view.View.VISIBLE);
+                                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                                if (busResultContainer != null) busResultContainer.removeAllViews();
+                            } else {
+                                isOnSubScreen = false;
+                                if (isOwner) ownerMenuBuilder.build();
+                                else userMenuBuilder.build(false);
+                            }
                         } else if (isOnBalanceScreen) {
                             if (currentTabFilter != null) {
                                 // 필터 해제 → 전체 보기
@@ -9025,9 +9032,16 @@ public class PinActivity extends AppCompatActivity {
         btnBack.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50)));
         btnBack.setOnClickListener(v -> {
-            isOnSubScreen = false;
-            if (isOwner) ownerMenuBuilder.build();
-            else userMenuBuilder.build(false);
+            // 타임라인 화면(검색창 숨겨진 상태)이면 검색 화면으로 복귀
+            if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.GONE) {
+                if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                if (busResultContainer != null) busResultContainer.removeAllViews();
+            } else {
+                isOnSubScreen = false;
+                if (isOwner) ownerMenuBuilder.build();
+                else userMenuBuilder.build(false);
+            }
         });
         btnBar.addView(btnBack);
         root.addView(btnBar);
