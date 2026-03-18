@@ -14003,71 +14003,69 @@ public class PinActivity extends AppCompatActivity {
         tvFavTitle.setLayoutParams(ttLp);
         favSection.addView(tvFavTitle);
 
-        // ── 노선 즐겨찾기 카드 ─────────────────────────────
+        // ── 노선 즐겨찾기 카드 (2열 그리드) ──────────────────
+        LinearLayout routeGrid = new LinearLayout(this);
+        routeGrid.setOrientation(LinearLayout.VERTICAL);
+        routeGrid.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout routeRow = null;
+        int routeColIdx = 0;
+
         for (String rKey : favRouteKeys) {
-            // rKey = "routeId_direction"
             String rNo     = prefs.getString("fav_route_no_"     + rKey, rKey);
             String rDir    = prefs.getString("fav_route_dir_"    + rKey, "");
             String rId     = prefs.getString("fav_route_id_"     + rKey, "");
             String rDirKey = prefs.getString("fav_route_dirkey_" + rKey, "forward");
             String rMemo   = prefs.getString("fav_route_memo_"   + rKey, "");
 
+            // 새 행 시작
+            if (routeColIdx % 2 == 0) {
+                routeRow = new LinearLayout(this);
+                routeRow.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rowLp.setMargins(0, 0, 0, dpToPx(8));
+                routeRow.setLayoutParams(rowLp);
+                routeGrid.addView(routeRow);
+            }
+
             LinearLayout rCard = new LinearLayout(this);
-            rCard.setOrientation(LinearLayout.HORIZONTAL);
-            rCard.setGravity(Gravity.CENTER_VERTICAL);
+            rCard.setOrientation(LinearLayout.VERTICAL);
             rCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
             rCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-            rCard.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
-            LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            rCardLp.setMargins(0, 0, 0, dpToPx(8));
+            rCard.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
+            LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            rCardLp.setMargins(0, 0, routeColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             rCard.setLayoutParams(rCardLp);
 
-            // 버스 아이콘
-            TextView tvRIcon = new TextView(this);
-            tvRIcon.setText("🚌");
-            tvRIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 24);
-            tvRIcon.setGravity(Gravity.CENTER);
-            tvRIcon.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(50), dpToPx(50)));
-            rCard.addView(tvRIcon);
-
-            // 텍스트
-            LinearLayout rText = new LinearLayout(this);
-            rText.setOrientation(LinearLayout.VERTICAL);
-            rText.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-            rText.setPadding(dpToPx(8), 0, 0, 0);
+            // 번호 + 즐겨찾기 버튼 행
+            LinearLayout topRow = new LinearLayout(this);
+            topRow.setOrientation(LinearLayout.HORIZONTAL);
+            topRow.setGravity(Gravity.CENTER_VERTICAL);
+            topRow.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
             TextView tvRNo = new TextView(this);
             tvRNo.setText(rNo + "번");
             tvRNo.setTextColor(Color.parseColor("#0984E3"));
-            tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+            tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
             tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
-            rText.addView(tvRNo);
+            tvRNo.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            topRow.addView(tvRNo);
 
-            // 메모 있으면 메모, 없으면 방향
-            String subText = rMemo.isEmpty() ? rDir : rMemo;
-            if (!subText.isEmpty()) {
-                TextView tvRSub = new TextView(this);
-                tvRSub.setText(subText);
-                tvRSub.setTextColor(Color.parseColor("#555555"));
-                tvRSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                rText.addView(tvRSub);
-            }
-            rCard.addView(rText);
-
-            // 즐겨찾기 해제 버튼
+            // 즐겨찾기 해제 버튼 (크게)
             final String fRKey = rKey;
             TextView tvRStar = new TextView(this);
             tvRStar.setText("즐겨찾기");
             tvRStar.setTextColor(Color.WHITE);
-            tvRStar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvRStar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
             tvRStar.setTypeface(null, android.graphics.Typeface.BOLD);
             tvRStar.setGravity(Gravity.CENTER);
-            tvRStar.setPadding(dpToPx(7), dpToPx(4), dpToPx(7), dpToPx(4));
+            tvRStar.setPadding(dpToPx(10), dpToPx(6), dpToPx(10), dpToPx(6));
             android.graphics.drawable.GradientDrawable rStarBg = new android.graphics.drawable.GradientDrawable();
             rStarBg.setColor(Color.parseColor("#F39C12"));
-            rStarBg.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
-            rStarBg.setCornerRadius(dpToPx(4));
+            rStarBg.setCornerRadius(dpToPx(6));
             tvRStar.setBackground(rStarBg);
             LinearLayout.LayoutParams rStarLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -14083,7 +14081,22 @@ public class PinActivity extends AppCompatActivity {
                         android.widget.Toast.LENGTH_SHORT).show();
                 refreshBusFavorites(favSection, resultContainer);
             });
-            rCard.addView(tvRStar);
+            topRow.addView(tvRStar);
+            rCard.addView(topRow);
+
+            // 메모/방향 (크게)
+            String subText = rMemo.isEmpty() ? rDir : rMemo;
+            if (!subText.isEmpty()) {
+                TextView tvRSub = new TextView(this);
+                tvRSub.setText(subText);
+                tvRSub.setTextColor(Color.parseColor("#555555"));
+                tvRSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                subLp.setMargins(0, dpToPx(4), 0, 0);
+                tvRSub.setLayoutParams(subLp);
+                rCard.addView(tvRSub);
+            }
 
             // 카드 탭 → 즉시 타임라인 (캐시 있으면 UI 스레드에서 바로 렌더링)
             final String fRId = rId, fRNo = rNo, fRDirKey = rDirKey;
@@ -14150,8 +14163,18 @@ public class PinActivity extends AppCompatActivity {
                     busScreenLoadStops(fRId, fRNo, resultContainer, fRDirKey, "");
                 }
             });
-            favSection.addView(rCard);
+            routeRow.addView(rCard);
+            routeColIdx++;
         }
+        // 홀수개면 빈 카드로 채우기
+        if (routeColIdx % 2 == 1 && routeRow != null) {
+            View empty = new View(this);
+            LinearLayout.LayoutParams emLp = new LinearLayout.LayoutParams(0, 1, 1f);
+            emLp.setMargins(0, 0, 0, 0);
+            empty.setLayoutParams(emLp);
+            routeRow.addView(empty);
+        }
+        if (!favRouteKeys.isEmpty()) favSection.addView(routeGrid);
 
         for (String compositeKey : favKeys) {
             // compositeKey = "routeId_nodeId"
@@ -14172,53 +14195,40 @@ public class PinActivity extends AppCompatActivity {
             cardLp.setMargins(0, 0, 0, dpToPx(8));
             card.setLayoutParams(cardLp);
 
-            // 버스 아이콘 영역
-            LinearLayout iconArea = new LinearLayout(this);
-            iconArea.setOrientation(LinearLayout.VERTICAL);
-            iconArea.setGravity(Gravity.CENTER);
-            iconArea.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(50), dpToPx(50)));
-            TextView tvBusIcon = new TextView(this);
-            tvBusIcon.setText("🚌");
-            tvBusIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 24);
-            tvBusIcon.setGravity(Gravity.CENTER);
-            iconArea.addView(tvBusIcon);
-            card.addView(iconArea);
-
+            // 버스 아이콘 제거 - 텍스트만 표시
             // 텍스트 영역
             LinearLayout textArea = new LinearLayout(this);
             textArea.setOrientation(LinearLayout.VERTICAL);
             textArea.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-            textArea.setPadding(dpToPx(8), 0, 0, 0);
             if (!routeNo.isEmpty()) {
                 TextView tvRoute = new TextView(this);
                 tvRoute.setText(routeNo + "번");
                 tvRoute.setTextColor(Color.parseColor("#0984E3"));
-                tvRoute.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                tvRoute.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
                 tvRoute.setTypeface(null, android.graphics.Typeface.BOLD);
                 textArea.addView(tvRoute);
             }
             TextView tvStopName = new TextView(this);
             tvStopName.setText(stopName);
             tvStopName.setTextColor(Color.parseColor("#555555"));
-            tvStopName.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvStopName.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
             textArea.addView(tvStopName);
             card.addView(textArea);
 
-            // 즐겨찾기 버튼
+            // 즐겨찾기 버튼 (크게)
             final String favKey2 = "fav_stop_" + compositeKey;
             final String fCompositeKey = compositeKey;
             final String fNodeId = compositeKey, fStopName = stopName, fRouteNo = routeNo;
             TextView tvStar2 = new TextView(this);
             tvStar2.setText("즐겨찾기");
             tvStar2.setTextColor(Color.WHITE);
-            tvStar2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvStar2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
             tvStar2.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStar2.setGravity(Gravity.CENTER);
-            tvStar2.setPadding(dpToPx(7), dpToPx(4), dpToPx(7), dpToPx(4));
+            tvStar2.setPadding(dpToPx(10), dpToPx(6), dpToPx(10), dpToPx(6));
             android.graphics.drawable.GradientDrawable star2Bg = new android.graphics.drawable.GradientDrawable();
             star2Bg.setColor(Color.parseColor("#F39C12"));
-            star2Bg.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
-            star2Bg.setCornerRadius(dpToPx(4));
+            star2Bg.setCornerRadius(dpToPx(6));
             tvStar2.setBackground(star2Bg);
             LinearLayout.LayoutParams star2Lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
