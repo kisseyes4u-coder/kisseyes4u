@@ -12696,7 +12696,7 @@ public class PinActivity extends AppCompatActivity {
 
             // 즐겨찾기 별 (채워진)
             final String favKey = "fav_stop_" + nodeId;
-            final String fNodeId = nodeId, fStopName = stopName;
+            final String fNodeId = nodeId, fStopName = stopName, fRouteNo = routeNo;
             TextView tvStar2 = new TextView(this);
             tvStar2.setText("★");
             tvStar2.setTextColor(Color.parseColor("#F39C12"));
@@ -12713,6 +12713,56 @@ public class PinActivity extends AppCompatActivity {
                 refreshBusFavorites(favSection, resultContainer);
             });
             card.addView(tvStar2);
+
+            // 카드 탭 → 해당 노선 타임라인으로 이동 (routeId 검색 후 이동)
+            card.setOnClickListener(v2 -> {
+                if (fRouteNo.isEmpty()) return;
+                resultContainer.removeAllViews();
+                TextView tvLoading = new TextView(this);
+                tvLoading.setText(fRouteNo + "번 노선 불러오는 중...");
+                tvLoading.setTextColor(Color.parseColor("#AAAAAA"));
+                tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                resultContainer.addView(tvLoading);
+                // 검색창 숨기기
+                if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
+                new Thread(() -> {
+                    try {
+                        String url = BUS_BASE2 + "BusRouteInfoInqireService/getRouteNoList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&routeNo=" + java.net.URLEncoder.encode(fRouteNo, "UTF-8")
+                                + "&numOfRows=20&pageNo=1&_type=xml";
+                        String xml = httpGet(url);
+                        String routeId = "";
+                        for (String item : xml.split("<item>")) {
+                            String rno = tag(item, "routeno");
+                            if (rno.equals(fRouteNo)) {
+                                routeId = tag(item, "routeid");
+                                break;
+                            }
+                        }
+                        final String fRouteId = routeId;
+                        runOnUiThread(() -> {
+                            if (fRouteId.isEmpty()) {
+                                if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                                resultContainer.removeAllViews();
+                                TextView tv = new TextView(this);
+                                tv.setText(fRouteNo + "번 노선을 찾을 수 없습니다");
+                                tv.setTextColor(Color.parseColor("#AAAAAA"));
+                                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                                resultContainer.addView(tv);
+                            } else {
+                                busScreenLoadStops(fRouteId, fRouteNo, resultContainer);
+                            }
+                        });
+                    } catch (Exception e) {
+                        runOnUiThread(() -> {
+                            if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                            resultContainer.removeAllViews();
+                        });
+                    }
+                }).start();
+            });
+
             favSection.addView(card);
         }
 
