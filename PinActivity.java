@@ -3635,10 +3635,72 @@ public class PinActivity extends AppCompatActivity {
         btnBusManage.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         btnBusManage.setOnClickListener(v -> {
-            btnBusManage.setText("⏳ 수집 중... (수분 소요)");
-            btnBusBg.setColor(Color.parseColor("#AAAAAA"));
+            // ── 프로그레스 다이얼로그 ──
+            android.app.Dialog dlg = new android.app.Dialog(this,
+                    android.R.style.Theme_Material_Light_Dialog_Alert);
+            LinearLayout dlgLayout = new LinearLayout(this);
+            dlgLayout.setOrientation(LinearLayout.VERTICAL);
+            dlgLayout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+            dlgLayout.setBackgroundColor(Color.WHITE);
+
+            TextView tvDlgTitle = new TextView(this);
+            tvDlgTitle.setText("🚏 정류장 DB 수집 중");
+            tvDlgTitle.setTextColor(Color.parseColor("#0984E3"));
+            tvDlgTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+            tvDlgTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+            LinearLayout.LayoutParams dlgTLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            dlgTLp.setMargins(0, 0, 0, dpToPx(6));
+            tvDlgTitle.setLayoutParams(dlgTLp);
+            dlgLayout.addView(tvDlgTitle);
+
+            TextView tvDlgDesc = new TextView(this);
+            tvDlgDesc.setText("대전 전체 정류장 데이터를 수집하고\nDrive에 업로드합니다.");
+            tvDlgDesc.setTextColor(Color.parseColor("#666666"));
+            tvDlgDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            LinearLayout.LayoutParams dlgDLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            dlgDLp.setMargins(0, 0, 0, dpToPx(16));
+            tvDlgDesc.setLayoutParams(dlgDLp);
+            dlgLayout.addView(tvDlgDesc);
+
+            // 프로그레스바
+            android.widget.ProgressBar dlgPb = new android.widget.ProgressBar(
+                    this, null, android.R.attr.progressBarStyleHorizontal);
+            dlgPb.setMax(100);
+            dlgPb.setProgress(0);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                dlgPb.setProgressTintList(android.content.res.ColorStateList.valueOf(
+                        Color.parseColor("#0984E3")));
+                dlgPb.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                        Color.parseColor("#DDEEFF")));
+            }
+            dlgPb.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(10)));
+            dlgLayout.addView(dlgPb);
+
+            // 퍼센트 + 수집된 수
+            TextView tvDlgPct = new TextView(this);
+            tvDlgPct.setText("0%");
+            tvDlgPct.setTextColor(Color.parseColor("#0984E3"));
+            tvDlgPct.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvDlgPct.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvDlgPct.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams pctLp2 = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            pctLp2.setMargins(0, dpToPx(8), 0, 0);
+            tvDlgPct.setLayoutParams(pctLp2);
+            dlgLayout.addView(tvDlgPct);
+
+            dlg.setContentView(dlgLayout);
+            dlg.setCancelable(false);
+            dlg.show();
+
             btnBusManage.setEnabled(false);
+            btnBusBg.setColor(Color.parseColor("#AAAAAA"));
+
             buildAndUploadStopDb(() -> {
+                dlg.dismiss();
                 int cnt = stopDbList != null ? stopDbList.size() : 0;
                 tvStopStatus.setText("🚏 정류장 DB: " + cnt + "개");
                 tvStopStatus.setTextColor(Color.parseColor("#27AE60"));
@@ -3648,7 +3710,10 @@ public class PinActivity extends AppCompatActivity {
                 android.widget.Toast.makeText(this,
                         "✓ " + cnt + "개 정류장 DB 업로드 완료!",
                         android.widget.Toast.LENGTH_LONG).show();
-            }, null);
+            }, pct -> {
+                dlgPb.setProgress(pct);
+                tvDlgPct.setText(pct + "%");
+            });
         });
         busManageCard.addView(btnBusManage);
         layout.addView(busManageCard);
