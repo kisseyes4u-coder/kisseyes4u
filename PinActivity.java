@@ -133,6 +133,7 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 버스 검색 화면 ─────────────────────────────────────
     private LinearLayout busSearchArea = null;
+    private LinearLayout busFixedHeader = null; // 타임라인 고정 헤더 영역
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     private java.util.List<String[]> routeDbList = null;
@@ -6635,7 +6636,7 @@ public class PinActivity extends AppCompatActivity {
             card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             card.setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14));
             LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
             cardLp.setMargins(0, 0, 0, dpToPx(10));
             card.setLayoutParams(cardLp);
             slotCards[si] = card;
@@ -9676,6 +9677,16 @@ public class PinActivity extends AppCompatActivity {
         busSearchArea = searchArea;
         root.addView(searchArea);
 
+        // ── 타임라인 고정 헤더 영역 (노선번호+방향 고정) ──
+        LinearLayout fixedHeader = new LinearLayout(this);
+        fixedHeader.setOrientation(LinearLayout.VERTICAL);
+        fixedHeader.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        fixedHeader.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        fixedHeader.setVisibility(android.view.View.GONE);
+        busFixedHeader = fixedHeader;
+        root.addView(fixedHeader);
+
         // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
         ScrollView sv = new ScrollView(this);
         sv.setLayoutParams(new LinearLayout.LayoutParams(
@@ -10445,6 +10456,11 @@ public class PinActivity extends AppCompatActivity {
                 busRefreshHandler.removeCallbacks(busRefreshRunnable);
                 busRefreshRunnable = null;
             }
+            // 고정 헤더 숨김
+            if (busFixedHeader != null) {
+                busFixedHeader.setVisibility(android.view.View.GONE);
+                busFixedHeader.removeAllViews();
+            }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             container.removeAllViews();
@@ -10672,7 +10688,17 @@ public class PinActivity extends AppCompatActivity {
             }
         });
         topHeader.addView(tvRouteStar);
-        container.addView(topHeader);
+
+        // ── 고정 헤더 (busFixedHeader)에 topHeader + 기점↔종점 + 방향카드 배치 ──
+        LinearLayout fixedArea = (busFixedHeader != null) ? busFixedHeader : container;
+        fixedArea.removeAllViews();
+        fixedArea.setVisibility(android.view.View.VISIBLE);
+        fixedArea.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        LinearLayout.LayoutParams fixedPad = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        fixedPad.setMargins(dpToPx(12), dpToPx(4), dpToPx(12), 0);
+        topHeader.setLayoutParams(fixedPad);
+        fixedArea.addView(topHeader);
 
         // ── 기점↔종점 ────────────────────────────────────
         TextView tvRoute = new TextView(this);
@@ -10682,8 +10708,8 @@ public class PinActivity extends AppCompatActivity {
         tvRoute.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams rtLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rtLp.setMargins(0,0,0,dpToPx(10)); tvRoute.setLayoutParams(rtLp);
-        container.addView(tvRoute);
+        rtLp.setMargins(dpToPx(12),0,dpToPx(12),dpToPx(6)); tvRoute.setLayoutParams(rtLp);
+        fixedArea.addView(tvRoute);
 
         // ── 방향 카드 ─────────────────────────────────────
         LinearLayout dirRow = new LinearLayout(this);
@@ -10691,7 +10717,7 @@ public class PinActivity extends AppCompatActivity {
         dirRow.setClipChildren(false); dirRow.setClipToPadding(false);
         LinearLayout.LayoutParams drLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        drLp.setMargins(0,0,0,dpToPx(10)); dirRow.setLayoutParams(drLp);
+        drLp.setMargins(dpToPx(12),0,dpToPx(12),dpToPx(8)); dirRow.setLayoutParams(drLp);
         String[] dirLabels = {fEndNm + " 방향", fStartNm + " 방향"};
         String[] dirKeys   = {"forward","reverse"};
         for (int d = 0; d < 2; d++) {
@@ -10722,43 +10748,7 @@ public class PinActivity extends AppCompatActivity {
             dc.setOnClickListener(v2 -> busScreenLoadStops(routeId, routeNo, container, dKey, fRTp));
             dirRow.addView(dc);
         }
-
-        // ── 퀵 메뉴 ──────────────────────────────────────
-        LinearLayout quickMenu = new LinearLayout(this);
-        quickMenu.setOrientation(LinearLayout.HORIZONTAL);
-        quickMenu.setClipChildren(false); quickMenu.setClipToPadding(false);
-        LinearLayout.LayoutParams qmLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        qmLp.setMargins(0,0,0,dpToPx(10)); quickMenu.setLayoutParams(qmLp);
-        String[] qLabels = {"홈 추가","운행정보","지도","주변정류장"};
-        for (int qi = 0; qi < 4; qi++) {
-            final int qIdx = qi;
-            LinearLayout qCard = new LinearLayout(this);
-            qCard.setOrientation(LinearLayout.VERTICAL); qCard.setGravity(Gravity.CENTER);
-            qCard.setBackground(makeShadowCardDrawable("#FFFFFF",10,3));
-            qCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-            qCard.setPadding(dpToPx(4),dpToPx(10),dpToPx(4),dpToPx(10));
-            LinearLayout.LayoutParams qcLp = new LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1f);
-            qcLp.setMargins(0,0,qi<3?dpToPx(6):0,0); qCard.setLayoutParams(qcLp);
-            TextView tvQLabel = new TextView(this);
-            tvQLabel.setText(qLabels[qi]); tvQLabel.setGravity(Gravity.CENTER);
-            tvQLabel.setTextColor(Color.parseColor("#1A1A2E"));
-            tvQLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-            tvQLabel.setTypeface(null, android.graphics.Typeface.BOLD);
-            qCard.addView(tvQLabel);
-            if (qi == 1) {
-                qCard.setOnClickListener(v2 -> {
-                    String msg = "노선번호: " + routeNo + "번\n기점: " + fStartNm + "\n종점: " + fEndNm
-                            + "\n첫차: " + fStF + "\n막차: " + fEtF
-                            + "\n배차간격: " + (fInterval.isEmpty()?"-":fInterval+"분");
-                    new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                            .setTitle("\u23f1 운행 정보").setMessage(msg).setPositiveButton("확인",null).show();
-                });
-            }
-            quickMenu.addView(qCard);
-        }
-        container.addView(quickMenu);
-        container.addView(dirRow);
+        fixedArea.addView(dirRow);
 
         // ── 구분선 ────────────────────────────────────────
         View divider = new View(this);
@@ -14347,6 +14337,14 @@ public class PinActivity extends AppCompatActivity {
         }
         if (!favRouteKeys.isEmpty()) favSection.addView(routeGrid);
 
+        // ── 정류소 즐겨찾기 2열 그리드 ─────────────────────
+        LinearLayout stopGrid = new LinearLayout(this);
+        stopGrid.setOrientation(LinearLayout.VERTICAL);
+        stopGrid.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout stopRow = null;
+        int stopColIdx = 0;
+
         for (String compositeKey : favKeys) {
             // compositeKey = "routeId_nodeId"
             String stopName = prefs.getString("fav_stop_name_"    + compositeKey, compositeKey);
@@ -14355,6 +14353,17 @@ public class PinActivity extends AppCompatActivity {
             String routeId  = prefs.getString("fav_stop_routeid_" + compositeKey, "");
 
             // 카드: 버스이모지 + 노선번호 + 정류소명
+            // 새 행 시작
+            if (stopColIdx % 2 == 0) {
+                stopRow = new LinearLayout(this);
+                stopRow.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams stopRowLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                stopRowLp.setMargins(0, 0, 0, dpToPx(8));
+                stopRow.setLayoutParams(stopRowLp);
+                stopGrid.addView(stopRow);
+            }
+
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.HORIZONTAL);
             card.setGravity(Gravity.CENTER_VERTICAL);
@@ -14363,7 +14372,7 @@ public class PinActivity extends AppCompatActivity {
             card.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
             LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            cardLp.setMargins(0, 0, 0, dpToPx(8));
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
             card.setLayoutParams(cardLp);
 
             // 버스 아이콘 제거 - 텍스트만 표시
@@ -14513,9 +14522,18 @@ public class PinActivity extends AppCompatActivity {
                 }
             });
 
-            favSection.addView(card);
+            stopRow.addView(card);
+            stopColIdx++;
         }
 
+        // 홀수개면 빈 공간 채우기
+        if (stopColIdx % 2 == 1 && stopRow != null) {
+            View emptyStop = new View(this);
+            LinearLayout.LayoutParams emStopLp = new LinearLayout.LayoutParams(0, 1, 1f);
+            emptyStop.setLayoutParams(emStopLp);
+            stopRow.addView(emptyStop);
+        }
+        if (!favKeys.isEmpty()) favSection.addView(stopGrid);
         // 구분선
         View div = new View(this);
         div.setBackgroundColor(Color.parseColor("#EEEEEE"));
