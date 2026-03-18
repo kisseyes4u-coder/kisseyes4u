@@ -8837,7 +8837,7 @@ public class PinActivity extends AppCompatActivity {
         tabRow.setClipToPadding(false);
         LinearLayout.LayoutParams tabRowLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        tabRowLp.setMargins(dpToPx(10), dpToPx(6), dpToPx(10), dpToPx(4));
+        tabRowLp.setMargins(dpToPx(10), dpToPx(8), dpToPx(10), dpToPx(6));
         tabRow.setLayoutParams(tabRowLp);
 
         for (int i = 0; i < 3; i++) {
@@ -8847,22 +8847,21 @@ public class PinActivity extends AppCompatActivity {
             card.setGravity(Gravity.CENTER);
             card.setClipChildren(false);
             card.setClipToPadding(false);
-            // 초기: 0번 선택(진한), 나머지 파스텔
             boolean initSel = (i == 0);
             card.setBackground(makeShadowCardDrawable(
                     initSel ? tabColors[i][0] : tabColors[i][1], 14, 5));
             card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-            card.setPadding(dpToPx(4), dpToPx(10), dpToPx(4), dpToPx(10));
+            card.setPadding(dpToPx(6), dpToPx(16), dpToPx(6), dpToPx(16));
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            int mr = (i < 2) ? dpToPx(6) : 0;
+            int mr = (i < 2) ? dpToPx(8) : 0;
             cp.setMargins(0, 0, mr, 0);
             card.setLayoutParams(cp);
 
             TextView tv = new TextView(this);
             tv.setText(tabLabels[i]);
             tv.setGravity(Gravity.CENTER);
-            tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
             tv.setTypeface(null, android.graphics.Typeface.BOLD);
             tv.setTextColor(initSel ? Color.WHITE : Color.parseColor(tabColors[i][0]));
             card.addView(tv);
