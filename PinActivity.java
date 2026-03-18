@@ -4648,8 +4648,8 @@ public class PinActivity extends AppCompatActivity {
 
         // ── 메뉴 카드들 ───────────────────────────────────────
         String[][] menuItems = {
-                {"💰", "통장 잔액 보기",   "계좌별 문자 내역 상세 확인",    "#6C5CE7", "#EDE9FF"},
                 {"🚌", "버스 노선 검색",   "버스번호·정류장으로 검색",       "#0984E3", "#EBF5FB"},
+                {"💰", "통장 잔액 보기",   "계좌별 문자 내역 상세 확인",    "#6C5CE7", "#EDE9FF"},
                 {"🥩", "선결제 잔액 보기", "선결제 입출금 내역을 확인합니다", "#27AE60", "#EAFAF1"},
                 {"📊", "월별 지출 통계",   "계좌별 월별 수입/지출 차트",     "#E74C3C", "#FDEDEC"},
                 {"📠", "팩스 전송 방법",   "팩스 전송 절차를 확인합니다",    "#E67E22", "#FEF9E7"},
@@ -4657,8 +4657,8 @@ public class PinActivity extends AppCompatActivity {
                 {"📋", "경로당 회원명부",  "경로당 회원 명단을 확인합니다",  "#8E44AD", "#F5EEF8"}
         };
         android.view.View.OnClickListener[] menuClicks = {
-                v -> showBalanceScreen(),
                 v -> showBusSearchScreen(),
+                v -> showBalanceScreen(),
                 v -> showMeatClubScreen(),
                 v -> showStatsScreen(),
                 v -> showFaxGuideScreen(),
