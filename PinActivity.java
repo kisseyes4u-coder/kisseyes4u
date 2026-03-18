@@ -3634,7 +3634,11 @@ public class PinActivity extends AppCompatActivity {
         btnBusManage.setBackground(btnBusBg);
         btnBusManage.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        btnBusManage.setOnClickListener(v -> showStopDbConfirmDialog(() -> {
+        btnBusManage.setOnClickListener(v -> showConfirmDialog("🚏", "정류장 DB 업데이트", "정류장 DB를 업데이트 하시겠습니까?
+
+대전 전체 정류장을 수집하여
+Drive에 업로드합니다.
+수 분이 소요됩니다.", () -> {
             // ── 프로그레스 다이얼로그 ──
             android.app.Dialog dlg = new android.app.Dialog(this,
                     android.R.style.Theme_Material_Light_Dialog_Alert);
@@ -6759,6 +6763,7 @@ public class PinActivity extends AppCompatActivity {
         dlgRoot.addView(tvAmtLabel);
 
         android.widget.EditText etAmount = new android.widget.EditText(this);
+        setBlackCursor(etAmount);
         etAmount.setHint("금액 입력");
         etAmount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         etAmount.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(22));
@@ -7588,6 +7593,7 @@ public class PinActivity extends AppCompatActivity {
         form.addView(tvLabelHint);
 
         android.widget.EditText etLabel = new android.widget.EditText(this);
+        setBlackCursor(etLabel);
         etLabel.setHint("예: 와이마트");
         if (!isNew) etLabel.setText(existingSlot[1]);
         etLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14);
@@ -7612,6 +7618,7 @@ public class PinActivity extends AppCompatActivity {
         form.addView(tvKeyHint);
 
         android.widget.EditText etKey = new android.widget.EditText(this);
+        setBlackCursor(etKey);
         etKey.setHint("예: 와이마트");
         if (!isNew) etKey.setText(existingSlot[0]);
         etKey.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14);
@@ -8253,6 +8260,21 @@ public class PinActivity extends AppCompatActivity {
         et.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
         et.setTextColor(Color.parseColor("#1A1A2E"));
         et.setHintTextColor(Color.parseColor("#AAAAAA"));
+        setBlackCursor(et);
+    }
+
+    /** EditText 커서 검은색으로 설정 (공통) */
+    private void setBlackCursor(android.widget.EditText et) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            et.setTextCursorDrawable(null); // null이면 textColor 따라감 → 검은색
+        } else {
+            try {
+                java.lang.reflect.Field f = android.widget.TextView.class.getDeclaredField("mCursorDrawableRes");
+                f.setAccessible(true);
+                f.set(et, 0);
+            } catch (Exception ignored) {}
+        }
+        et.setCursorVisible(true);
     }
 
     private void showSingleImageScreen(String title, String subtitle, String assetFile) {
@@ -9172,7 +9194,11 @@ public class PinActivity extends AppCompatActivity {
         btnStopRef[0] = btnStop;
         btnBgRef[0] = btnStopBg;
 
-        btnStop.setOnClickListener(v -> showStopDbConfirmDialog(() -> {
+        btnStop.setOnClickListener(v -> showConfirmDialog("🚏", "정류장 DB 업데이트", "정류장 DB를 업데이트 하시겠습니까?
+
+대전 전체 정류장을 수집하여
+Drive에 업로드합니다.
+수 분이 소요됩니다.", () -> {
                     btnStop.setText("⏳ 수집 중... (수분 소요)");
                     btnStopBg.setColor(Color.parseColor("#AAAAAA"));
                     btnStop.setEnabled(false);
@@ -9239,7 +9265,8 @@ public class PinActivity extends AppCompatActivity {
     }
 
     /** 정류장 DB 업데이트 확인 커스텀 다이얼로그 */
-    private void showStopDbConfirmDialog(Runnable onConfirm) {
+    /** 공통 확인/취소 다이얼로그 (앞으로 모든 확인/취소는 이 함수 사용) */
+    private void showConfirmDialog(String icon, String title, String message, Runnable onConfirm) {
         android.app.Dialog dlg = new android.app.Dialog(this,
                 android.R.style.Theme_Material_Light_Dialog);
         LinearLayout layout = new LinearLayout(this);
@@ -9253,7 +9280,7 @@ public class PinActivity extends AppCompatActivity {
 
         // 아이콘
         TextView tvIcon = new TextView(this);
-        tvIcon.setText("🚏");
+        tvIcon.setText(icon);
         tvIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 36);
         tvIcon.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(
@@ -9264,7 +9291,7 @@ public class PinActivity extends AppCompatActivity {
 
         // 제목
         TextView tvTitle = new TextView(this);
-        tvTitle.setText("정류장 DB 업데이트");
+        tvTitle.setText(title);
         tvTitle.setTextColor(Color.parseColor("#0984E3"));
         tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
         tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -9286,7 +9313,7 @@ public class PinActivity extends AppCompatActivity {
 
         // 메시지
         TextView tvMsg = new TextView(this);
-        tvMsg.setText("정류장 DB를 업데이트 하시겠습니까?\n\n대전 전체 정류장을 수집하여\nDrive에 업로드합니다.\n수 분이 소요됩니다.");
+        tvMsg.setText(message);
         tvMsg.setTextColor(Color.parseColor("#444444"));
         tvMsg.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
         tvMsg.setGravity(Gravity.CENTER);
@@ -9602,6 +9629,7 @@ public class PinActivity extends AppCompatActivity {
         etWrapper.setLayoutParams(wLp);
 
         android.widget.EditText etSearch = new android.widget.EditText(this);
+        setBlackCursor(etSearch);
         busEtSearch = etSearch;
         etSearch.setHint("버스 번호 입력");
         etSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
@@ -9865,6 +9893,7 @@ public class PinActivity extends AppCompatActivity {
         etWrapper.setLayoutParams(wLp);
 
         android.widget.EditText etSearch = new android.widget.EditText(this);
+        setBlackCursor(etSearch);
         String[] hints = {"버스 번호 입력 (예: 708, 104)", "정류장 이름 입력 (예: 지족동)", "장소 이름 입력 (예: 유성온천)"};
         int[] inputTypes = {android.text.InputType.TYPE_CLASS_NUMBER,
                 android.text.InputType.TYPE_CLASS_TEXT, android.text.InputType.TYPE_CLASS_TEXT};
@@ -10464,6 +10493,7 @@ public class PinActivity extends AppCompatActivity {
                 mlLp.setMargins(0,0,0,dpToPx(4)); tvMemoLabel.setLayoutParams(mlLp);
                 dlgLayout.addView(tvMemoLabel);
                 android.widget.EditText etMemo = new android.widget.EditText(this);
+                setBlackCursor(etMemo);
                 etMemo.setHint("예) 출근길, 집앞 정류장");
                 etMemo.setText(existingMemo);
                 etMemo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
@@ -11910,6 +11940,7 @@ public class PinActivity extends AppCompatActivity {
                             etWrapper.setLayoutParams(wrapLp);
 
                             android.widget.EditText et2 = new android.widget.EditText(this);
+                            setBlackCursor(et2);
                             et2.setHint(hints[mi2]);
                             et2.setHintTextColor(Color.parseColor("#CCCCCC"));
                             String etVal = (driveItems!=null && mi2<driveItems.length)
