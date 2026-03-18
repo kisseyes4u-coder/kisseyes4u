@@ -3634,20 +3634,14 @@ public class PinActivity extends AppCompatActivity {
         btnBusManage.setBackground(btnBusBg);
         btnBusManage.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        btnBusManage.setOnClickListener(v -> {
-            // ── 확인 다이얼로그 ──
-            new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                .setTitle("정류장 DB 업데이트")
-                .setMessage("정류장 DB를 업데이트 하시겠습니까?\n\n대전 전체 정류장을 수집하여 Drive에 업로드합니다. 수 분이 소요됩니다.")
-                .setPositiveButton("확인", (d, w) -> {
-                    // ── 프로그레스 다이얼로그 ──
+        btnBusManage.setOnClickListener(v -> showStopDbConfirmDialog(() -> {
+            // ── 프로그레스 다이얼로그 ──
             android.app.Dialog dlg = new android.app.Dialog(this,
                     android.R.style.Theme_Material_Light_Dialog_Alert);
             LinearLayout dlgLayout = new LinearLayout(this);
             dlgLayout.setOrientation(LinearLayout.VERTICAL);
             dlgLayout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
             dlgLayout.setBackgroundColor(Color.WHITE);
-
             TextView tvDlgTitle = new TextView(this);
             tvDlgTitle.setText("🚏 정류장 DB 수집 중");
             tvDlgTitle.setTextColor(Color.parseColor("#0984E3"));
@@ -3658,7 +3652,6 @@ public class PinActivity extends AppCompatActivity {
             dlgTLp.setMargins(0, 0, 0, dpToPx(6));
             tvDlgTitle.setLayoutParams(dlgTLp);
             dlgLayout.addView(tvDlgTitle);
-
             TextView tvDlgDesc = new TextView(this);
             tvDlgDesc.setText("대전 전체 정류장 데이터를 수집하고\nDrive에 업로드합니다.");
             tvDlgDesc.setTextColor(Color.parseColor("#666666"));
@@ -3668,23 +3661,15 @@ public class PinActivity extends AppCompatActivity {
             dlgDLp.setMargins(0, 0, 0, dpToPx(16));
             tvDlgDesc.setLayoutParams(dlgDLp);
             dlgLayout.addView(tvDlgDesc);
-
-            // 프로그레스바
             android.widget.ProgressBar dlgPb = new android.widget.ProgressBar(
                     this, null, android.R.attr.progressBarStyleHorizontal);
-            dlgPb.setMax(100);
-            dlgPb.setProgress(0);
+            dlgPb.setMax(100); dlgPb.setProgress(0);
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                dlgPb.setProgressTintList(android.content.res.ColorStateList.valueOf(
-                        Color.parseColor("#0984E3")));
-                dlgPb.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                        Color.parseColor("#DDEEFF")));
+                dlgPb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#0984E3")));
+                dlgPb.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#DDEEFF")));
             }
-            dlgPb.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(10)));
+            dlgPb.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(10)));
             dlgLayout.addView(dlgPb);
-
-            // 퍼센트 + 수집된 수
             TextView tvDlgPct = new TextView(this);
             tvDlgPct.setText("0%");
             tvDlgPct.setTextColor(Color.parseColor("#0984E3"));
@@ -3696,14 +3681,11 @@ public class PinActivity extends AppCompatActivity {
             pctLp2.setMargins(0, dpToPx(8), 0, 0);
             tvDlgPct.setLayoutParams(pctLp2);
             dlgLayout.addView(tvDlgPct);
-
             dlg.setContentView(dlgLayout);
             dlg.setCancelable(false);
             dlg.show();
-
             btnBusManage.setEnabled(false);
             btnBusBg.setColor(Color.parseColor("#AAAAAA"));
-
             buildAndUploadStopDb(() -> {
                 dlg.dismiss();
                 int cnt = stopDbList != null ? stopDbList.size() : 0;
@@ -3712,17 +3694,9 @@ public class PinActivity extends AppCompatActivity {
                 btnBusManage.setText("🚏 정류장 DB 업데이트");
                 btnBusBg.setColor(Color.parseColor("#0984E3"));
                 btnBusManage.setEnabled(true);
-                android.widget.Toast.makeText(this,
-                        "✓ " + cnt + "개 정류장 DB 업로드 완료!",
-                        android.widget.Toast.LENGTH_LONG).show();
-            }, pct -> {
-                dlgPb.setProgress(pct);
-                tvDlgPct.setText(pct + "%");
-            });
-                })
-                .setNegativeButton("취소", null)
-                .show();
-        });
+                android.widget.Toast.makeText(this, "✓ " + cnt + "개 정류장 DB 업로드 완료!", android.widget.Toast.LENGTH_LONG).show();
+            }, pct -> { dlgPb.setProgress(pct); tvDlgPct.setText(pct + "%"); });
+        }));
         busManageCard.addView(btnBusManage);
         layout.addView(busManageCard);
 
@@ -9198,11 +9172,7 @@ public class PinActivity extends AppCompatActivity {
         btnStopRef[0] = btnStop;
         btnBgRef[0] = btnStopBg;
 
-        btnStop.setOnClickListener(v -> {
-            new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                .setTitle("정류장 DB 업데이트")
-                .setMessage("정류장 DB를 업데이트 하시겠습니까?\n\n대전 전체 정류장을 수집하여 Drive에 업로드합니다. 수 분이 소요됩니다.")
-                .setPositiveButton("확인", (d, w) -> {
+        btnStop.setOnClickListener(v -> showStopDbConfirmDialog(() -> {
                     btnStop.setText("⏳ 수집 중... (수분 소요)");
                     btnStopBg.setColor(Color.parseColor("#AAAAAA"));
                     btnStop.setEnabled(false);
@@ -9220,10 +9190,7 @@ public class PinActivity extends AppCompatActivity {
                                 "✓ " + cnt + "개 정류장 DB 업로드 완료!",
                                 android.widget.Toast.LENGTH_LONG).show();
                     }, null);
-                })
-                .setNegativeButton("취소", null)
-                .show();
-        });
+        }));
         stopCard.addView(btnStop);
         content.addView(stopCard);
 
@@ -9269,6 +9236,121 @@ public class PinActivity extends AppCompatActivity {
         outerRoot.addView(root);
         outerRoot.addView(btnBar);
         setContentView(outerRoot);
+    }
+
+    /** 정류장 DB 업데이트 확인 커스텀 다이얼로그 */
+    private void showStopDbConfirmDialog(Runnable onConfirm) {
+        android.app.Dialog dlg = new android.app.Dialog(this,
+                android.R.style.Theme_Material_Light_Dialog);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setBackgroundColor(Color.WHITE);
+        android.graphics.drawable.GradientDrawable dlgBg = new android.graphics.drawable.GradientDrawable();
+        dlgBg.setColor(Color.WHITE);
+        dlgBg.setCornerRadius(dpToPx(16));
+        layout.setBackground(dlgBg);
+        layout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+
+        // 아이콘
+        TextView tvIcon = new TextView(this);
+        tvIcon.setText("🚏");
+        tvIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 36);
+        tvIcon.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        iconLp.setMargins(0, 0, 0, dpToPx(10));
+        tvIcon.setLayoutParams(iconLp);
+        layout.addView(tvIcon);
+
+        // 제목
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("정류장 DB 업데이트");
+        tvTitle.setTextColor(Color.parseColor("#0984E3"));
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvTitle.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.setMargins(0, 0, 0, dpToPx(10));
+        tvTitle.setLayoutParams(titleLp);
+        layout.addView(tvTitle);
+
+        // 구분선
+        View div = new View(this);
+        div.setBackgroundColor(Color.parseColor("#EEEEEE"));
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+        divLp.setMargins(0, 0, 0, dpToPx(14));
+        div.setLayoutParams(divLp);
+        layout.addView(div);
+
+        // 메시지
+        TextView tvMsg = new TextView(this);
+        tvMsg.setText("정류장 DB를 업데이트 하시겠습니까?\n\n대전 전체 정류장을 수집하여\nDrive에 업로드합니다.\n수 분이 소요됩니다.");
+        tvMsg.setTextColor(Color.parseColor("#444444"));
+        tvMsg.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tvMsg.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams msgLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        msgLp.setMargins(0, 0, 0, dpToPx(20));
+        tvMsg.setLayoutParams(msgLp);
+        layout.addView(tvMsg);
+
+        // 버튼 행
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setGravity(Gravity.CENTER);
+        btnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // 취소 버튼
+        TextView btnCancel = new TextView(this);
+        btnCancel.setText("취소");
+        btnCancel.setTextColor(Color.parseColor("#888888"));
+        btnCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        btnCancel.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnCancel.setGravity(Gravity.CENTER);
+        btnCancel.setPadding(0, dpToPx(13), 0, dpToPx(13));
+        android.graphics.drawable.GradientDrawable cancelBg = new android.graphics.drawable.GradientDrawable();
+        cancelBg.setColor(Color.parseColor("#F0F0F0"));
+        cancelBg.setCornerRadius(dpToPx(10));
+        btnCancel.setBackground(cancelBg);
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        cancelLp.setMargins(0, 0, dpToPx(8), 0);
+        btnCancel.setLayoutParams(cancelLp);
+        btnCancel.setOnClickListener(v -> dlg.dismiss());
+        btnRow.addView(btnCancel);
+
+        // 확인 버튼
+        TextView btnOk = new TextView(this);
+        btnOk.setText("확인");
+        btnOk.setTextColor(Color.WHITE);
+        btnOk.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        btnOk.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnOk.setGravity(Gravity.CENTER);
+        btnOk.setPadding(0, dpToPx(13), 0, dpToPx(13));
+        android.graphics.drawable.GradientDrawable okBg = new android.graphics.drawable.GradientDrawable();
+        okBg.setColor(Color.parseColor("#0984E3"));
+        okBg.setCornerRadius(dpToPx(10));
+        btnOk.setBackground(okBg);
+        btnOk.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        btnOk.setOnClickListener(v -> {
+            dlg.dismiss();
+            if (onConfirm != null) onConfirm.run();
+        });
+        btnRow.addView(btnOk);
+        layout.addView(btnRow);
+
+        dlg.setContentView(layout);
+        dlg.setCancelable(true);
+        // 다이얼로그 너비 설정
+        if (dlg.getWindow() != null) {
+            dlg.getWindow().setLayout(
+                    (int)(getResources().getDisplayMetrics().widthPixels * 0.85),
+                    android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+            dlg.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        }
+        dlg.show();
     }
 
     private void buildDbCard(LinearLayout parent, String icon, String title,
