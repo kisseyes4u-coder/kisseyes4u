@@ -14264,6 +14264,13 @@ public class PinActivity extends AppCompatActivity {
     private void refreshBusFavorites(LinearLayout favSection, LinearLayout resultContainer) {
         busFavSection = favSection;
         favSection.removeAllViews();
+        if (resultContainer != null) resultContainer.removeAllViews(); // 타임라인 등 이전 내용 제거
+        // 고정헤더도 숨김
+        if (busFixedHeader != null) {
+            busFixedHeader.setVisibility(android.view.View.GONE);
+            busFixedHeader.removeAllViews();
+        }
+        if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
         android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         // 키: fav_stop_routeId_nodeId (boolean=true인 것만)
         java.util.List<String> favKeys = new java.util.ArrayList<>();
