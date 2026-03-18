@@ -12950,9 +12950,8 @@ public class PinActivity extends AppCompatActivity {
             tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
             rText.addView(tvRNo);
 
-            // 방향 + 메모 한 줄
-            String subText = rDir;
-            if (!rMemo.isEmpty()) subText = rMemo.isEmpty() ? rDir : rMemo + (!rDir.isEmpty() ? "  ·  " + rDir : "");
+            // 메모 있으면 메모, 없으면 방향
+            String subText = rMemo.isEmpty() ? rDir : rMemo;
             if (!subText.isEmpty()) {
                 TextView tvRSub = new TextView(this);
                 tvRSub.setText(subText);
