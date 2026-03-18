@@ -9742,22 +9742,31 @@ public class PinActivity extends AppCompatActivity {
                         }
                         row.addView(stopInfo);
 
-                        // 즐겨찾기 버튼 (삭제버튼 스타일)
+                        // 즐겨찾기 버튼
                         final String favKey = "fav_stop_" + s[0];
                         boolean isFav = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
                                 .getBoolean(favKey, false);
                         TextView tvStar = new TextView(this);
                         tvStar.setText("즐겨찾기");
-                        tvStar.setTextColor(Color.WHITE);
                         tvStar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
                         tvStar.setTypeface(null, android.graphics.Typeface.BOLD);
                         tvStar.setGravity(Gravity.CENTER);
-                        tvStar.setPadding(dpToPx(6), dpToPx(4), dpToPx(6), dpToPx(4));
+                        tvStar.setPadding(dpToPx(7), dpToPx(4), dpToPx(7), dpToPx(4));
+
                         android.graphics.drawable.GradientDrawable starBg =
                                 new android.graphics.drawable.GradientDrawable();
-                        starBg.setColor(isFav ? Color.parseColor("#F39C12") : Color.parseColor("#AAAAAA"));
+                        if (isFav) {
+                            starBg.setColor(Color.parseColor("#F39C12"));
+                            starBg.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
+                            tvStar.setTextColor(Color.WHITE);
+                        } else {
+                            starBg.setColor(Color.WHITE);
+                            starBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
+                            tvStar.setTextColor(Color.parseColor("#333333"));
+                        }
                         starBg.setCornerRadius(dpToPx(4));
                         tvStar.setBackground(starBg);
+
                         LinearLayout.LayoutParams starLp = new LinearLayout.LayoutParams(
                                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                         starLp.gravity = Gravity.CENTER_VERTICAL;
@@ -9776,8 +9785,16 @@ public class PinActivity extends AppCompatActivity {
                                     .apply();
                             android.graphics.drawable.GradientDrawable newBg =
                                     new android.graphics.drawable.GradientDrawable();
-                            newBg.setColor(nowFav ? Color.parseColor("#F39C12") : Color.parseColor("#AAAAAA"));
                             newBg.setCornerRadius(dpToPx(4));
+                            if (nowFav) {
+                                newBg.setColor(Color.parseColor("#F39C12"));
+                                newBg.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
+                                tvStar.setTextColor(Color.WHITE);
+                            } else {
+                                newBg.setColor(Color.WHITE);
+                                newBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
+                                tvStar.setTextColor(Color.parseColor("#333333"));
+                            }
                             tvStar.setBackground(newBg);
                             android.widget.Toast.makeText(this,
                                     nowFav ? stopName + " 즐겨찾기 추가" : stopName + " 즐겨찾기 해제",
