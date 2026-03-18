@@ -8991,6 +8991,26 @@ public class PinActivity extends AppCompatActivity {
         panel.addView(searchRow);
         panel.addView(resultContainer);
 
+        // 버스번호 탭: 입력할 때마다 실시간 검색 (300ms 디바운스)
+        if (type == 0) {
+            android.os.Handler debounceHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            Runnable[] debounceRunnable = {null};
+            etSearch.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+                @Override public void onTextChanged(CharSequence s, int st, int b, int c) {
+                    if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
+                    String kw = s.toString().trim();
+                    if (kw.isEmpty()) {
+                        resultContainer.removeAllViews();
+                        return;
+                    }
+                    debounceRunnable[0] = () -> busScreenSearchByNo(kw, resultContainer);
+                    debounceHandler.postDelayed(debounceRunnable[0], 300);
+                }
+                @Override public void afterTextChanged(android.text.Editable e) {}
+            });
+        }
+
         btnGo.setOnClickListener(v -> {
             String kw = etSearch.getText().toString().trim();
             if (kw.isEmpty()) return;
@@ -9003,6 +9023,9 @@ public class PinActivity extends AppCompatActivity {
         etSearch.setOnEditorActionListener((tv, actionId, event) -> {
             String kw = etSearch.getText().toString().trim();
             if (!kw.isEmpty()) {
+                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)
+                        getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
                 if (type == 0) busScreenSearchByNo(kw, resultContainer);
                 else           busScreenSearchByStop(kw, resultContainer);
             }
