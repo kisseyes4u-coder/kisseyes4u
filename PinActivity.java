@@ -133,7 +133,6 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 버스 검색 화면 ─────────────────────────────────────
     private LinearLayout busSearchArea = null;
-    private LinearLayout busFixedHeader = null; // 타임라인 고정 헤더 영역
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     private java.util.List<String[]> routeDbList = null;
@@ -9677,15 +9676,6 @@ public class PinActivity extends AppCompatActivity {
         busSearchArea = searchArea;
         root.addView(searchArea);
 
-        // ── 타임라인 고정 헤더 영역 (노선번호+방향 고정) ──
-        LinearLayout fixedHeader = new LinearLayout(this);
-        fixedHeader.setOrientation(LinearLayout.VERTICAL);
-        fixedHeader.setBackgroundColor(Color.parseColor("#F2F4F8"));
-        fixedHeader.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        fixedHeader.setVisibility(android.view.View.GONE);
-        busFixedHeader = fixedHeader;
-        root.addView(fixedHeader);
 
         // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
         ScrollView sv = new ScrollView(this);
@@ -10456,11 +10446,6 @@ public class PinActivity extends AppCompatActivity {
                 busRefreshHandler.removeCallbacks(busRefreshRunnable);
                 busRefreshRunnable = null;
             }
-            // 고정 헤더 숨김
-            if (busFixedHeader != null) {
-                busFixedHeader.setVisibility(android.view.View.GONE);
-                busFixedHeader.removeAllViews();
-            }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             container.removeAllViews();
@@ -10689,16 +10674,7 @@ public class PinActivity extends AppCompatActivity {
         });
         topHeader.addView(tvRouteStar);
 
-        // ── 고정 헤더 (busFixedHeader)에 topHeader + 기점↔종점 + 방향카드 배치 ──
-        LinearLayout fixedArea = (busFixedHeader != null) ? busFixedHeader : container;
-        fixedArea.removeAllViews();
-        fixedArea.setVisibility(android.view.View.VISIBLE);
-        fixedArea.setBackgroundColor(Color.parseColor("#F2F4F8"));
-        LinearLayout.LayoutParams fixedPad = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        fixedPad.setMargins(dpToPx(12), dpToPx(4), dpToPx(12), 0);
-        topHeader.setLayoutParams(fixedPad);
-        fixedArea.addView(topHeader);
+        container.addView(topHeader);
 
         // ── 기점↔종점 ────────────────────────────────────
         TextView tvRoute = new TextView(this);
@@ -10708,47 +10684,8 @@ public class PinActivity extends AppCompatActivity {
         tvRoute.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams rtLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rtLp.setMargins(dpToPx(12),0,dpToPx(12),dpToPx(6)); tvRoute.setLayoutParams(rtLp);
-        fixedArea.addView(tvRoute);
-
-        // ── 방향 카드 ─────────────────────────────────────
-        LinearLayout dirRow = new LinearLayout(this);
-        dirRow.setOrientation(LinearLayout.HORIZONTAL);
-        dirRow.setClipChildren(false); dirRow.setClipToPadding(false);
-        LinearLayout.LayoutParams drLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        drLp.setMargins(dpToPx(12),0,dpToPx(12),dpToPx(8)); dirRow.setLayoutParams(drLp);
-        String[] dirLabels = {fEndNm + " 방향", fStartNm + " 방향"};
-        String[] dirKeys   = {"forward","reverse"};
-        for (int d = 0; d < 2; d++) {
-            boolean isCur = direction.equals(dirKeys[d]);
-            LinearLayout dc = new LinearLayout(this);
-            dc.setOrientation(LinearLayout.VERTICAL); dc.setGravity(Gravity.CENTER);
-            dc.setBackground(makeShadowCardDrawable(isCur?"#0984E3":"#FFFFFF",10,4));
-            dc.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-            dc.setPadding(dpToPx(8),dpToPx(12),dpToPx(8),dpToPx(12));
-            LinearLayout.LayoutParams dcLp = new LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1f);
-            dcLp.setMargins(0,0,d==0?dpToPx(8):0,0); dc.setLayoutParams(dcLp);
-            TextView tvDir = new TextView(this);
-            tvDir.setText(dirLabels[d]);
-            tvDir.setTextColor(isCur?Color.WHITE:Color.parseColor("#1A1A2E"));
-            tvDir.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-            tvDir.setTypeface(null,isCur?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
-            tvDir.setGravity(Gravity.CENTER); tvDir.setSingleLine(true);
-            tvDir.setEllipsize(android.text.TextUtils.TruncateAt.END); dc.addView(tvDir);
-            TextView tvTime = new TextView(this);
-            tvTime.setText(fStF + " ~ " + fEtF);
-            tvTime.setTextColor(isCur?Color.parseColor("#D6EAF8"):Color.parseColor("#AAAAAA"));
-            tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-            tvTime.setGravity(Gravity.CENTER);
-            LinearLayout.LayoutParams tLp2 = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            tLp2.setMargins(0,dpToPx(3),0,0); tvTime.setLayoutParams(tLp2); dc.addView(tvTime);
-            final String dKey = dirKeys[d];
-            dc.setOnClickListener(v2 -> busScreenLoadStops(routeId, routeNo, container, dKey, fRTp));
-            dirRow.addView(dc);
-        }
-        fixedArea.addView(dirRow);
+        rtLp.setMargins(0,0,0,dpToPx(6)); tvRoute.setLayoutParams(rtLp);
+        container.addView(tvRoute);
 
         // ── 퀵 메뉴 (홈 추가/운행정보/지도/주변정류장) - 스크롤 영역, 기점↔종점 바로 아래 ──
         LinearLayout quickMenu = new LinearLayout(this);
@@ -10785,6 +10722,45 @@ public class PinActivity extends AppCompatActivity {
             quickMenu.addView(qCard);
         }
         container.addView(quickMenu);
+
+        // ── 방향 카드 ─────────────────────────────────────
+        LinearLayout dirRow = new LinearLayout(this);
+        dirRow.setOrientation(LinearLayout.HORIZONTAL);
+        dirRow.setClipChildren(false); dirRow.setClipToPadding(false);
+        LinearLayout.LayoutParams drLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        drLp.setMargins(0,0,0,dpToPx(8)); dirRow.setLayoutParams(drLp);
+        String[] dirLabels = {fEndNm + " 방향", fStartNm + " 방향"};
+        String[] dirKeys   = {"forward","reverse"};
+        for (int d = 0; d < 2; d++) {
+            boolean isCur = direction.equals(dirKeys[d]);
+            LinearLayout dc = new LinearLayout(this);
+            dc.setOrientation(LinearLayout.VERTICAL); dc.setGravity(Gravity.CENTER);
+            dc.setBackground(makeShadowCardDrawable(isCur?"#0984E3":"#FFFFFF",10,4));
+            dc.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+            dc.setPadding(dpToPx(8),dpToPx(12),dpToPx(8),dpToPx(12));
+            LinearLayout.LayoutParams dcLp = new LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1f);
+            dcLp.setMargins(0,0,d==0?dpToPx(8):0,0); dc.setLayoutParams(dcLp);
+            TextView tvDir = new TextView(this);
+            tvDir.setText(dirLabels[d]);
+            tvDir.setTextColor(isCur?Color.WHITE:Color.parseColor("#1A1A2E"));
+            tvDir.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvDir.setTypeface(null,isCur?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            tvDir.setGravity(Gravity.CENTER); tvDir.setSingleLine(true);
+            tvDir.setEllipsize(android.text.TextUtils.TruncateAt.END); dc.addView(tvDir);
+            TextView tvTime = new TextView(this);
+            tvTime.setText(fStF + " ~ " + fEtF);
+            tvTime.setTextColor(isCur?Color.parseColor("#D6EAF8"):Color.parseColor("#AAAAAA"));
+            tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvTime.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams tLp2 = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            tLp2.setMargins(0,dpToPx(3),0,0); tvTime.setLayoutParams(tLp2); dc.addView(tvTime);
+            final String dKey = dirKeys[d];
+            dc.setOnClickListener(v2 -> busScreenLoadStops(routeId, routeNo, container, dKey, fRTp));
+            dirRow.addView(dc);
+        }
+        container.addView(dirRow);
 
         // ── 구분선 ────────────────────────────────────────
         View divider = new View(this);
