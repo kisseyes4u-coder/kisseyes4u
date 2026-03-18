@@ -9156,9 +9156,20 @@ public class PinActivity extends AppCompatActivity {
                     busFavSection2.setVisibility(kw.isEmpty() ? android.view.View.VISIBLE : android.view.View.GONE);
                 if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
                 if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
+                // 정류장 탭: 마지막 글자가 불완전한 한글(자음만/모음만)이면 검색 대기
+                if (!isBusTab[0] && kw.length() > 0) {
+                    char last = kw.charAt(kw.length() - 1);
+                    // 자음 단독(ㄱ~ㅎ) 또는 모음 단독(ㅏ~ㅣ)이면 입력 중으로 판단
+                    if ((last >= 0x3131 && last <= 0x314E) || (last >= 0x314F && last <= 0x3163)) {
+                        return; // 아직 입력 중, 검색 안 함
+                    }
+                    // 한글 조합 중인 글자 (받침 없는 상태의 마지막 글자 체크는 어렵지만
+                    // 최소 2글자 이상일 때만 검색)
+                    if (kw.length() < 2) return;
+                }
                 debounceRunnable[0] = doSearch;
-                // 버스탭은 숫자라 빠르게, 정류장탭은 300ms 디바운스
-                debounceHandler.postDelayed(debounceRunnable[0], isBusTab[0] ? 200 : 300);
+                // 버스: 200ms, 정류장: 600ms (타이핑 완료 기다리기)
+                debounceHandler.postDelayed(debounceRunnable[0], isBusTab[0] ? 200 : 600);
             }
             @Override public void afterTextChanged(android.text.Editable e) {}
         });
