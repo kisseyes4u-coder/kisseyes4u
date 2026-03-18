@@ -5071,12 +5071,15 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout topLayout = new LinearLayout(this);
         topLayout.setOrientation(LinearLayout.VERTICAL);
         topLayout.setBackgroundColor(Color.parseColor("#F5F3FA"));
-        topLayout.setPadding(0, dpToPx(4), 0, dpToPx(4));
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(topLayout, (v, insets) -> {
-            int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
-            v.setPadding(0, top + dpToPx(4), 0, dpToPx(4));
-            return insets;
-        });
+        if (!isOwner) {
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(topLayout, (v, insets) -> {
+                int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
+                v.setPadding(0, top + dpToPx(4), 0, dpToPx(4));
+                return insets;
+            });
+        } else {
+            topLayout.setPadding(0, statusBarHeight + dpToPx(4), 0, dpToPx(4));
+        }
         RelativeLayout.LayoutParams topParams = new RelativeLayout.LayoutParams(
                 RelativeLayout.LayoutParams.MATCH_PARENT,
                 RelativeLayout.LayoutParams.WRAP_CONTENT);
@@ -6142,12 +6145,15 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout topLayout = new LinearLayout(this);
         topLayout.setOrientation(LinearLayout.VERTICAL);
         topLayout.setBackgroundColor(Color.parseColor("#F5F3FA"));
-        topLayout.setPadding(0, dpToPx(4), 0, dpToPx(4));
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(topLayout, (v, insets) -> {
-            int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
-            v.setPadding(0, top + dpToPx(4), 0, dpToPx(4));
-            return insets;
-        });
+        if (!isOwner) {
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(topLayout, (v, insets) -> {
+                int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
+                v.setPadding(0, top + dpToPx(4), 0, dpToPx(4));
+                return insets;
+            });
+        } else {
+            topLayout.setPadding(0, statusBarHeight + dpToPx(4), 0, dpToPx(4));
+        }
         int topLayoutId = View.generateViewId();
         topLayout.setId(topLayoutId);
         RelativeLayout.LayoutParams topLp = new RelativeLayout.LayoutParams(
