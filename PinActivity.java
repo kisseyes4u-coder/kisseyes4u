@@ -9442,6 +9442,15 @@ public class PinActivity extends AppCompatActivity {
     }
     private void busScreenSearchByStop(String keyword, LinearLayout container) {
         container.removeAllViews();
+
+        // 로컬 DB 검색 시도
+        java.util.List<String[]> local = stopSearchLocal(keyword);
+        if (!local.isEmpty()) {
+            renderStopCards(local, keyword, container);
+            return;
+        }
+
+        // 로컬 없으면 API 검색
         TextView tvL = new TextView(this); tvL.setText("정류소 검색 중...");
         tvL.setTextColor(Color.parseColor("#AAAAAA")); tvL.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12)); container.addView(tvL);
         new Thread(() -> {
@@ -9462,13 +9471,7 @@ public class PinActivity extends AppCompatActivity {
                         TextView tv = new TextView(this); tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
                         tv.setTextColor(Color.parseColor("#AAAAAA")); tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12)); container.addView(tv);
                     } else {
-                        for (String[] s : stops) {
-                            LinearLayout card = makeBusCard(s[1],
-                                    s[2].isEmpty() ? "" : "정류소번호: " + s[2],
-                                    "탭하여 도착 정보 확인 →", "#0984E3");
-                            card.setOnClickListener(v -> busScreenLoadArrival(s[0], s[1], "", container));
-                            container.addView(card);
-                        }
+                        renderStopCards(stops, keyword, container);
                     }
                 });
             } catch (Exception e) {
@@ -9477,6 +9480,33 @@ public class PinActivity extends AppCompatActivity {
                     tv.setTextColor(Color.parseColor("#E74C3C")); tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11)); container.addView(tv); });
             }
         }).start();
+    }
+
+    /** 정류소 카드 렌더링 공통 */
+    private void renderStopCards(java.util.List<String[]> stops, String keyword, LinearLayout container) {
+        for (String[] s : stops) {
+            LinearLayout card = makeBusCard(s[1],
+                    s[2].isEmpty() ? "" : "정류소번호: " + s[2],
+                    "", "#0984E3");
+            card.setOnClickListener(v -> busScreenLoadArrival(s[0], s[1], "", container));
+            container.addView(card);
+        }
+    }
+
+    /** 로컬 정류장 DB에서 키워드 검색 */
+    private java.util.List<String[]> stopSearchLocal(String keyword) {
+        java.util.List<String[]> result = new java.util.ArrayList<>();
+        String raw = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
+                .getString("all_stops", "");
+        if (raw.isEmpty()) return result;
+        String kw = keyword.toLowerCase();
+        for (String line : raw.split(";")) {
+            String[] p = line.split("\\|", -1);
+            if (p.length < 3) continue;
+            if (p[1].toLowerCase().contains(kw)) result.add(p);
+            if (result.size() >= 30) break; // 최대 30개
+        }
+        return result;
     }
 
 
@@ -12764,11 +12794,12 @@ public class PinActivity extends AppCompatActivity {
         return result;
     }
 
-    /** 대전 전체 노선 DB 다운로드 후 로컬 저장 */
+    /** 대전 전체 노선 + 정류장 DB 다운로드 후 로컬 저장 */
     private void downloadBusRouteDb(Runnable onDone) {
         new Thread(() -> {
             try {
-                StringBuilder sb = new StringBuilder();
+                // ① 노선 목록
+                StringBuilder sbRoute = new StringBuilder();
                 int page = 1;
                 while (true) {
                     String url = BUS_BASE2 + "BusRouteInfoInqireService/getRouteNoList"
@@ -12778,25 +12809,47 @@ public class PinActivity extends AppCompatActivity {
                     int count = 0;
                     for (String item : xml.split("<item>")) {
                         if (!item.contains("<routeid>")) continue;
-                        String rid  = tag(item,"routeid");
-                        String rno  = tag(item,"routeno");
-                        String stnm = tag(item,"startnodenm");
-                        String etnm = tag(item,"endnodenm");
-                        String rtp  = tag(item,"routetp");
-                        if (sb.length() > 0) sb.append(";");
-                        sb.append(rid).append("|").append(rno).append("|")
-                          .append(stnm).append("|").append(etnm).append("|").append(rtp);
+                        if (sbRoute.length() > 0) sbRoute.append(";");
+                        sbRoute.append(tag(item,"routeid")).append("|")
+                               .append(tag(item,"routeno")).append("|")
+                               .append(tag(item,"startnodenm")).append("|")
+                               .append(tag(item,"endnodenm")).append("|")
+                               .append(tag(item,"routetp"));
                         count++;
                     }
-                    if (count < 100) break; // 마지막 페이지
+                    if (count < 100) break;
                     page++;
-                    if (page > 20) break;   // 안전 상한
+                    if (page > 20) break;
                 }
+
+                // ② 정류장 목록 (가나다 순으로 모든 정류장 다운로드)
+                StringBuilder sbStop = new StringBuilder();
+                int sPage = 1;
+                while (true) {
+                    String url2 = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
+                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                            + "&nodeNm=&numOfRows=100&pageNo=" + sPage + "&_type=xml";
+                    String xml2 = httpGet(url2);
+                    int cnt2 = 0;
+                    for (String item : xml2.split("<item>")) {
+                        if (!item.contains("<nodeid>")) continue;
+                        if (sbStop.length() > 0) sbStop.append(";");
+                        sbStop.append(tag(item,"nodeid")).append("|")
+                              .append(tag(item,"nodenm")).append("|")
+                              .append(tag(item,"nodeno"));
+                        cnt2++;
+                    }
+                    if (cnt2 < 100) break;
+                    sPage++;
+                    if (sPage > 100) break; // 대전 정류장 최대 ~수천개
+                }
+
                 String today = new java.text.SimpleDateFormat("yyyyMMdd",
                         java.util.Locale.getDefault()).format(new java.util.Date());
                 getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
-                        .putString(BUS_DB_KEY, sb.toString())
-                        .putString(BUS_DB_VER, today)
+                        .putString(BUS_DB_KEY,   sbRoute.toString())
+                        .putString("all_stops",  sbStop.toString())
+                        .putString(BUS_DB_VER,   today)
                         .apply();
                 if (onDone != null) runOnUiThread(onDone);
             } catch (Exception ignored) {
@@ -12809,10 +12862,11 @@ public class PinActivity extends AppCompatActivity {
     private boolean busDbNeedsUpdate() {
         android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
         if (!p.contains(BUS_DB_KEY) || p.getString(BUS_DB_KEY,"").isEmpty()) return true;
+        if (p.getString("all_stops","").isEmpty()) return true;
         String saved = p.getString(BUS_DB_VER, "");
         String today = new java.text.SimpleDateFormat("yyyyMMdd",
                 java.util.Locale.getDefault()).format(new java.util.Date());
-        return !saved.equals(today); // 오늘 날짜가 아니면 갱신
+        return !saved.equals(today);
     }
 
     // ── 즐겨찾기 렌더링 ────────────────────────────────────
