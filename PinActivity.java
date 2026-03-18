@@ -9119,7 +9119,6 @@ public class PinActivity extends AppCompatActivity {
                     routes.add(new String[]{tag(item,"routeid"), rno,
                             tag(item,"startnodenm"), tag(item,"endnodenm"),
                             tag(item,"routetp")}); // 노선유형 추가
-                    android.util.Log.d("BUS_TP", "routeno=" + rno + " routetp=" + tag(item,"routetp"));
                 }
                 runOnUiThread(() -> {
                     container.removeAllViews();
@@ -9437,6 +9436,8 @@ public class PinActivity extends AppCompatActivity {
         if (routeType.contains("광역"))   return new String[]{"광역", "#8E44AD"};
         if (routeType.contains("직행"))   return new String[]{"직행", "#C0392B"};
         if (routeType.contains("급행"))   return new String[]{"급행", "#E74C3C"};
+        if (routeType.contains("간선"))   return new String[]{"도시", "#0984E3"};
+        if (routeType.contains("지선"))   return new String[]{"지선", "#27AE60"};
         if (routeType.contains("마을"))   return new String[]{"마을", "#27AE60"};
         if (routeType.contains("외곽"))   return new String[]{"외곽", "#E67E22"};
         if (routeType.contains("순환"))   return new String[]{"순환", "#16A085"};
