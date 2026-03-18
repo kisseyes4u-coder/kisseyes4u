@@ -10322,6 +10322,8 @@ public class PinActivity extends AppCompatActivity {
                                 et2.setText("");
                                 btnX.setVisibility(android.view.View.GONE);
                                 et2.clearFocus();
+                                if (immMemo != null)
+                                    immMemo.hideSoftInputFromWindow(et2.getWindowToken(), 0);
                                 android.graphics.drawable.GradientDrawable resetBg =
                                         new android.graphics.drawable.GradientDrawable();
                                 resetBg.setCornerRadius(dpToPx(6));
