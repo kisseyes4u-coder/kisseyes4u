@@ -8927,12 +8927,22 @@ public class PinActivity extends AppCompatActivity {
         svInner.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(12));
         sv.addView(svInner);
 
+        // 즐겨찾기 섹션
+        LinearLayout favSection = new LinearLayout(this);
+        favSection.setOrientation(LinearLayout.VERTICAL);
+        favSection.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        svInner.addView(favSection);
+
         // 결과 컨테이너 (단일)
         LinearLayout resultContainer = new LinearLayout(this);
         resultContainer.setOrientation(LinearLayout.VERTICAL);
         resultContainer.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         svInner.addView(resultContainer);
+
+        // 즐겨찾기 로드 & 렌더링
+        refreshBusFavorites(favSection, resultContainer);
         root.addView(sv);
 
         // ── 검색 로직 ─────────────────────────────────────
@@ -9388,51 +9398,39 @@ public class PinActivity extends AppCompatActivity {
                         dirRow.addView(dc);
                     }
 
-                    // ── 퀵 메뉴 (홈추가/운행정보/지도/주변정류장) ──
+                    // ── 퀵 메뉴 카드 4개 ─────────────────────────
                     LinearLayout quickMenu = new LinearLayout(this);
                     quickMenu.setOrientation(LinearLayout.HORIZONTAL);
-                    quickMenu.setGravity(Gravity.CENTER);
+                    quickMenu.setClipChildren(false);
+                    quickMenu.setClipToPadding(false);
                     LinearLayout.LayoutParams qmLp = new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                     qmLp.setMargins(0, 0, 0, dpToPx(10));
                     quickMenu.setLayoutParams(qmLp);
 
-                    String[][] qItems = {{"🏠","홈 추가"},{"ℹ️","운행정보"},{"🗺️","지도"},{"🚏","주변정류장"}};
-                    for (String[] qi : qItems) {
-                        LinearLayout qItem = new LinearLayout(this);
-                        qItem.setOrientation(LinearLayout.VERTICAL);
-                        qItem.setGravity(Gravity.CENTER);
-                        qItem.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-                        qItem.setPadding(0, dpToPx(4), 0, dpToPx(4));
+                    String[] qLabels = {"홈 추가", "운행정보", "지도", "주변정류장"};
+                    for (int qi = 0; qi < 4; qi++) {
+                        final int qIdx = qi;
+                        LinearLayout qCard = new LinearLayout(this);
+                        qCard.setOrientation(LinearLayout.VERTICAL);
+                        qCard.setGravity(Gravity.CENTER);
+                        qCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
+                        qCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                        qCard.setPadding(dpToPx(4), dpToPx(10), dpToPx(4), dpToPx(10));
+                        LinearLayout.LayoutParams qcLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                        qcLp.setMargins(0, 0, qi < 3 ? dpToPx(6) : 0, 0);
+                        qCard.setLayoutParams(qcLp);
 
-                        TextView tvIcon2 = new TextView(this);
-                        tvIcon2.setText(qi[0]);
-                        tvIcon2.setGravity(Gravity.CENTER);
-                        tvIcon2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
-                        android.graphics.drawable.GradientDrawable iconBg = new android.graphics.drawable.GradientDrawable();
-                        iconBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-                        iconBg.setColor(Color.parseColor("#F0F0F0"));
-                        tvIcon2.setBackground(iconBg);
-                        tvIcon2.setPadding(dpToPx(14), dpToPx(14), dpToPx(14), dpToPx(14));
-                        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dpToPx(52), dpToPx(52));
-                        iconLp.gravity = Gravity.CENTER_HORIZONTAL;
-                        tvIcon2.setLayoutParams(iconLp);
-                        qItem.addView(tvIcon2);
+                        TextView tvQLabel = new TextView(this);
+                        tvQLabel.setText(qLabels[qi]);
+                        tvQLabel.setGravity(Gravity.CENTER);
+                        tvQLabel.setTextColor(Color.parseColor("#1A1A2E"));
+                        tvQLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                        tvQLabel.setTypeface(null, android.graphics.Typeface.BOLD);
+                        qCard.addView(tvQLabel);
 
-                        TextView tvLabel2 = new TextView(this);
-                        tvLabel2.setText(qi[1]);
-                        tvLabel2.setGravity(Gravity.CENTER);
-                        tvLabel2.setTextColor(Color.parseColor("#555555"));
-                        tvLabel2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-                        LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                        labelLp.gravity = Gravity.CENTER_HORIZONTAL;
-                        labelLp.setMargins(0, dpToPx(4), 0, 0);
-                        tvLabel2.setLayoutParams(labelLp);
-                        qItem.addView(tvLabel2);
-
-                        if ("운행정보".equals(qi[1])) {
-                            qItem.setOnClickListener(v2 -> {
+                        if (qi == 1) { // 운행정보
+                            qCard.setOnClickListener(v2 -> {
                                 String msg = "노선번호: " + routeNo + "번\n"
                                         + "기점: " + fStartNm + "\n"
                                         + "종점: " + fEndNm + "\n"
@@ -9447,7 +9445,7 @@ public class PinActivity extends AppCompatActivity {
                                         .show();
                             });
                         }
-                        quickMenu.addView(qItem);
+                        quickMenu.addView(qCard);
                     }
                     container.addView(quickMenu);
 
@@ -9740,6 +9738,11 @@ public class PinActivity extends AppCompatActivity {
                             android.widget.Toast.makeText(this,
                                     nowFav ? stopName + " 즐겨찾기 추가" : stopName + " 즐겨찾기 해제",
                                     android.widget.Toast.LENGTH_SHORT).show();
+                            // 버스 검색 화면 즐겨찾기 섹션 갱신
+                            if (busFavSection != null) {
+                                refreshBusFavorites(busFavSection,
+                                        (LinearLayout) busFavSection.getParent().getChildAt(1));
+                            }
                         });
                         row.addView(tvStar);
 
@@ -12605,6 +12608,122 @@ public class PinActivity extends AppCompatActivity {
     private static final String BUS_KEY   = "4f9182aa6a8d775a6013c074fc5620578371c0031a6f97e9c0434e3973bcf1d5";
     private static final String BUS_BASE2 = "https://apis.data.go.kr/1613000/";
     private static final String BUS_CITY  = "25"; // 대전
+
+    // ── 즐겨찾기 렌더링 ────────────────────────────────────
+    private LinearLayout busFavSection;   // 검색 화면에서 참조용
+
+    private void refreshBusFavorites(LinearLayout favSection, LinearLayout resultContainer) {
+        busFavSection = favSection;
+        favSection.removeAllViews();
+        android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        java.util.List<String> favNodeIds = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, ?> e : prefs.getAll().entrySet()) {
+            if (e.getKey().startsWith("fav_stop_") && !e.getKey().contains("_name_")
+                    && !e.getKey().contains("_no_") && !e.getKey().contains("_route_")) {
+                if (Boolean.TRUE.equals(e.getValue())) {
+                    favNodeIds.add(e.getKey().substring("fav_stop_".length()));
+                }
+            }
+        }
+        if (favNodeIds.isEmpty()) return;
+
+        // 즐겨찾기 타이틀
+        TextView tvFavTitle = new TextView(this);
+        tvFavTitle.setText("★ 즐겨찾기");
+        tvFavTitle.setTextColor(Color.parseColor("#1A1A2E"));
+        tvFavTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tvFavTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        LinearLayout.LayoutParams ttLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        ttLp.setMargins(0, 0, 0, dpToPx(8));
+        tvFavTitle.setLayoutParams(ttLp);
+        favSection.addView(tvFavTitle);
+
+        for (String nodeId : favNodeIds) {
+            String stopName  = prefs.getString("fav_stop_name_"  + nodeId, nodeId);
+            String stopNo    = prefs.getString("fav_stop_no_"    + nodeId, "");
+            String routeNo   = prefs.getString("fav_stop_route_" + nodeId, "");
+
+            // 카드: 버스이모지 + 노선번호 + 정류소명
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
+            card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+            card.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            cardLp.setMargins(0, 0, 0, dpToPx(8));
+            card.setLayoutParams(cardLp);
+
+            // 버스 아이콘 영역
+            LinearLayout iconArea = new LinearLayout(this);
+            iconArea.setOrientation(LinearLayout.VERTICAL);
+            iconArea.setGravity(Gravity.CENTER);
+            iconArea.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(50), dpToPx(50)));
+
+            TextView tvBusIcon = new TextView(this);
+            tvBusIcon.setText("🚌");
+            tvBusIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 24);
+            tvBusIcon.setGravity(Gravity.CENTER);
+            iconArea.addView(tvBusIcon);
+            card.addView(iconArea);
+
+            // 텍스트 영역
+            LinearLayout textArea = new LinearLayout(this);
+            textArea.setOrientation(LinearLayout.VERTICAL);
+            textArea.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            textArea.setPadding(dpToPx(8), 0, 0, 0);
+
+            // 노선번호
+            if (!routeNo.isEmpty()) {
+                TextView tvRoute = new TextView(this);
+                tvRoute.setText(routeNo + "번");
+                tvRoute.setTextColor(Color.parseColor("#0984E3"));
+                tvRoute.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                tvRoute.setTypeface(null, android.graphics.Typeface.BOLD);
+                textArea.addView(tvRoute);
+            }
+
+            // 정류소명
+            TextView tvStopName = new TextView(this);
+            tvStopName.setText(stopName);
+            tvStopName.setTextColor(Color.parseColor("#555555"));
+            tvStopName.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            textArea.addView(tvStopName);
+            card.addView(textArea);
+
+            // 즐겨찾기 별 (채워진)
+            final String favKey = "fav_stop_" + nodeId;
+            final String fNodeId = nodeId, fStopName = stopName;
+            TextView tvStar2 = new TextView(this);
+            tvStar2.setText("★");
+            tvStar2.setTextColor(Color.parseColor("#F39C12"));
+            tvStar2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
+            tvStar2.setGravity(Gravity.CENTER);
+            tvStar2.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)));
+            tvStar2.setOnClickListener(v2 -> {
+                prefs.edit().remove(favKey)
+                        .remove("fav_stop_name_" + fNodeId)
+                        .remove("fav_stop_no_" + fNodeId)
+                        .remove("fav_stop_route_" + fNodeId).apply();
+                android.widget.Toast.makeText(this, fStopName + " 즐겨찾기 해제",
+                        android.widget.Toast.LENGTH_SHORT).show();
+                refreshBusFavorites(favSection, resultContainer);
+            });
+            card.addView(tvStar2);
+            favSection.addView(card);
+        }
+
+        // 구분선
+        View div = new View(this);
+        div.setBackgroundColor(Color.parseColor("#EEEEEE"));
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+        divLp.setMargins(0, dpToPx(4), 0, dpToPx(12));
+        div.setLayoutParams(divLp);
+        favSection.addView(div);
+    }
 
     // ── 헬퍼 ──────────────────────────────────────────────
     private String httpGet(String url) throws Exception {
