@@ -164,6 +164,8 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 자동 새로고침 ──────────────────────────────────────
     private android.os.Handler refreshHandler = new android.os.Handler();
+    private android.os.Handler busRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable busRefreshRunnable = null;
     private Runnable refreshRunnable;
     private Runnable blockedCheckRunnable;
     private int lastKnownBlockCount = 0;
@@ -10104,12 +10106,59 @@ public class PinActivity extends AppCompatActivity {
 
     /** 노선별 정류소 목록 로드 */
     private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container) {
+    private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container) {
         busScreenLoadStops(routeId, routeNo, container, "forward", "");
+
+    /** 30초마다 버스 위치 자동 갱신 */
+    private void startBusAutoRefresh(
+            String routeId, String routeNo, String direction, LinearLayout container,
+            String sNm, String eNm, String stF, String etF, String interval, String rTp,
+            java.util.List<String[]> stops, String turnOrd) {
+        if (busRefreshRunnable != null) busRefreshHandler.removeCallbacks(busRefreshRunnable);
+        final String fRId=routeId, fRNo=routeNo, fDir=direction;
+        final String fSNm=sNm, fENm=eNm, fStF=stF, fEtF=etF, fInterval=interval, fRTp=rTp, fTurnOrd=turnOrd;
+        final java.util.List<String[]> fStops = stops;
+        busRefreshRunnable = new Runnable() {
+            @Override public void run() {
+                if (!isOnSubScreen) return;
+                new Thread(() -> {
+                    try {
+                        String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&routeId=" + fRId + "&numOfRows=50&pageNo=1&_type=xml");
+                        int cnt = 0;
+                        try { cnt = Integer.parseInt(tag(lcXml,"totalCount")); } catch(Exception ig){}
+                        java.util.Set<String> ordSet = new java.util.HashSet<>();
+                        java.util.Map<String,String> vehMap = new java.util.HashMap<>();
+                        for (String item : lcXml.split("<item>")) {
+                            String ord=tag(item,"nodeord"), vno=tag(item,"vehicleno");
+                            if (!ord.isEmpty()) { ordSet.add(ord); if (!vno.isEmpty()) vehMap.put(ord,vno); }
+                        }
+                        final int fCnt=cnt;
+                        final java.util.Set<String> fOrd=ordSet;
+                        final java.util.Map<String,String> fVeh=vehMap;
+                        runOnUiThread(() -> {
+                            if (!isOnSubScreen) return;
+                            renderBusTimeline(fRId, fRNo, fDir, container,
+                                    fSNm, fENm, fStF, fEtF, fInterval, fRTp,
+                                    fCnt, fVeh, fOrd, fStops, fTurnOrd);
+                        });
+                    } catch (Exception ignored) {}
+                }).start();
+                busRefreshHandler.postDelayed(this, 30000);
+            }
+        };
+        busRefreshHandler.postDelayed(busRefreshRunnable, 30000);
     }
 
     private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container,
                                     String direction, String routeType) {
         container.removeAllViews();
+        // 기존 자동 갱신 중단
+        if (busRefreshRunnable != null) {
+            busRefreshHandler.removeCallbacks(busRefreshRunnable);
+            busRefreshRunnable = null;
+        }
         if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
 
         android.view.inputmethod.InputMethodManager immStop =
@@ -10149,7 +10198,8 @@ public class PinActivity extends AppCompatActivity {
             // 실시간 데이터 자리 확보 (runningCount=0, busOrdSet 빈값으로 즉시 그리기)
             renderBusTimeline(routeId, routeNo, direction, container,
                     fStartNm, fEndNm, fStF, fEtF, fInterval, fRTp,
-                    0, new java.util.HashMap<>(), new java.util.HashSet<>(), fStops);
+                    0, new java.util.HashMap<>(), new java.util.HashSet<>(), fStops,
+                    cache.getString(cKey+"_turnOrd",""));
 
             // 실시간 버스 위치 백그라운드 업데이트
             new Thread(() -> {
@@ -10168,9 +10218,15 @@ public class PinActivity extends AppCompatActivity {
                     final int fCnt = cnt;
                     final java.util.Set<String> fOrd = ordSet;
                     final java.util.Map<String,String> fVeh = vehMap;
-                    runOnUiThread(() -> renderBusTimeline(routeId, routeNo, direction, container,
-                            fStartNm, fEndNm, fStF, fEtF, fInterval, fRTp,
-                            fCnt, fVeh, fOrd, fStops));
+                    final String fTurnOrd = cache.getString(cKey+"_turnOrd","");
+                    runOnUiThread(() -> {
+                        renderBusTimeline(routeId, routeNo, direction, container,
+                                fStartNm, fEndNm, fStF, fEtF, fInterval, fRTp,
+                                fCnt, fVeh, fOrd, fStops, fTurnOrd);
+                        // 30초마다 자동 갱신 시작
+                        startBusAutoRefresh(routeId, routeNo, direction, container,
+                                fStartNm, fEndNm, fStF, fEtF, fInterval, fRTp, fStops, fTurnOrd);
+                    });
                 } catch (Exception ignored) {}
             }).start();
 
@@ -10193,12 +10249,14 @@ public class PinActivity extends AppCompatActivity {
                     String endTime   = tag(infoXml,"endvehicletime");
                     String interval  = tag(infoXml,"intervaltime");
                     String rTp       = routeType.isEmpty() ? tag(infoXml,"routetp") : routeType;
+                    String turnOrd   = tag(infoXml,"turnnodeord");
                     String stF = startTime.length()==4 ? startTime.substring(0,2)+":"+startTime.substring(2) : startTime;
                     String etF = endTime.length()==4   ? endTime.substring(0,2)+":"+endTime.substring(2)   : endTime;
                     cache.edit()
                             .putString(cKey+"_startNm", startNm).putString(cKey+"_endNm", endNm)
                             .putString(cKey+"_startTime", startTime).putString(cKey+"_endTime", endTime)
-                            .putString(cKey+"_interval", interval).putString(cKey+"_rTp", rTp).apply();
+                            .putString(cKey+"_interval", interval).putString(cKey+"_rTp", rTp)
+                            .putString(cKey+"_turnOrd", turnOrd).apply();
 
                     // ② 실시간
                     String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
@@ -10240,10 +10298,15 @@ public class PinActivity extends AppCompatActivity {
                     final String fStartNm = startNm.isEmpty()?"기점":startNm;
                     final String fEndNm   = endNm.isEmpty()  ?"종점":endNm;
                     final String fStF=stF, fEtF=etF, fInterval=interval, fRTp=rTp;
+                    final String fTurnOrd2 = cache.getString(cKey+"_turnOrd","");
 
-                    runOnUiThread(() -> renderBusTimeline(routeId, routeNo, direction, container,
-                            fStartNm, fEndNm, fStF, fEtF, fInterval, fRTp,
-                            fCnt, fVeh, fOrd, fStops));
+                    runOnUiThread(() -> {
+                        renderBusTimeline(routeId, routeNo, direction, container,
+                                fStartNm, fEndNm, fStF, fEtF, fInterval, fRTp,
+                                fCnt, fVeh, fOrd, fStops, fTurnOrd2);
+                        startBusAutoRefresh(routeId, routeNo, direction, container,
+                                fStartNm, fEndNm, fStF, fEtF, fInterval, fRTp, fStops, fTurnOrd2);
+                    });
                 } catch (Exception e) {
                     runOnUiThread(() -> { container.removeAllViews();
                         TextView tv = new TextView(this); tv.setText("조회 실패: "+e.getMessage());
@@ -10358,7 +10421,7 @@ public class PinActivity extends AppCompatActivity {
             String routeId, String routeNo, String direction, LinearLayout container,
             String fStartNm, String fEndNm, String fStF, String fEtF, String fInterval, String fRTp,
             int fRunning, java.util.Map<String,String> fBusVehicle,
-            java.util.Set<String> busOrdSet, java.util.List<String[]> stops) {
+            java.util.Set<String> busOrdSet, java.util.List<String[]> stops, String turnOrd) {
         container.removeAllViews();
 
         // ── 헤더: ‹ [배지] 번호 + 즐겨찾기 ─────────────────
@@ -10377,6 +10440,11 @@ public class PinActivity extends AppCompatActivity {
         btnBack2.setTypeface(null, android.graphics.Typeface.BOLD);
         btnBack2.setPadding(0, 0, dpToPx(8), 0);
         btnBack2.setOnClickListener(v -> {
+            // 자동 갱신 중단
+            if (busRefreshRunnable != null) {
+                busRefreshHandler.removeCallbacks(busRefreshRunnable);
+                busRefreshRunnable = null;
+            }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             container.removeAllViews();
@@ -10741,11 +10809,71 @@ public class PinActivity extends AppCompatActivity {
         container.addView(runBanner);
 
         // ── 타임라인 ──────────────────────────────────────
+        int turnOrdInt = -1;
+        try { if (turnOrd != null && !turnOrd.isEmpty()) turnOrdInt = Integer.parseInt(turnOrd); } catch (Exception ig) {}
+        final int fTurnOrd = turnOrdInt;
+
         for (int si = 0; si < stops.size(); si++) {
             String[] s = stops.get(si);
             boolean isFirst = (si==0), isLast = (si==stops.size()-1);
             boolean hasBus  = busOrdSet.contains(s[2]);
             String vehicleNo = hasBus ? fBusVehicle.getOrDefault(s[2],"") : "";
+
+            // 회차 지점 여부
+            int stopOrd = -1;
+            try { stopOrd = Integer.parseInt(s[2]); } catch (Exception ig) {}
+            boolean isTurn = fTurnOrd > 0 && stopOrd == fTurnOrd;
+            boolean isReturn = fTurnOrd > 0 && stopOrd > fTurnOrd; // 회차 이후 (복귀 구간)
+
+            // 회차 지점이면 유턴 화살표 행 삽입
+            if (isTurn && si > 0) {
+                LinearLayout turnRow = new LinearLayout(this);
+                turnRow.setOrientation(LinearLayout.HORIZONTAL);
+                turnRow.setGravity(Gravity.CENTER_VERTICAL);
+                turnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(32)));
+
+                android.view.View turnLine = new android.view.View(this) {
+                    @Override protected void onDraw(android.graphics.Canvas canvas) {
+                        super.onDraw(canvas);
+                        int w = getWidth(), h = getHeight(); float cx = w / 2f;
+                        android.graphics.Paint lp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        lp.setColor(Color.parseColor("#AED6F1")); lp.setStrokeWidth(dpToPx(2));
+                        canvas.drawLine(cx, 0, cx, h, lp);
+                        // 유턴 화살표 (↩ 모양)
+                        android.graphics.Paint ap = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        ap.setColor(Color.parseColor("#E74C3C")); ap.setStrokeWidth(dpToPx(2));
+                        ap.setStyle(android.graphics.Paint.Style.STROKE);
+                        ap.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                        float r = dpToPx(7), cy = h / 2f;
+                        android.graphics.RectF arc = new android.graphics.RectF(cx - r, cy - r, cx + r, cy + r);
+                        canvas.drawArc(arc, 270, 180, false, ap);
+                        // 화살표 머리
+                        android.graphics.Paint hp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        hp.setColor(Color.parseColor("#E74C3C")); hp.setStyle(android.graphics.Paint.Style.FILL);
+                        android.graphics.Path arrow = new android.graphics.Path();
+                        float ax = cx, ay = cy - r;
+                        arrow.moveTo(ax, ay - dpToPx(4));
+                        arrow.lineTo(ax + dpToPx(4), ay + dpToPx(2));
+                        arrow.lineTo(ax - dpToPx(4), ay + dpToPx(2));
+                        arrow.close();
+                        canvas.drawPath(arrow, hp);
+                    }
+                };
+                turnLine.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
+                turnRow.addView(turnLine);
+
+                TextView tvTurn = new TextView(this);
+                tvTurn.setText("↩  회차");
+                tvTurn.setTextColor(Color.parseColor("#E74C3C"));
+                tvTurn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                tvTurn.setTypeface(null, android.graphics.Typeface.BOLD);
+                LinearLayout.LayoutParams tvTurnLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                tvTurnLp.setMargins(dpToPx(6), 0, 0, 0);
+                tvTurn.setLayoutParams(tvTurnLp);
+                turnRow.addView(tvTurn);
+                container.addView(turnRow);
+            }
 
             if (hasBus) {
                 String shortNo = vehicleNo.replaceAll("[^0-9]","");
@@ -10795,22 +10923,24 @@ public class PinActivity extends AppCompatActivity {
             row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.TOP);
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            final boolean fFirst2=isFirst, fLast2=isLast;
+            final boolean fFirst2=isFirst, fLast2=isLast, fIsReturn=isReturn;
             android.view.View timeline = new android.view.View(this) {
                 @Override protected void onDraw(android.graphics.Canvas canvas) {
                     super.onDraw(canvas);
                     int w=getWidth(), h=getHeight(); float cx=w/2f, cr=dpToPx(9);
+                    String lineColor = fIsReturn ? "#F1948A" : "#AED6F1";
+                    String circleColor = fIsReturn ? "#E74C3C" : "#0984E3";
                     android.graphics.Paint lPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                    lPaint.setColor(Color.parseColor("#AED6F1")); lPaint.setStrokeWidth(dpToPx(2));
+                    lPaint.setColor(Color.parseColor(lineColor)); lPaint.setStrokeWidth(dpToPx(2));
                     if (!fFirst2) canvas.drawLine(cx,0,cx,h/2f-cr,lPaint);
                     if (!fLast2)  canvas.drawLine(cx,h/2f+cr,cx,h,lPaint);
                     android.graphics.Paint cPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                    cPaint.setColor(Color.parseColor("#0984E3")); cPaint.setStyle(android.graphics.Paint.Style.STROKE); cPaint.setStrokeWidth(dpToPx(1));
+                    cPaint.setColor(Color.parseColor(circleColor)); cPaint.setStyle(android.graphics.Paint.Style.STROKE); cPaint.setStrokeWidth(dpToPx(1));
                     canvas.drawCircle(cx,h/2f,cr,cPaint);
                     android.graphics.Paint wPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                     wPaint.setColor(Color.WHITE); canvas.drawCircle(cx,h/2f,cr-dpToPx(1),wPaint);
                     android.graphics.Paint vPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                    vPaint.setColor(Color.parseColor("#0984E3")); vPaint.setStyle(android.graphics.Paint.Style.STROKE);
+                    vPaint.setColor(Color.parseColor(circleColor)); vPaint.setStyle(android.graphics.Paint.Style.STROKE);
                     vPaint.setStrokeWidth(dpToPx(2)); vPaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
                     float vSize=dpToPx(4), vy=h/2f;
                     android.graphics.Path vPath = new android.graphics.Path();
@@ -14171,9 +14301,10 @@ public class PinActivity extends AppCompatActivity {
                     }
                     if ("reverse".equals(fRDirKey)) java.util.Collections.reverse(stops);
                     // 즉시 표시 (운행대수 0, 버스위치 없음)
+                    String fcTurnOrd = fc.getString(fcKey+"_turnOrd","");
                     renderBusTimeline(fRId, fRNo, fRDirKey, resultContainer,
                             sNm, eNm, stF, etF, inv, rTp,
-                            0, new java.util.HashMap<>(), new java.util.HashSet<>(), stops);
+                            0, new java.util.HashMap<>(), new java.util.HashSet<>(), stops, fcTurnOrd);
                     // 실시간만 백그라운드
                     final java.util.List<String[]> fStops = stops;
                     final String fSNm=sNm,fENm=eNm,fStF=stF,fEtF=etF,fInv=inv,fRTp2=rTp;
@@ -14193,8 +14324,9 @@ public class PinActivity extends AppCompatActivity {
                             final int fCnt=cnt;
                             final java.util.Set<String> fOrd=ordSet;
                             final java.util.Map<String,String> fVeh=vehMap;
+                            final String fFcTurnOrd = fc.getString(fcKey+"_turnOrd","");
                             runOnUiThread(()->renderBusTimeline(fRId,fRNo,fRDirKey,resultContainer,
-                                    fSNm,fENm,fStF,fEtF,fInv,fRTp2,fCnt,fVeh,fOrd,fStops));
+                                    fSNm,fENm,fStF,fEtF,fInv,fRTp2,fCnt,fVeh,fOrd,fStops,fFcTurnOrd));
                         } catch(Exception ignored){}
                     }).start();
                 } else {
@@ -14312,9 +14444,10 @@ public class PinActivity extends AppCompatActivity {
                         for (String line:fc2.getString(fcKey2+"_stops","").split(";")) {
                             String[] p=line.split("\\|",-1); if(p.length==4) stops2.add(p);
                         }
+                        String fcTurnOrd2 = fc2.getString(fcKey2+"_turnOrd","");
                         renderBusTimeline(fRouteId,fRouteNo,"forward",resultContainer,
                                 sNm2,eNm2,stF2,etF2,inv2,rTp2,
-                                0,new java.util.HashMap<>(),new java.util.HashSet<>(),stops2);
+                                0,new java.util.HashMap<>(),new java.util.HashSet<>(),stops2,fcTurnOrd2);
                         final java.util.List<String[]> fS2=stops2;
                         final String fSN2=sNm2,fEN2=eNm2,fStF2=stF2,fEtF2=etF2,fInv2=inv2,fRT2=rTp2;
                         new Thread(()->{
@@ -14330,8 +14463,9 @@ public class PinActivity extends AppCompatActivity {
                                     if(!o.isEmpty()){os.add(o);if(!v.isEmpty())vm.put(o,v);}
                                 }
                                 final int fc3=c; final java.util.Set<String> fo=os; final java.util.Map<String,String> fv=vm;
+                                final String fFcTurnOrd2 = fc2.getString(fcKey2+"_turnOrd","");
                                 runOnUiThread(()->renderBusTimeline(fRouteId,fRouteNo,"forward",resultContainer,
-                                        fSN2,fEN2,fStF2,fEtF2,fInv2,fRT2,fc3,fv,fo,fS2));
+                                        fSN2,fEN2,fStF2,fEtF2,fInv2,fRT2,fc3,fv,fo,fS2,fFcTurnOrd2));
                             }catch(Exception ignored){}
                         }).start();
                     } else {
