@@ -165,8 +165,40 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 자동 새로고침 ──────────────────────────────────────
     private android.os.Handler refreshHandler = new android.os.Handler();
-    private android.graphics.Bitmap busIconBitmap = null;      // 빨간색 착색 (타임라인용)
+    private android.graphics.Bitmap busIconBitmap = null;      // 진한 보라 착색 (타임라인용)
     private android.graphics.Bitmap busIconWhiteBitmap = null; // 흰색 (헤더용)
+    private android.graphics.Bitmap busIconPurpleBitmap = null; // 진한 보라 + 흰 배경 (즐겨찾기 카드용)
+
+    /** assets/bus.png - 흰 배경 + 진한 보라 아이콘 (즐겨찾기 카드용) */
+    private android.graphics.Bitmap getBusIconPurple() {
+        if (busIconPurpleBitmap == null) {
+            try {
+                android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                        getAssets().open("bus.png"));
+                if (raw != null) {
+                    int w = raw.getWidth(), h = raw.getHeight();
+                    android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                    int[] pixels = new int[w * h];
+                    raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                    for (int i = 0; i < pixels.length; i++) {
+                        int r2 = (pixels[i] >> 16) & 0xFF;
+                        int g2 = (pixels[i] >> 8)  & 0xFF;
+                        int b2 =  pixels[i]         & 0xFF;
+                        int brightness = (r2 + g2 + b2) / 3;
+                        if (brightness > 128) {
+                            pixels[i] = 0xFF6C3FA0; // 진한 보라 (불투명)
+                        } else {
+                            pixels[i] = 0xFFFFFFFF; // 흰색 배경
+                        }
+                    }
+                    result.setPixels(pixels, 0, w, 0, 0, w, h);
+                    busIconPurpleBitmap = result;
+                    raw.recycle();
+                }
+            } catch (Exception ignored) {}
+        }
+        return busIconPurpleBitmap;
+    }
 
     /** assets/bus.png 로드 - 빨간색 착색 버전 (타임라인 빨간박스용) */
     private android.graphics.Bitmap getBusIcon() {
@@ -185,7 +217,7 @@ public class PinActivity extends AppCompatActivity {
                         int b2 =  pixels[i]         & 0xFF;
                         int brightness = (r2 + g2 + b2) / 3;
                         if (brightness > 128) {
-                            pixels[i] = (brightness << 24) | 0x00C8BFEF; // 연보라 (돌아가기 버튼색)
+                            pixels[i] = (brightness << 24) | 0x006C3FA0; // 진한 보라
                         } else {
                             pixels[i] = 0x00000000; // 투명
                         }
@@ -10952,19 +10984,19 @@ public class PinActivity extends AppCompatActivity {
 
             // 회차 지점이면 유턴 화살표 행 삽입
             if (isTurn && si > 0) {
-                // ── 회차 행: FrameLayout (세로줄 + 유턴이미지 겹침) ──
+                // ── 회차 행: FrameLayout (세로줄 + "↩ 회차" 텍스트 겹침, 별도 행 없음) ──
                 android.widget.FrameLayout turnFrame = new android.widget.FrameLayout(this);
                 turnFrame.setLayoutParams(new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(40)));
+                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(36)));
 
                 // 세로줄 (연파랑)
                 android.view.View turnLineView = new android.view.View(this) {
                     @Override protected void onDraw(android.graphics.Canvas canvas) {
                         super.onDraw(canvas);
-                        int w=getWidth(), h=getHeight(); float cx=dpToPx(20);
+                        float cx = dpToPx(20);
                         android.graphics.Paint lp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         lp.setColor(Color.parseColor("#AED6F1")); lp.setStrokeWidth(dpToPx(2));
-                        canvas.drawLine(cx, 0, cx, h, lp);
+                        canvas.drawLine(cx, 0, cx, getHeight(), lp);
                     }
                 };
                 turnLineView.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
@@ -10972,52 +11004,17 @@ public class PinActivity extends AppCompatActivity {
                         android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
                 turnFrame.addView(turnLineView);
 
-                // 유턴 화살표 오버레이 (busOverlay와 동일 방식)
-                android.view.View turnOverlay = new android.view.View(this) {
-                    @Override protected void onDraw(android.graphics.Canvas canvas) {
-                        int w=getWidth(), h=getHeight();
-                        float cx = dpToPx(20); // 왼쪽 40dp 중앙
-                        float cy = h / 2f;
-                        // 배경 지우기
-                        android.graphics.Paint bgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                        bgP.setColor(Color.parseColor("#F2F4F8"));
-                        float r = dpToPx(9);
-                        canvas.drawRect(cx-r-dpToPx(2), cy-r-dpToPx(2), cx+r+dpToPx(2), cy+r+dpToPx(2), bgP);
-                        // 유턴 반원
-                        android.graphics.Paint ap = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                        ap.setColor(Color.parseColor("#E74C3C")); ap.setStrokeWidth(dpToPx(2));
-                        ap.setStyle(android.graphics.Paint.Style.STROKE);
-                        ap.setStrokeCap(android.graphics.Paint.Cap.ROUND);
-                        android.graphics.RectF arc = new android.graphics.RectF(cx-r, cy-r, cx+r, cy+r);
-                        canvas.drawArc(arc, 270, 180, false, ap);
-                        // 화살표 머리
-                        android.graphics.Paint hp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                        hp.setColor(Color.parseColor("#E74C3C")); hp.setStyle(android.graphics.Paint.Style.FILL);
-                        android.graphics.Path arrow = new android.graphics.Path();
-                        float ax = cx, ay = cy - r;
-                        arrow.moveTo(ax, ay - dpToPx(4));
-                        arrow.lineTo(ax + dpToPx(4), ay + dpToPx(2));
-                        arrow.lineTo(ax - dpToPx(4), ay + dpToPx(2));
-                        arrow.close();
-                        canvas.drawPath(arrow, hp);
-                    }
-                };
-                turnOverlay.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
-                turnFrame.addView(turnOverlay);
-
-                // 회차 텍스트
+                // "↩ 회차" 텍스트를 타임라인 선 위에 겹침 (배경으로 선 가림)
                 TextView tvTurn = new TextView(this);
-                tvTurn.setText("↩  회차");
+                tvTurn.setText("↩ 회차");
                 tvTurn.setTextColor(Color.parseColor("#E74C3C"));
                 tvTurn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                 tvTurn.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvTurn.setGravity(Gravity.CENTER);
+                tvTurn.setBackgroundColor(Color.parseColor("#F2F4F8"));
                 android.widget.FrameLayout.LayoutParams tvTurnLp = new android.widget.FrameLayout.LayoutParams(
-                        android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-                        android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
-                tvTurnLp.leftMargin = dpToPx(48);
-                tvTurnLp.gravity = Gravity.CENTER_VERTICAL;
+                        dpToPx(40), android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
+                tvTurnLp.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
                 tvTurn.setLayoutParams(tvTurnLp);
                 turnFrame.addView(tvTurn);
 
@@ -14361,7 +14358,7 @@ public class PinActivity extends AppCompatActivity {
 
             // 버스 이미지 (설정 왼쪽)
             android.widget.ImageView ivFavBus = new android.widget.ImageView(this);
-            android.graphics.Bitmap favBusBmp = getBusIcon();
+            android.graphics.Bitmap favBusBmp = getBusIconPurple();
             if (favBusBmp != null) ivFavBus.setImageBitmap(favBusBmp);
             LinearLayout.LayoutParams favBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
             favBusLp.setMargins(0, 0, dpToPx(6), 0);
@@ -14440,7 +14437,7 @@ public class PinActivity extends AppCompatActivity {
             // 버스 번호
             TextView tvRNo = new TextView(this);
             tvRNo.setText(rNo + "번");
-            tvRNo.setTextColor(Color.parseColor("#C8BFEF"));
+            tvRNo.setTextColor(Color.parseColor("#6C3FA0"));
             tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
             tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
             LinearLayout.LayoutParams rNoLp = new LinearLayout.LayoutParams(
