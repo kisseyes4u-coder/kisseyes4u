@@ -10780,8 +10780,12 @@ public class PinActivity extends AppCompatActivity {
                     tvRouteStar.setTextColor(Color.WHITE); tvRouteStar.setBackground(onBg);
                     android.widget.Toast.makeText(this, routeNo + "번 " + shortDir + " 즐겨찾기 추가",
                             android.widget.Toast.LENGTH_SHORT).show();
-                    if (busFavSection != null && busResultContainer != null)
-                        refreshBusFavorites(busFavSection, busResultContainer);
+                    // 즐겨찾기 추가 후 검색화면으로 복귀하며 즐겨찾기 새로고침
+                    if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+                    if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+                    if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
+                    if (busFavSection2 != null && busResultContainer != null)
+                        refreshBusFavorites(busFavSection2, busResultContainer);
                 });
                 btnRow.addView(btnFavOk);
                 dlgLayout.addView(btnRow);
@@ -14271,6 +14275,7 @@ public class PinActivity extends AppCompatActivity {
             busFixedHeader.removeAllViews();
         }
         if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
         android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         // 키: fav_stop_routeId_nodeId (boolean=true인 것만)
         java.util.List<String> favKeys = new java.util.ArrayList<>();
@@ -14410,7 +14415,7 @@ public class PinActivity extends AppCompatActivity {
                 String curMemo = prefs.getString("fav_route_memo_" + fRKey, "");
                 if (!curMemo.isEmpty()) {
                     TextView tvCurMemo = new TextView(this);
-                    tvCurMemo.setText("📝 " + curMemo);
+                    tvCurMemo.setText(curMemo);
                     tvCurMemo.setTextColor(Color.parseColor("#888888"));
                     tvCurMemo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                     tvCurMemo.setGravity(Gravity.CENTER);
@@ -14434,7 +14439,7 @@ public class PinActivity extends AppCompatActivity {
 
                 // 수정 버튼
                 TextView btnEdit = new TextView(this);
-                btnEdit.setText("✏  수정");
+                btnEdit.setText("수정");
                 btnEdit.setTextColor(Color.WHITE);
                 btnEdit.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
                 btnEdit.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -14570,7 +14575,7 @@ public class PinActivity extends AppCompatActivity {
 
                 // 삭제 버튼
                 TextView btnDel = new TextView(this);
-                btnDel.setText("🗑  삭제");
+                btnDel.setText("삭제");
                 btnDel.setTextColor(Color.WHITE);
                 btnDel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
                 btnDel.setTypeface(null, android.graphics.Typeface.BOLD);
