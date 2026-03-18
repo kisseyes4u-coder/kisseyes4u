@@ -14374,47 +14374,255 @@ public class PinActivity extends AppCompatActivity {
             gearLp.setMargins(0, 0, dpToPx(5), 0);
             tvGear.setLayoutParams(gearLp);
             tvGear.setOnClickListener(v2 -> {
-                String[] options = {"수정", "삭제", "취소"};
-                new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                    .setTitle(rNo + "번 설정")
-                    .setItems(options, (d, which) -> {
-                        if (which == 0) {
-                            // 수정 - 메모 수정 다이얼로그
-                            android.widget.EditText etMemo = new android.widget.EditText(this);
-                            etMemo.setHint("메모를 입력하세요");
-                            etMemo.setText(prefs.getString("fav_route_memo_" + fRKey, ""));
-                            etMemo.setSingleLine(false); etMemo.setMaxLines(3);
-                            etMemo.setPadding(dpToPx(16), dpToPx(12), dpToPx(16), dpToPx(12));
-                            setBlackCursor(etMemo);
-                            new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                                .setTitle(rNo + "번 메모 수정")
-                                .setView(etMemo)
-                                .setPositiveButton("저장", (d2, w2) -> {
-                                    String memo = etMemo.getText().toString().trim();
-                                    prefs.edit().putString("fav_route_memo_" + fRKey, memo).apply();
-                                    android.widget.Toast.makeText(this, "메모가 저장되었습니다",
-                                            android.widget.Toast.LENGTH_SHORT).show();
-                                    refreshBusFavorites(favSection, resultContainer);
-                                })
-                                .setNegativeButton("취소", null)
-                                .show();
-                        } else if (which == 1) {
-                            // 삭제 - 즐겨찾기 삭제
-                            showConfirmDialog("🗑", rNo + "번 즐겨찾기 삭제",
-                                    "즐겨찾기에서 삭제하시겠습니까?", () -> {
-                                prefs.edit().remove("fav_route_" + fRKey)
-                                        .remove("fav_route_no_"     + fRKey)
-                                        .remove("fav_route_dir_"    + fRKey)
-                                        .remove("fav_route_id_"     + fRKey)
-                                        .remove("fav_route_dirkey_" + fRKey)
-                                        .remove("fav_route_memo_"   + fRKey).apply();
-                                android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 삭제",
-                                        android.widget.Toast.LENGTH_SHORT).show();
-                                refreshBusFavorites(favSection, resultContainer);
-                            });
-                        }
-                        // which == 2: 취소 - 아무것도 안 함
-                    }).show();
+                // ── 커스텀 수정/삭제/취소 카드 다이얼로그 ──
+                android.app.Dialog settingDlg = new android.app.Dialog(this,
+                        android.R.style.Theme_Material_Light_Dialog);
+                LinearLayout settingLayout = new LinearLayout(this);
+                settingLayout.setOrientation(LinearLayout.VERTICAL);
+                android.graphics.drawable.GradientDrawable settingCardBg = new android.graphics.drawable.GradientDrawable();
+                settingCardBg.setColor(Color.WHITE);
+                settingCardBg.setCornerRadius(dpToPx(20));
+                settingLayout.setBackground(settingCardBg);
+                settingLayout.setPadding(dpToPx(20), dpToPx(22), dpToPx(20), dpToPx(20));
+
+                // 제목
+                TextView tvSettingTitle = new TextView(this);
+                tvSettingTitle.setText(rNo + "번  " + rDir);
+                tvSettingTitle.setTextColor(Color.parseColor("#0984E3"));
+                tvSettingTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                tvSettingTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvSettingTitle.setGravity(Gravity.CENTER);
+                tvSettingTitle.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
+                LinearLayout.LayoutParams stTitleLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                stTitleLp.setMargins(0, 0, 0, dpToPx(6));
+                tvSettingTitle.setLayoutParams(stTitleLp);
+                settingLayout.addView(tvSettingTitle);
+
+                // 메모 표시 (있는 경우)
+                String curMemo = prefs.getString("fav_route_memo_" + fRKey, "");
+                if (!curMemo.isEmpty()) {
+                    TextView tvCurMemo = new TextView(this);
+                    tvCurMemo.setText("📝 " + curMemo);
+                    tvCurMemo.setTextColor(Color.parseColor("#888888"));
+                    tvCurMemo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    tvCurMemo.setGravity(Gravity.CENTER);
+                    LinearLayout.LayoutParams cmLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    cmLp.setMargins(0, 0, 0, dpToPx(16));
+                    tvCurMemo.setLayoutParams(cmLp);
+                    settingLayout.addView(tvCurMemo);
+                } else {
+                    View spacer = new View(this);
+                    spacer.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(10)));
+                    // 구분선
+                    View divSetting = new View(this);
+                    divSetting.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                    LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                    divLp.setMargins(0, 0, 0, dpToPx(16));
+                    divSetting.setLayoutParams(divLp);
+                    settingLayout.addView(divSetting);
+                }
+
+                // 수정 버튼
+                TextView btnEdit = new TextView(this);
+                btnEdit.setText("✏  수정");
+                btnEdit.setTextColor(Color.WHITE);
+                btnEdit.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                btnEdit.setTypeface(null, android.graphics.Typeface.BOLD);
+                btnEdit.setGravity(Gravity.CENTER);
+                btnEdit.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                android.graphics.drawable.GradientDrawable editBg = new android.graphics.drawable.GradientDrawable();
+                editBg.setColor(Color.parseColor("#5BA9F0"));
+                editBg.setCornerRadius(dpToPx(12));
+                btnEdit.setBackground(editBg);
+                btnEdit.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                LinearLayout.LayoutParams editLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                editLp.setMargins(0, 0, 0, dpToPx(10));
+                btnEdit.setLayoutParams(editLp);
+                btnEdit.setOnClickListener(vv -> {
+                    settingDlg.dismiss();
+                    // 즐겨찾기 추가 다이얼로그와 동일한 메모 수정창
+                    String existingMemo = prefs.getString("fav_route_memo_" + fRKey, "");
+                    android.app.Dialog memoDlg = new android.app.Dialog(this,
+                            android.R.style.Theme_Material_Light_Dialog);
+                    LinearLayout memoLayout = new LinearLayout(this);
+                    memoLayout.setOrientation(LinearLayout.VERTICAL);
+                    android.graphics.drawable.GradientDrawable memoCardBg = new android.graphics.drawable.GradientDrawable();
+                    memoCardBg.setColor(Color.WHITE);
+                    memoCardBg.setCornerRadius(dpToPx(16));
+                    memoLayout.setBackground(memoCardBg);
+                    memoLayout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+                    // 제목
+                    TextView tvMTitle = new TextView(this);
+                    tvMTitle.setText(rNo + "번  " + rDir);
+                    tvMTitle.setTextColor(Color.parseColor("#0984E3"));
+                    tvMTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                    tvMTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvMTitle.setGravity(Gravity.CENTER);
+                    LinearLayout.LayoutParams mtLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    mtLp.setMargins(0, 0, 0, dpToPx(14));
+                    tvMTitle.setLayoutParams(mtLp);
+                    memoLayout.addView(tvMTitle);
+                    // 구분선
+                    View mDiv = new View(this);
+                    mDiv.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                    LinearLayout.LayoutParams mDivLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                    mDivLp.setMargins(0, 0, 0, dpToPx(14));
+                    mDiv.setLayoutParams(mDivLp);
+                    memoLayout.addView(mDiv);
+                    // 메모 라벨
+                    TextView tvMLabel = new TextView(this);
+                    tvMLabel.setText("메모 (선택)");
+                    tvMLabel.setTextColor(Color.parseColor("#555555"));
+                    tvMLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    LinearLayout.LayoutParams mlLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    mlLp.setMargins(0, 0, 0, dpToPx(6));
+                    tvMLabel.setLayoutParams(mlLp);
+                    memoLayout.addView(tvMLabel);
+                    // 메모 입력창
+                    android.widget.EditText etMemo2 = new android.widget.EditText(this);
+                    setBlackCursor(etMemo2);
+                    etMemo2.setHint("예) 출근길, 집앞 정류장");
+                    etMemo2.setText(existingMemo);
+                    etMemo2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                    etMemo2.setSingleLine(true);
+                    android.graphics.drawable.GradientDrawable memoBg2 = new android.graphics.drawable.GradientDrawable();
+                    memoBg2.setColor(Color.parseColor("#F8F8F8"));
+                    memoBg2.setCornerRadius(dpToPx(10));
+                    memoBg2.setStroke(dpToPx(1), Color.parseColor("#DDDDDD"));
+                    etMemo2.setBackground(memoBg2);
+                    etMemo2.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+                    LinearLayout.LayoutParams etLp2 = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    etLp2.setMargins(0, 0, 0, dpToPx(20));
+                    etMemo2.setLayoutParams(etLp2);
+                    memoLayout.addView(etMemo2);
+                    // 버튼 행
+                    LinearLayout mBtnRow = new LinearLayout(this);
+                    mBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+                    mBtnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    TextView mBtnCancel = new TextView(this);
+                    mBtnCancel.setText("취소");
+                    mBtnCancel.setTextColor(Color.parseColor("#888888"));
+                    mBtnCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    mBtnCancel.setTypeface(null, android.graphics.Typeface.BOLD);
+                    mBtnCancel.setGravity(Gravity.CENTER);
+                    mBtnCancel.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                    android.graphics.drawable.GradientDrawable mCancelBg = new android.graphics.drawable.GradientDrawable();
+                    mCancelBg.setColor(Color.parseColor("#F0F0F0"));
+                    mCancelBg.setCornerRadius(dpToPx(10));
+                    mBtnCancel.setBackground(mCancelBg);
+                    LinearLayout.LayoutParams mCancelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                    mCancelLp.setMargins(0, 0, dpToPx(8), 0);
+                    mBtnCancel.setLayoutParams(mCancelLp);
+                    mBtnCancel.setOnClickListener(vvv -> memoDlg.dismiss());
+                    mBtnRow.addView(mBtnCancel);
+                    TextView mBtnOk = new TextView(this);
+                    mBtnOk.setText("저장");
+                    mBtnOk.setTextColor(Color.WHITE);
+                    mBtnOk.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    mBtnOk.setTypeface(null, android.graphics.Typeface.BOLD);
+                    mBtnOk.setGravity(Gravity.CENTER);
+                    mBtnOk.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                    android.graphics.drawable.GradientDrawable mOkBg = new android.graphics.drawable.GradientDrawable();
+                    mOkBg.setColor(Color.parseColor("#5BA9F0"));
+                    mOkBg.setCornerRadius(dpToPx(10));
+                    mBtnOk.setBackground(mOkBg);
+                    mBtnOk.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                    mBtnOk.setOnClickListener(vvv -> {
+                        memoDlg.dismiss();
+                        prefs.edit().putString("fav_route_memo_" + fRKey, etMemo2.getText().toString().trim()).apply();
+                        android.widget.Toast.makeText(this, "메모가 저장되었습니다", android.widget.Toast.LENGTH_SHORT).show();
+                        refreshBusFavorites(favSection, resultContainer);
+                    });
+                    mBtnRow.addView(mBtnOk);
+                    memoLayout.addView(mBtnRow);
+                    memoDlg.setContentView(memoLayout);
+                    memoDlg.setCancelable(true);
+                    if (memoDlg.getWindow() != null) {
+                        memoDlg.getWindow().setLayout(
+                                (int)(getResources().getDisplayMetrics().widthPixels * 0.85),
+                                android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+                        memoDlg.getWindow().setBackgroundDrawable(
+                                new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                    }
+                    memoDlg.show();
+                    etMemo2.post(() -> {
+                        etMemo2.requestFocus();
+                        etMemo2.setSelection(etMemo2.getText().length());
+                    });
+                });
+                settingLayout.addView(btnEdit);
+
+                // 삭제 버튼
+                TextView btnDel = new TextView(this);
+                btnDel.setText("🗑  삭제");
+                btnDel.setTextColor(Color.WHITE);
+                btnDel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                btnDel.setTypeface(null, android.graphics.Typeface.BOLD);
+                btnDel.setGravity(Gravity.CENTER);
+                btnDel.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                android.graphics.drawable.GradientDrawable delBg = new android.graphics.drawable.GradientDrawable();
+                delBg.setColor(Color.parseColor("#E74C3C"));
+                delBg.setCornerRadius(dpToPx(12));
+                btnDel.setBackground(delBg);
+                btnDel.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                delLp.setMargins(0, 0, 0, dpToPx(10));
+                btnDel.setLayoutParams(delLp);
+                btnDel.setOnClickListener(vv -> {
+                    settingDlg.dismiss();
+                    showConfirmDialog("🗑", rNo + "번 즐겨찾기 삭제",
+                            "즐겨찾기에서 삭제하시겠습니까?", () -> {
+                        prefs.edit().remove("fav_route_" + fRKey)
+                                .remove("fav_route_no_"     + fRKey)
+                                .remove("fav_route_dir_"    + fRKey)
+                                .remove("fav_route_id_"     + fRKey)
+                                .remove("fav_route_dirkey_" + fRKey)
+                                .remove("fav_route_memo_"   + fRKey).apply();
+                        android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 삭제",
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        refreshBusFavorites(favSection, resultContainer);
+                    });
+                });
+                settingLayout.addView(btnDel);
+
+                // 취소 버튼
+                TextView btnCancel2 = new TextView(this);
+                btnCancel2.setText("취소");
+                btnCancel2.setTextColor(Color.parseColor("#888888"));
+                btnCancel2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                btnCancel2.setTypeface(null, android.graphics.Typeface.BOLD);
+                btnCancel2.setGravity(Gravity.CENTER);
+                btnCancel2.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                android.graphics.drawable.GradientDrawable cancelBg2 = new android.graphics.drawable.GradientDrawable();
+                cancelBg2.setColor(Color.parseColor("#F0F0F0"));
+                cancelBg2.setCornerRadius(dpToPx(12));
+                cancelBg2.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                btnCancel2.setBackground(cancelBg2);
+                btnCancel2.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                btnCancel2.setOnClickListener(vv -> settingDlg.dismiss());
+                settingLayout.addView(btnCancel2);
+
+                settingDlg.setContentView(settingLayout);
+                settingDlg.setCancelable(true);
+                if (settingDlg.getWindow() != null) {
+                    settingDlg.getWindow().setLayout(
+                            (int)(getResources().getDisplayMetrics().widthPixels * 0.80),
+                            android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+                    settingDlg.getWindow().setBackgroundDrawable(
+                            new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                }
+                settingDlg.show();
             });
             iconBtnRow.addView(tvGear);
 
