@@ -10380,6 +10380,16 @@ public class PinActivity extends AppCompatActivity {
 
                             // 확인 버튼 클릭 → 완료 + 키보드 내림 (다음 자동이동 없음)
                             btnNext.setOnClickListener(nbv -> {
+                                // 입력 상태면 → 포커스+키보드 올리기
+                                if (btnState[finalMi] == 0) {
+                                    et2.requestFocus();
+                                    et2.setSelection(et2.getText().length());
+                                    if (immMemo != null)
+                                        immMemo.showSoftInput(et2,
+                                                android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                                    return;
+                                }
+                                // 확인 상태면 → 완료 + 키보드 내림
                                 android.graphics.drawable.GradientDrawable bg3 =
                                         new android.graphics.drawable.GradientDrawable();
                                 bg3.setCornerRadius(dpToPx(6));
@@ -10387,7 +10397,6 @@ public class PinActivity extends AppCompatActivity {
                                 btnNext.setText("완료");
                                 bg3.setColor(Color.parseColor("#27AE60"));
                                 btnNext.setBackground(bg3);
-                                // 포커스 해제 + 키보드 내림
                                 et2.clearFocus();
                                 if (immMemo != null)
                                     immMemo.hideSoftInputFromWindow(et2.getWindowToken(), 0);
