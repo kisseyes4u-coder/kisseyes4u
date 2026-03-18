@@ -10997,10 +10997,9 @@ public class PinActivity extends AppCompatActivity {
                 LinearLayout busRow = new LinearLayout(this);
                 busRow.setOrientation(LinearLayout.HORIZONTAL); busRow.setGravity(Gravity.CENTER_VERTICAL);
                 busRow.setLayoutParams(new LinearLayout.LayoutParams(
-                busRow.setLayoutParams(new LinearLayout.LayoutParams(
                         dpToPx(40), dpToPx(50)));
+                android.view.View busTimeline = new android.view.View(this) {
                     @Override protected void onDraw(android.graphics.Canvas canvas) {
-                        super.onDraw(canvas);
                         int w=getWidth(), h=getHeight(); float cx=w/2f;
                         android.graphics.Paint lp2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         lp2.setColor(Color.parseColor("#AED6F1")); lp2.setStrokeWidth(dpToPx(2));
