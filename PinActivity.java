@@ -134,8 +134,9 @@ public class PinActivity extends AppCompatActivity {
     // ── 버스 검색 화면 ─────────────────────────────────────
     private LinearLayout busSearchArea = null;
     private LinearLayout busResultContainer = null;
-    private LinearLayout busFavSection2 = null; // favSection 외부 참조용
-    private android.widget.EditText busEtSearch = null; // 검색창 외부 참조용
+    private LinearLayout busFavSection2 = null;
+    private android.widget.EditText busEtSearch = null;
+    private TextView splashLoadingTv = null; // 스플래시 로딩 텍스트 (외부 접근용)
 
     // ── UI 참조 (잔액화면 갱신용) ──────────────────────────
     private LinearLayout msgContainer       = null;
@@ -291,12 +292,20 @@ public class PinActivity extends AppCompatActivity {
 
         if (isOwner) {
             uploadVersionToDrive();
-            uploadFcmTokenIfNeeded(); // 관리자도 FCM 토큰 Drive에 등록
-            ownerMenuBuilder.build();
-            checkAccessibilityService();
+            uploadFcmTokenIfNeeded();
+            if (busDbNeedsUpdate()) {
+                if (splashLoadingTv != null) splashLoadingTv.setText("버스 데이터 다운로드 중...");
+                downloadBusRouteDb(() -> {
+                    ownerMenuBuilder.build();
+                    checkAccessibilityService();
+                });
+            } else {
+                ownerMenuBuilder.build();
+                checkAccessibilityService();
+            }
         } else {
-            uploadFcmTokenIfNeeded(); // FCM 토큰 Drive에 등록
-            updateLastAccessTime();      // 마지막 접속 시간 갱신
+            uploadFcmTokenIfNeeded();
+            updateLastAccessTime();
             checkBlockedThenStart();
         }
     }
@@ -2413,6 +2422,7 @@ public class PinActivity extends AppCompatActivity {
 
         // 로딩 문구
         TextView tvLoading = new TextView(this);
+        splashLoadingTv = tvLoading;
         tvLoading.setText("로그인 중...");
         tvLoading.setTextColor(Color.parseColor("#A89CD0"));
         tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
@@ -2435,6 +2445,16 @@ public class PinActivity extends AppCompatActivity {
     }
 
     private void checkVersionThenShowMenu() {
+        // 버스 DB 다운로드 필요하면 먼저 처리 후 메뉴 진입
+        if (busDbNeedsUpdate()) {
+            if (splashLoadingTv != null) splashLoadingTv.setText("버스 데이터 다운로드 중...");
+            downloadBusRouteDb(() -> doCheckVersionThenShowMenu());
+        } else {
+            doCheckVersionThenShowMenu();
+        }
+    }
+
+    private void doCheckVersionThenShowMenu() {
         String myVersion = getMyVersion();
         try {
             DriveReadHelper reader = new DriveReadHelper(this);
@@ -8956,28 +8976,6 @@ public class PinActivity extends AppCompatActivity {
 
         // 즐겨찾기 로드 & 렌더링
         refreshBusFavorites(favSection, resultContainer);
-
-        // ── 로컬 DB 체크 & 백그라운드 다운로드 ──────────────
-        if (busDbNeedsUpdate()) {
-            // 상태 표시 TextView (검색창 아래 한 줄)
-            TextView tvDbStatus = new TextView(this);
-            tvDbStatus.setText("⏳ 버스 노선 데이터 다운로드 중...");
-            tvDbStatus.setTextColor(Color.parseColor("#AAAAAA"));
-            tvDbStatus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-            tvDbStatus.setGravity(Gravity.CENTER);
-            LinearLayout.LayoutParams dbsLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            dbsLp.setMargins(0, dpToPx(4), 0, 0);
-            tvDbStatus.setLayoutParams(dbsLp);
-            // searchArea 안에 추가
-            if (busSearchArea != null && busSearchArea instanceof LinearLayout) {
-                ((LinearLayout) busSearchArea).addView(tvDbStatus);
-            }
-            downloadBusRouteDb(() -> {
-                if (tvDbStatus.getParent() != null)
-                    ((android.view.ViewGroup) tvDbStatus.getParent()).removeView(tvDbStatus);
-            });
-        }
 
         root.addView(sv);
 
