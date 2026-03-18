@@ -9762,7 +9762,7 @@ public class PinActivity extends AppCompatActivity {
                         } else {
                             starBg.setColor(Color.WHITE);
                             starBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
-                            tvStar.setTextColor(Color.parseColor("#333333"));
+                            tvStar.setTextColor(Color.parseColor("#888888"));
                         }
                         starBg.setCornerRadius(dpToPx(4));
                         tvStar.setBackground(starBg);
@@ -9793,7 +9793,7 @@ public class PinActivity extends AppCompatActivity {
                             } else {
                                 newBg.setColor(Color.WHITE);
                                 newBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
-                                tvStar.setTextColor(Color.parseColor("#333333"));
+                                tvStar.setTextColor(Color.parseColor("#888888"));
                             }
                             tvStar.setBackground(newBg);
                             android.widget.Toast.makeText(this,
@@ -12756,11 +12756,21 @@ public class PinActivity extends AppCompatActivity {
             final String favKey = "fav_stop_" + nodeId;
             final String fNodeId = nodeId, fStopName = stopName, fRouteNo = routeNo;
             TextView tvStar2 = new TextView(this);
-            tvStar2.setText("★");
-            tvStar2.setTextColor(Color.parseColor("#F39C12"));
-            tvStar2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
+            tvStar2.setText("즐겨찾기");
+            tvStar2.setTextColor(Color.WHITE);
+            tvStar2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvStar2.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStar2.setGravity(Gravity.CENTER);
-            tvStar2.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)));
+            tvStar2.setPadding(dpToPx(7), dpToPx(4), dpToPx(7), dpToPx(4));
+            android.graphics.drawable.GradientDrawable star2Bg = new android.graphics.drawable.GradientDrawable();
+            star2Bg.setColor(Color.parseColor("#F39C12"));
+            star2Bg.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
+            star2Bg.setCornerRadius(dpToPx(4));
+            tvStar2.setBackground(star2Bg);
+            LinearLayout.LayoutParams star2Lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            star2Lp.gravity = Gravity.CENTER_VERTICAL;
+            tvStar2.setLayoutParams(star2Lp);
             tvStar2.setOnClickListener(v2 -> {
                 prefs.edit().remove(favKey)
                         .remove("fav_stop_name_" + fNodeId)
