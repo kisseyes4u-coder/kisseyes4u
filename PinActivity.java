@@ -309,7 +309,7 @@ public class PinActivity extends AppCompatActivity {
             uploadVersionToDrive();
             uploadFcmTokenIfNeeded();
             if (busDbNeedsUpdate()) {
-                if (splashLoadingTv != null) splashLoadingTv.setText("버스 데이터 다운로드 중...");
+                if (splashLoadingTv != null) splashLoadingTv.setText("버스 노선 데이터 다운로드 중...");
                 showSplashProgress();
                 downloadBusRouteDb(() -> {
                     hideSplashProgress();
@@ -2525,7 +2525,7 @@ public class PinActivity extends AppCompatActivity {
     private void checkVersionThenShowMenu() {
         // 버스 DB 다운로드 필요하면 먼저 처리 후 메뉴 진입
         if (busDbNeedsUpdate()) {
-            if (splashLoadingTv != null) splashLoadingTv.setText("버스 데이터 다운로드 중...");
+            if (splashLoadingTv != null) splashLoadingTv.setText("버스 노선 데이터 다운로드 중...");
             showSplashProgress();
             downloadBusRouteDb(() -> {
                 hideSplashProgress();
@@ -13067,8 +13067,8 @@ public class PinActivity extends AppCompatActivity {
                         count++;
                     }
                     doneRoute += count;
-                    final int pct1 = (int)(doneRoute * 50.0 / Math.max(totalRoute, 1));
-                    if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct1, 50)));
+                    final int pct1 = (int)(doneRoute * 100.0 / Math.max(totalRoute, 1));
+                    if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct1, 99)));
                     if (count < 100) break;
                     page++;
                     if (page > 20) break;
