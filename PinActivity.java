@@ -8876,6 +8876,16 @@ public class PinActivity extends AppCompatActivity {
         ScrollView sv = new ScrollView(this);
         sv.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        // 스크롤 시 키보드 숨김
+        sv.setOnTouchListener((v, event) -> {
+            if (event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
+                android.view.inputmethod.InputMethodManager imm2 =
+                        (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                if (imm2 != null) imm2.hideSoftInputFromWindow(sv.getWindowToken(), 0);
+                if (getCurrentFocus() != null) getCurrentFocus().clearFocus();
+            }
+            return false;
+        });
         LinearLayout svInner = new LinearLayout(this);
         svInner.setOrientation(LinearLayout.VERTICAL);
         svInner.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
@@ -8947,14 +8957,16 @@ public class PinActivity extends AppCompatActivity {
 
     /** 검색 패널 공통 빌더 (type: 0=버스번호, 1=정류장, 2=장소) */
     private void buildSearchPanel(LinearLayout panel, LinearLayout resultContainer, int type) {
-        // 검색창 행
-        LinearLayout searchRow = new LinearLayout(this);
-        searchRow.setOrientation(LinearLayout.HORIZONTAL);
-        searchRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams srLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        srLp.setMargins(0, 0, 0, dpToPx(10));
-        searchRow.setLayoutParams(srLp);
+        android.view.inputmethod.InputMethodManager imm =
+                (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+
+        // ── 검색창 행 ─────────────────────────────────────
+        // EditText를 RelativeLayout으로 감싸서 오른쪽 끝에 X버튼 오버레이
+        RelativeLayout etWrapper = new RelativeLayout(this);
+        LinearLayout.LayoutParams wLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        wLp.setMargins(0, 0, dpToPx(8), 0);
+        etWrapper.setLayoutParams(wLp);
 
         android.widget.EditText etSearch = new android.widget.EditText(this);
         String[] hints = {"버스 번호 입력 (예: 708, 104)", "정류장 이름 입력 (예: 지족동)", "장소 이름 입력 (예: 유성온천)"};
@@ -8968,12 +8980,59 @@ public class PinActivity extends AppCompatActivity {
         eBg.setCornerRadius(dpToPx(10));
         eBg.setStroke(dpToPx(1), Color.parseColor("#C8BFEF"));
         etSearch.setBackground(eBg);
-        etSearch.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
-        LinearLayout.LayoutParams eLp = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        eLp.setMargins(0, 0, dpToPx(8), 0);
-        etSearch.setLayoutParams(eLp);
-        searchRow.addView(etSearch);
+        // 오른쪽 패딩 넉넉히 줘서 X버튼과 안 겹치게
+        etSearch.setPadding(dpToPx(12), dpToPx(10), dpToPx(40), dpToPx(10));
+        etSearch.setLayoutParams(new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT));
+        etWrapper.addView(etSearch);
+
+        // X 버튼 (처음엔 숨김)
+        TextView btnClear = new TextView(this);
+        btnClear.setText("✕");
+        btnClear.setTextColor(Color.parseColor("#AAAAAA"));
+        btnClear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        btnClear.setGravity(Gravity.CENTER);
+        btnClear.setVisibility(android.view.View.GONE);
+        RelativeLayout.LayoutParams xLp = new RelativeLayout.LayoutParams(
+                dpToPx(36), RelativeLayout.LayoutParams.MATCH_PARENT);
+        xLp.addRule(RelativeLayout.ALIGN_PARENT_END);
+        xLp.addRule(RelativeLayout.CENTER_VERTICAL);
+        btnClear.setLayoutParams(xLp);
+        btnClear.setOnClickListener(v -> {
+            etSearch.setText("");
+            etSearch.requestFocus();
+            if (imm != null) imm.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            resultContainer.removeAllViews();
+        });
+        etWrapper.addView(btnClear);
+
+        // 텍스트 변화 → X버튼 표시/숨김 + 버스번호 실시간 검색
+        android.os.Handler debounceHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        Runnable[] debounceRunnable = {null};
+        etSearch.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+            @Override public void onTextChanged(CharSequence s, int st, int b, int c) {
+                String kw = s.toString().trim();
+                // X버튼 표시 제어
+                btnClear.setVisibility(kw.isEmpty() ? android.view.View.GONE : android.view.View.VISIBLE);
+                // 버스번호 탭만 실시간 검색
+                if (type != 0) return;
+                if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
+                if (kw.isEmpty()) { resultContainer.removeAllViews(); return; }
+                debounceRunnable[0] = () -> busScreenSearchByNo(kw, resultContainer);
+                debounceHandler.postDelayed(debounceRunnable[0], 300);
+            }
+            @Override public void afterTextChanged(android.text.Editable e) {}
+        });
+
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setOrientation(LinearLayout.HORIZONTAL);
+        searchRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams srLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        srLp.setMargins(0, 0, 0, dpToPx(10));
+        searchRow.setLayoutParams(srLp);
+        searchRow.addView(etWrapper);
 
         TextView btnGo = new TextView(this);
         btnGo.setText("검색");
@@ -8989,43 +9048,32 @@ public class PinActivity extends AppCompatActivity {
         searchRow.addView(btnGo);
 
         panel.addView(searchRow);
-        panel.addView(resultContainer);
 
-        // 버스번호 탭: 입력할 때마다 실시간 검색 (300ms 디바운스)
-        if (type == 0) {
-            android.os.Handler debounceHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-            Runnable[] debounceRunnable = {null};
-            etSearch.addTextChangedListener(new android.text.TextWatcher() {
-                @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
-                @Override public void onTextChanged(CharSequence s, int st, int b, int c) {
-                    if (debounceRunnable[0] != null) debounceHandler.removeCallbacks(debounceRunnable[0]);
-                    String kw = s.toString().trim();
-                    if (kw.isEmpty()) {
-                        resultContainer.removeAllViews();
-                        return;
-                    }
-                    debounceRunnable[0] = () -> busScreenSearchByNo(kw, resultContainer);
-                    debounceHandler.postDelayed(debounceRunnable[0], 300);
-                }
-                @Override public void afterTextChanged(android.text.Editable e) {}
-            });
-        }
+        // ── 스크롤시 키보드 숨김 ──────────────────────────
+        // resultContainer를 터치 감지 ScrollView 안에 넣기
+        // 단, resultContainer 자체에 터치 리스너 → 스크롤 시작하면 키보드 내림
+        resultContainer.setOnTouchListener((v, event) -> {
+            if (event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
+                if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
+                etSearch.clearFocus();
+            }
+            return false; // 이벤트 소비하지 않음 (스크롤 정상 동작)
+        });
+        panel.addView(resultContainer);
 
         btnGo.setOnClickListener(v -> {
             String kw = etSearch.getText().toString().trim();
             if (kw.isEmpty()) return;
-            android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)
-                    getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
+            etSearch.clearFocus();
             if (type == 0) busScreenSearchByNo(kw, resultContainer);
             else           busScreenSearchByStop(kw, resultContainer);
         });
         etSearch.setOnEditorActionListener((tv, actionId, event) -> {
             String kw = etSearch.getText().toString().trim();
             if (!kw.isEmpty()) {
-                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)
-                        getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
                 if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
+                etSearch.clearFocus();
                 if (type == 0) busScreenSearchByNo(kw, resultContainer);
                 else           busScreenSearchByStop(kw, resultContainer);
             }
