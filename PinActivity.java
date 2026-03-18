@@ -3635,7 +3635,12 @@ public class PinActivity extends AppCompatActivity {
         btnBusManage.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         btnBusManage.setOnClickListener(v -> {
-            // ── 프로그레스 다이얼로그 ──
+            // ── 확인 다이얼로그 ──
+            new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setTitle("정류장 DB 업데이트")
+                .setMessage("정류장 DB를 업데이트 하시겠습니까?\n\n대전 전체 정류장을 수집하여 Drive에 업로드합니다. 수 분이 소요됩니다.")
+                .setPositiveButton("확인", (d, w) -> {
+                    // ── 프로그레스 다이얼로그 ──
             android.app.Dialog dlg = new android.app.Dialog(this,
                     android.R.style.Theme_Material_Light_Dialog_Alert);
             LinearLayout dlgLayout = new LinearLayout(this);
@@ -3714,6 +3719,9 @@ public class PinActivity extends AppCompatActivity {
                 dlgPb.setProgress(pct);
                 tvDlgPct.setText(pct + "%");
             });
+                })
+                .setNegativeButton("취소", null)
+                .show();
         });
         busManageCard.addView(btnBusManage);
         layout.addView(busManageCard);
@@ -9191,23 +9199,30 @@ public class PinActivity extends AppCompatActivity {
         btnBgRef[0] = btnStopBg;
 
         btnStop.setOnClickListener(v -> {
-            btnStop.setText("⏳ 수집 중... (수분 소요)");
-            btnStopBg.setColor(Color.parseColor("#AAAAAA"));
-            btnStop.setEnabled(false);
-            buildAndUploadStopDb(() -> {
-                int cnt = stopDbList != null ? stopDbList.size() : 0;
-                tvStopCount.setText(cnt + "개 정류장");
-                tvStopBadge.setText("✓ 있음");
-                badgeBg.setColor(Color.parseColor("#27AE60"));
-                tvStopDesc.setText("정류장 DB가 최신 상태입니다.");
-                tvStopDesc.setTextColor(Color.parseColor("#27AE60"));
-                btnStop.setText("정류장 DB 업데이트");
-                btnStopBg.setColor(Color.parseColor("#0984E3"));
-                btnStop.setEnabled(true);
-                android.widget.Toast.makeText(this,
-                        "✓ " + cnt + "개 정류장 DB 업로드 완료!",
-                        android.widget.Toast.LENGTH_LONG).show();
-            }, null);
+            new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setTitle("정류장 DB 업데이트")
+                .setMessage("정류장 DB를 업데이트 하시겠습니까?\n\n대전 전체 정류장을 수집하여 Drive에 업로드합니다. 수 분이 소요됩니다.")
+                .setPositiveButton("확인", (d, w) -> {
+                    btnStop.setText("⏳ 수집 중... (수분 소요)");
+                    btnStopBg.setColor(Color.parseColor("#AAAAAA"));
+                    btnStop.setEnabled(false);
+                    buildAndUploadStopDb(() -> {
+                        int cnt = stopDbList != null ? stopDbList.size() : 0;
+                        tvStopCount.setText(cnt + "개 정류장");
+                        tvStopBadge.setText("✓ 있음");
+                        badgeBg.setColor(Color.parseColor("#27AE60"));
+                        tvStopDesc.setText("정류장 DB가 최신 상태입니다.");
+                        tvStopDesc.setTextColor(Color.parseColor("#27AE60"));
+                        btnStop.setText("정류장 DB 업데이트");
+                        btnStopBg.setColor(Color.parseColor("#0984E3"));
+                        btnStop.setEnabled(true);
+                        android.widget.Toast.makeText(this,
+                                "✓ " + cnt + "개 정류장 DB 업로드 완료!",
+                                android.widget.Toast.LENGTH_LONG).show();
+                    }, null);
+                })
+                .setNegativeButton("취소", null)
+                .show();
         });
         stopCard.addView(btnStop);
         content.addView(stopCard);
