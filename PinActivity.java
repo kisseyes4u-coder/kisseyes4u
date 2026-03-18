@@ -8975,6 +8975,16 @@ public class PinActivity extends AppCompatActivity {
         etSearch.setHint(hints[type]);
         etSearch.setInputType(inputTypes[type]);
         etSearch.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        etSearch.setCursorVisible(true);
+        try {
+            // 커서 색상을 진한 파란색으로
+            java.lang.reflect.Field f = android.widget.TextView.class.getDeclaredField("mCursorDrawableRes");
+            f.setAccessible(true);
+        } catch (Exception ignored) {}
+        // 커서 색상: API 29+ 직접 지원
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            etSearch.setTextCursorDrawable(null); // 기본 커서 사용
+        }
         android.graphics.drawable.GradientDrawable eBg = new android.graphics.drawable.GradientDrawable();
         eBg.setColor(Color.WHITE);
         eBg.setCornerRadius(dpToPx(10));
@@ -10240,6 +10250,10 @@ public class PinActivity extends AppCompatActivity {
                         android.content.SharedPreferences prefs2 =
                                 getSharedPreferences(PREF_NAME, MODE_PRIVATE);
                         String[] hints = {"항목 1", "항목 2", "항목 3", "항목 4", "항목 5"};
+                        android.widget.Button[] btnNextArr = new android.widget.Button[5];
+                        // 버튼 상태: 0=입력(회색), 1=입력중(오렌지), 2=완료(초록)
+                        int[] btnState = new int[5]; // 0=입력, 1=확인, 2=완료
+
                         for (int mi2 = 0; mi2 < 5; mi2++) {
                             final int curIdx = mi2;
                             // 행: LinearLayout (EditText flex + 버튼 wrap)
@@ -10255,7 +10269,6 @@ public class PinActivity extends AppCompatActivity {
                             android.widget.EditText et2 = new android.widget.EditText(this);
                             et2.setHint(hints[mi2]);
                             et2.setHintTextColor(Color.parseColor("#CCCCCC"));
-                            // Drive 공유 메모만 사용
                             String etVal = (driveItems!=null && mi2<driveItems.length)
                                     ? (driveItems[mi2] != null ? driveItems[mi2] : "") : "";
                             et2.setText(etVal);
@@ -10273,17 +10286,27 @@ public class PinActivity extends AppCompatActivity {
                             et2.setPadding(dpToPx(4), 0, dpToPx(4), 0);
                             etItems[mi2] = et2;
 
-                            // 확인 버튼 (EditText 오른쪽, 글씨에 붙어서 위치)
+                            // 확인 버튼
                             final int finalMi = mi2;
                             android.widget.Button btnNext = new android.widget.Button(this);
-                            btnNext.setText("확인");
+                            btnNextArr[mi2] = btnNext;
+
+                            // 초기 상태: 기존 값 있으면 완료, 없으면 입력
+                            android.graphics.drawable.GradientDrawable nextBg =
+                                    new android.graphics.drawable.GradientDrawable();
+                            nextBg.setCornerRadius(dpToPx(6));
+                            if (!etVal.isEmpty()) {
+                                btnState[mi2] = 2;
+                                btnNext.setText("완료");
+                                nextBg.setColor(Color.parseColor("#27AE60"));
+                            } else {
+                                btnState[mi2] = 0;
+                                btnNext.setText("입력");
+                                nextBg.setColor(Color.parseColor("#BBBBBB"));
+                            }
                             btnNext.setTextColor(Color.WHITE);
                             btnNext.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
                             btnNext.setTypeface(null, android.graphics.Typeface.BOLD);
-                            android.graphics.drawable.GradientDrawable nextBg =
-                                    new android.graphics.drawable.GradientDrawable();
-                            nextBg.setColor(Color.parseColor("#9B8EC4"));
-                            nextBg.setCornerRadius(dpToPx(6));
                             btnNext.setBackground(nextBg);
                             LinearLayout.LayoutParams btnLlp = new LinearLayout.LayoutParams(
                                     LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(42));
@@ -10291,19 +10314,51 @@ public class PinActivity extends AppCompatActivity {
                             btnNext.setMinWidth(dpToPx(56));
                             btnNext.setPadding(dpToPx(10), 0, dpToPx(10), 0);
                             btnNext.setLayoutParams(btnLlp);
+
+                            // 포커스 → 입력중(오렌지 확인)
+                            et2.setOnFocusChangeListener((fv, hasFocus) -> {
+                                android.graphics.drawable.GradientDrawable bg2 =
+                                        new android.graphics.drawable.GradientDrawable();
+                                bg2.setCornerRadius(dpToPx(6));
+                                if (hasFocus) {
+                                    btnState[finalMi] = 1;
+                                    btnNext.setText("확인");
+                                    bg2.setColor(Color.parseColor("#E67E22")); // 오렌지
+                                } else {
+                                    // 포커스 잃을때: 텍스트 있으면 완료, 없으면 입력
+                                    if (!et2.getText().toString().trim().isEmpty()) {
+                                        btnState[finalMi] = 2;
+                                        btnNext.setText("완료");
+                                        bg2.setColor(Color.parseColor("#27AE60")); // 초록
+                                    } else {
+                                        btnState[finalMi] = 0;
+                                        btnNext.setText("입력");
+                                        bg2.setColor(Color.parseColor("#BBBBBB")); // 회색
+                                    }
+                                }
+                                btnNext.setBackground(bg2);
+                            });
+
                             btnNext.setOnClickListener(nbv -> {
+                                // 완료 처리: 다음 항목으로 포커스 이동
+                                android.graphics.drawable.GradientDrawable bg3 =
+                                        new android.graphics.drawable.GradientDrawable();
+                                bg3.setCornerRadius(dpToPx(6));
+                                btnState[finalMi] = 2;
+                                btnNext.setText("완료");
+                                bg3.setColor(Color.parseColor("#27AE60"));
+                                btnNext.setBackground(bg3);
+
                                 int nextIdx = finalMi + 1;
                                 if (nextIdx < 5 && etItems[nextIdx] != null) {
                                     etItems[nextIdx].requestFocus();
-                                    etItems[nextIdx].setSelection(
-                                            etItems[nextIdx].getText().length());
+                                    etItems[nextIdx].setSelection(etItems[nextIdx].getText().length());
                                 } else {
                                     android.view.inputmethod.InputMethodManager imm2 =
                                             (android.view.inputmethod.InputMethodManager)
                                                     getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
                                     if (imm2 != null)
-                                        imm2.hideSoftInputFromWindow(
-                                                etItems[finalMi].getWindowToken(), 0);
+                                        imm2.hideSoftInputFromWindow(etItems[finalMi].getWindowToken(), 0);
                                 }
                             });
 
