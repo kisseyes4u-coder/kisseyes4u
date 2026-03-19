@@ -13450,6 +13450,37 @@ public class PinActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+
+        // ★ FCM으로 받은 pending_new_block 즉시 처리 (일반사용자 앱 오픈 시 화면 즉시 갱신)
+        android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        String pendingBlock = prefs.getString("pending_new_block", "");
+        if (!pendingBlock.isEmpty()) {
+            prefs.edit().remove("pending_new_block").apply();
+            android.util.Log.d("RESUME", "pending_new_block 처리: " + pendingBlock.length() + "자");
+            if (cachedBlocks == null) cachedBlocks = new java.util.ArrayList<>();
+            // 중복 방지: 이미 있는 블록이면 추가 안 함
+            final String pb = pendingBlock;
+            boolean alreadyExists = false;
+            for (String b : cachedBlocks) {
+                if (b.trim().equals(pb.trim())) { alreadyExists = true; break; }
+            }
+            if (!alreadyExists) {
+                cachedBlocks.add(pb);
+                lastKnownBlockCount = cachedBlocks.size();
+                android.util.Log.d("RESUME", "캐시 추가 완료 총 " + cachedBlocks.size() + "개");
+                // 잔액 갱신
+                if (tvBalValues != null) updateBalanceValues(cachedBlocks);
+                else updateWidgetFromBlocks(cachedBlocks);
+                // 화면 갱신
+                if (isOnBalanceScreen && msgContainer != null) {
+                    displayedCount = Math.min(Math.max(displayedCount, PAGE_SIZE), cachedBlocks.size());
+                    renderMessages(cachedBlocks, currentTabFilter);
+                }
+                if (menuBalTv != null && isOnMenuScreen) updateMenuBalCards(cachedBlocks);
+                cachedBalValues = null;
+            }
+        }
+
         // 접근성/배터리 설정 화면에서 돌아올 때 관리자 메뉴 다시 그리기
         if (isOwner && isOnMenuScreen) {
             ownerMenuBuilder.build();
