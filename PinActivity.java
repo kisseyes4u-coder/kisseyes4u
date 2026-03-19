@@ -15578,11 +15578,13 @@ public class PinActivity extends AppCompatActivity {
 
     /** 배차시간표 다이얼로그 표시 */
     private void showBusTimeTableDialog(String routeNo, boolean fromSrc) {
-        // busTimesMap 비어있으면 캐시에서 즉시 로드
-        if (busTimesMap.isEmpty()) {
-            String cached = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
+        // busTimesMap 비어있거나 구버전이면 재로드
+        if (busTimesMap.isEmpty() || (busTimesMap.get(routeNo) != null && busTimesMap.get(routeNo).length < 16)) {
+            busTimesMap.clear();
+            String cached = loadBusTimes(); // 내부 파일 우선
+            if (cached.isEmpty()) cached = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
                     .getString("bustimes_txt_cache", "");
-            if (!cached.isEmpty()) loadBusTimesFromJson(cached);
+            if (!cached.isEmpty() && cached.contains("||")) loadBusTimesFromJson(cached);
         }
         String[] data = busTimesMap.get(routeNo);
         if (data == null || data.length < 16) {
@@ -15607,7 +15609,7 @@ public class PinActivity extends AppCompatActivity {
                 } catch (Exception ignored) {}
                 runOnUiThread(() -> {
                     String[] d2 = busTimesMap.get(routeNo);
-                    if (d2 != null && d2.length >= 4) showBusTimeTableDialog(routeNo, fromSrc);
+                    if (d2 != null && d2.length >= 16) showBusTimeTableDialog(routeNo, fromSrc);
                     else android.widget.Toast.makeText(this,
                             routeNo + "번 배차시간표 없음. 관리자 메뉴에서 업데이트하세요.",
                             android.widget.Toast.LENGTH_LONG).show();
