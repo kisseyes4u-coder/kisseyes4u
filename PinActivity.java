@@ -12720,7 +12720,7 @@ public class PinActivity extends AppCompatActivity {
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setBackgroundColor(Color.WHITE);
-            row.setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14));
+            row.setPadding(dpToPx(14), dpToPx(10), dpToPx(10), dpToPx(10));
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             LinearLayout leftCol = new LinearLayout(this);
@@ -12758,9 +12758,9 @@ public class PinActivity extends AppCompatActivity {
             // 오른쪽 컬럼: 시간(위) + 즐겨찾기/알림(아래) 세로 배치
             LinearLayout rightCol = new LinearLayout(this);
             rightCol.setOrientation(LinearLayout.VERTICAL);
-            rightCol.setGravity(Gravity.END);
+            rightCol.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
             rightCol.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT));
             // 시간 행
             LinearLayout timeRow = new LinearLayout(this);
             timeRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -17185,7 +17185,7 @@ public class PinActivity extends AppCompatActivity {
             rCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
             rCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             rCard.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
-            LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0, dpToPx(108), 1f);
+            LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0, dpToPx(110), 1f);
             rCardLp.setMargins(0, 0, routeColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             rCard.setLayoutParams(rCardLp);
 
@@ -17656,7 +17656,7 @@ public class PinActivity extends AppCompatActivity {
             card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
             card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             card.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
-            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(0, dpToPx(108), 1f);
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(0, dpToPx(110), 1f);
             cardLp.setMargins(0, 0, stopColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             card.setLayoutParams(cardLp);
 
@@ -17974,6 +17974,9 @@ public class PinActivity extends AppCompatActivity {
             tvStopRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStopRouteNo.setSingleLine(true);
             tvStopRouteNo.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            // 글자 길면 자동 축소
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                tvStopRouteNo, 10, 20, 1, android.util.TypedValue.COMPLEX_UNIT_DIP);
             LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             rNoLp2.setMargins(0, dpToPx(4), 0, 0);
