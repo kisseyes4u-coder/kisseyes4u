@@ -222,31 +222,34 @@ public class PinActivity extends AppCompatActivity {
         return getBusIconColor(0xFF6C3FA0);
     }
 
-    /** assets/stop.png를 지정된 색상으로 렌더링 (정류소 즐겨찾기 아이콘용) */
+    /** assets/stop.png를 지정된 색상으로 렌더링 (bus.png와 동일한 방식) */
     private android.graphics.Bitmap getStopIconColor(int argbColor) {
         try {
             android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
                     getAssets().open("stop.png"));
-            if (raw == null) return null;
-            int w = raw.getWidth(), h = raw.getHeight();
-            int[] pixels = new int[w * h];
-            raw.getPixels(pixels, 0, w, 0, 0, w, h);
-            raw.recycle();
-            int tr = (argbColor >> 16) & 0xFF;
-            int tg = (argbColor >> 8)  & 0xFF;
-            int tb =  argbColor        & 0xFF;
-            for (int i = 0; i < pixels.length; i++) {
-                int a = (pixels[i] >> 24) & 0xFF;
-                if (a > 10) {
-                    pixels[i] = (a << 24) | (tr << 16) | (tg << 8) | tb;
-                } else {
-                    pixels[i] = 0;
+            if (raw != null) {
+                int w = raw.getWidth(), h = raw.getHeight();
+                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                int[] pixels = new int[w * h];
+                raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                int tr = (argbColor >> 16) & 0xFF;
+                int tg = (argbColor >> 8)  & 0xFF;
+                int tb =  argbColor        & 0xFF;
+                for (int i = 0; i < pixels.length; i++) {
+                    int r2 = (pixels[i] >> 16) & 0xFF;
+                    int g2 = (pixels[i] >> 8)  & 0xFF;
+                    int b2 =  pixels[i]         & 0xFF;
+                    int brightness = (r2 + g2 + b2) / 3;
+                    if (brightness > 128) {
+                        pixels[i] = (0xFF << 24) | (tr << 16) | (tg << 8) | tb;
+                    } else {
+                        pixels[i] = 0xFFFFFFFF; // 흰색 배경
+                    }
                 }
+                result.setPixels(pixels, 0, w, 0, 0, w, h);
+                raw.recycle();
+                return result;
             }
-            android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h,
-                    android.graphics.Bitmap.Config.ARGB_8888);
-            result.setPixels(pixels, 0, w, 0, 0, w, h);
-            return result;
         } catch (Exception e) {
             android.util.Log.e("StopIcon", "err:" + e.getMessage());
         }
@@ -10363,7 +10366,8 @@ public class PinActivity extends AppCompatActivity {
         btnRefreshBar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
         btnRefreshBar.setTypeface(null, android.graphics.Typeface.BOLD);
         btnRefreshBar.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-        btnRefreshBar.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(50)));
+        LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
+        btnRefreshBar.setLayoutParams(refreshLp);
         btnRefreshBar.setOnClickListener(v -> {
             // 현재 화면 새로고침
             if (!busBackStack.isEmpty()) {
@@ -17510,35 +17514,18 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout stopBusWrapper = new LinearLayout(this);
             stopBusWrapper.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             stopBusWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-            // stop.png 인라인 직접 로딩
-            try {
-                android.graphics.Bitmap rawStop = android.graphics.BitmapFactory.decodeStream(
-                        getAssets().open("stop.png"));
-                if (rawStop != null) {
-                    int sw = rawStop.getWidth(), sh = rawStop.getHeight();
-                    int[] spx = new int[sw * sh];
-                    rawStop.getPixels(spx, 0, sw, 0, 0, sw, sh);
-                    rawStop.recycle();
-                    int str = (sTypeColorInt >> 16) & 0xFF;
-                    int stg = (sTypeColorInt >> 8)  & 0xFF;
-                    int stb =  sTypeColorInt         & 0xFF;
-                    for (int si = 0; si < spx.length; si++) {
-                        int sa = (spx[si] >> 24) & 0xFF;
-                        spx[si] = sa > 10 ? ((sa << 24) | (str << 16) | (stg << 8) | stb) : 0;
-                    }
-                    android.graphics.Bitmap stopBmp = android.graphics.Bitmap.createBitmap(sw, sh,
-                            android.graphics.Bitmap.Config.ARGB_8888);
-                    stopBmp.setPixels(spx, 0, sw, 0, 0, sw, sh);
-                    android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
-                    ivStopBus.setImageBitmap(stopBmp);
-                    LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
-                    stopBusLp.setMargins(0, 0, dpToPx(6), 0);
-                    stopBusLp.gravity = Gravity.CENTER_VERTICAL;
-                    ivStopBus.setLayoutParams(stopBusLp);
-                    ivStopBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-                    stopBusWrapper.addView(ivStopBus);
-                }
-            } catch (Exception eStop) { android.util.Log.e("StopIcon","inline err:"+eStop.getMessage()); }
+            // stop.png 로딩 (bus.png와 동일한 방식)
+            android.graphics.Bitmap stopBusBmp = getStopIconColor(sTypeColorInt);
+            if (stopBusBmp != null) {
+                android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
+                ivStopBus.setImageBitmap(stopBusBmp);
+                LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
+                stopBusLp.setMargins(0, 0, dpToPx(6), 0);
+                stopBusLp.gravity = Gravity.CENTER_VERTICAL;
+                ivStopBus.setLayoutParams(stopBusLp);
+                ivStopBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                stopBusWrapper.addView(ivStopBus);
+            }
             sIconBtnRow.addView(stopBusWrapper);
 
             // 설정 버튼
