@@ -13453,7 +13453,6 @@ public class PinActivity extends AppCompatActivity {
 
         // ★ SMS 수신 후 저장된 pending_new_block 즉시 처리
         // (관리자: SmsReceiver에서 저장 / 일반사용자: MyFirebaseMessagingService에서 저장)
-        // 앱 종료/백그라운드 상태에서 SMS를 받은 후 앱을 열 때 화면 즉시 갱신
         android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         String pendingBlock = prefs.getString("pending_new_block", "");
         boolean hadPending = false;
@@ -13462,7 +13461,6 @@ public class PinActivity extends AppCompatActivity {
             hadPending = true;
             android.util.Log.d("RESUME", "pending_new_block 처리: " + pendingBlock.length() + "자");
             if (cachedBlocks == null) cachedBlocks = new java.util.ArrayList<>();
-            // 중복 방지: 이미 있는 블록이면 추가 안 함
             boolean alreadyExists = false;
             for (String b : cachedBlocks) {
                 if (b.trim().equals(pendingBlock.trim())) { alreadyExists = true; break; }
@@ -13471,10 +13469,8 @@ public class PinActivity extends AppCompatActivity {
                 cachedBlocks.add(pendingBlock);
                 lastKnownBlockCount = cachedBlocks.size();
                 android.util.Log.d("RESUME", "캐시 추가 완료 총 " + cachedBlocks.size() + "개");
-                // 잔액 갱신 (위젯 + SharedPreferences + UI)
                 if (tvBalValues != null) updateBalanceValues(cachedBlocks);
                 else updateWidgetFromBlocks(cachedBlocks);
-                // 통장잔액 화면 갱신
                 if (isOnBalanceScreen && msgContainer != null) {
                     displayedCount = Math.min(Math.max(displayedCount, PAGE_SIZE), cachedBlocks.size());
                     renderMessages(cachedBlocks, currentTabFilter);
@@ -13482,6 +13478,24 @@ public class PinActivity extends AppCompatActivity {
                 if (menuBalTv != null && isOnMenuScreen) updateMenuBalCards(cachedBlocks);
                 cachedBalValues = null;
             }
+        }
+
+        // ★ 삭제 후 저장된 pending_delete 즉시 처리
+        // (일반사용자: MyFirebaseMessagingService에서 저장)
+        boolean pendingDelete = prefs.getBoolean("pending_delete", false);
+        if (pendingDelete) {
+            prefs.edit().remove("pending_delete").apply();
+            hadPending = true;
+            android.util.Log.d("RESUME", "pending_delete 처리 → Drive 재로드");
+            cachedBlocks    = null;
+            cachedBalValues = null;
+            // Drive 캐시 무효화 후 최신 데이터 로드
+            int curYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR);
+            DriveReadHelper.invalidateCache(SmsReceiver.getSmsRawFile(curYear));
+            DriveReadHelper.invalidateCache(SmsReceiver.getSmsRawFile(curYear - 1));
+            DriveReadHelper.invalidateCache(BALANCE_FILE);
+            runOnUiThread(() -> forceReloadAfterDelete());
+            hadPending = false; // 삭제 후에는 forceReload가 필요하므로 hadPending 유지 안 함
         }
 
         // 접근성/배터리 설정 화면에서 돌아올 때 관리자 메뉴 다시 그리기
