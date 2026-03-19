@@ -17054,29 +17054,33 @@ public class PinActivity extends AppCompatActivity {
         }
         if (favKeys.isEmpty() && favRouteKeys.isEmpty()) return;
 
-        // 저장된 순서 적용 - "fav_order" 에 콤마 구분 저장
+        // fav_order 순서대로 통합 렌더링 리스트 구성
+        // allOrdered: "R:key" 또는 "S:key" 형태로 렌더링 순서 결정
+        java.util.List<String> allOrdered = new java.util.ArrayList<>();
         String savedOrder = prefs.getString("fav_order", "");
         if (!savedOrder.isEmpty()) {
-            java.util.List<String> orderedRoute = new java.util.ArrayList<>();
-            java.util.List<String> orderedStop  = new java.util.ArrayList<>();
             for (String tok : savedOrder.split(",")) {
                 tok = tok.trim();
                 if (tok.startsWith("R:") && favRouteKeys.contains(tok.substring(2)))
-                    orderedRoute.add(tok.substring(2));
+                    allOrdered.add(tok);
                 else if (tok.startsWith("S:") && favKeys.contains(tok.substring(2)))
-                    orderedStop.add(tok.substring(2));
+                    allOrdered.add(tok);
             }
-            // 새로 추가된 항목은 맨 뒤에 (savedOrder에 없는 것)
-            for (String k : favRouteKeys) { if (!orderedRoute.contains(k)) orderedRoute.add(k); }
-            for (String k : favKeys)      { if (!orderedStop.contains(k))  orderedStop.add(k); }
-            favRouteKeys.clear(); favRouteKeys.addAll(orderedRoute);
-            favKeys.clear();      favKeys.addAll(orderedStop);
         }
+        // fav_order에 없는 항목은 맨 뒤에 추가
+        for (String k : favRouteKeys) { if (!allOrdered.contains("R:"+k)) allOrdered.add("R:"+k); }
+        for (String k : favKeys)      { if (!allOrdered.contains("S:"+k)) allOrdered.add("S:"+k); }
 
         // 즐겨찾기 타이틀 (숨김)
 
         // ── 노선 즐겨찾기 카드 (2열 그리드) ──────────────────
         // ── 통합 2열 그리드 (노선+정류소 함께) ──────────────────
+        // allOrdered 순서대로 카드 정보 (드래그 순서 추적용)
+        final java.util.List<String[]> allCardInfos = new java.util.ArrayList<>();
+        for (String tok : allOrdered) {
+            if (tok.startsWith("R:")) allCardInfos.add(new String[]{"R", tok.substring(2)});
+            else                      allCardInfos.add(new String[]{"S", tok.substring(2)});
+        }
         LinearLayout grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         grid.setLayoutParams(new LinearLayout.LayoutParams(
@@ -17084,7 +17088,8 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout gridRow = null;
         int colIdx = 0;
 
-        for (String rKey : favRouteKeys) {
+        for (String ordKey : allOrdered) {
+            if (ordKey.startsWith("R:")) { String rKey = ordKey.substring(2);
             String rNo     = prefs.getString("fav_route_no_"     + rKey, rKey);
             String rDir    = prefs.getString("fav_route_dir_"    + rKey, "");
             String rId     = prefs.getString("fav_route_id_"     + rKey, "");
@@ -17549,13 +17554,7 @@ public class PinActivity extends AppCompatActivity {
             });
             if (gridRow != null) gridRow.addView(rCard);
             colIdx++;
-        }
-        // 홀수개면 빈 카드로 채우기
-        // 노선 끝 - 그리드 계속 유지 (정류소 카드가 이어서 채움)
-
-        // ── 정류소 즐겨찾기 (노선과 동일 그리드 계속 사용) ─────
-
-        for (String compositeKey : favKeys) {
+            } else { String compositeKey = ordKey.substring(2);
             // compositeKey = "routeId_nodeId"
             String stopName = prefs.getString("fav_stop_name_"    + compositeKey, compositeKey);
             String stopNo   = prefs.getString("fav_stop_no_"      + compositeKey, "");
@@ -17955,7 +17954,8 @@ public class PinActivity extends AppCompatActivity {
 
             if (gridRow != null) gridRow.addView(card);
             colIdx++;
-        }
+            } // end else S:
+            } // end for allOrdered
 
         // 홀수개면 빈 공간 채우기
         // 홀수개면 빈 공간 채우기
