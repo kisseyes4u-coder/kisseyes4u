@@ -10659,7 +10659,7 @@ public class PinActivity extends AppCompatActivity {
                 if (!isOnSubScreen) return;
                 // 검색화면(busSearchArea 보임)이면 갱신 안 함
                 if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) {
-                    busRefreshHandler.postDelayed(this, 30000);
+                    busRefreshHandler.postDelayed(this, 20000);
                     return;
                 }
                 new Thread(() -> {
@@ -10688,10 +10688,10 @@ public class PinActivity extends AppCompatActivity {
                         });
                     } catch (Exception ignored) {}
                 }).start();
-                busRefreshHandler.postDelayed(this, 30000);
+                busRefreshHandler.postDelayed(this, 20000);
             }
         };
-        busRefreshHandler.postDelayed(busRefreshRunnable, 30000);
+        busRefreshHandler.postDelayed(busRefreshRunnable, 0); // 즉시 첫 갱신
     }
 
     /** 버스 화면 뒤로가기 - 백스택 기반 */
@@ -12139,7 +12139,7 @@ public class PinActivity extends AppCompatActivity {
         if (cached != null) {
             long cacheTime = (long) cached[0];
             // 30초 이내 캐시면 즉시 표시
-            if (System.currentTimeMillis() - cacheTime < 30000) {
+            if (System.currentTimeMillis() - cacheTime < 20000) {
                 @SuppressWarnings("unchecked")
                 java.util.List<String[]> cachedRoutes = (java.util.List<String[]>) cached[1];
                 @SuppressWarnings("unchecked")
@@ -17819,14 +17819,24 @@ public class PinActivity extends AppCompatActivity {
             tvStopRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStopRouteNo.setSingleLine(true);
             tvStopRouteNo.setEllipsize(null);
-            // API 26+ 자동 글자 축소
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                tvStopRouteNo.setAutoSizeTextTypeUniformWithConfiguration(
-                    8, 20, 1, android.util.TypedValue.COMPLEX_UNIT_DIP);
-            } else {
-                androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
-                    tvStopRouteNo, 8, 20, 1, android.util.TypedValue.COMPLEX_UNIT_DIP);
-            }
+            // ViewTreeObserver로 실제 너비 측정 후 글자 크기 직접 조정
+            tvStopRouteNo.getViewTreeObserver().addOnGlobalLayoutListener(
+                new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+                    @Override public void onGlobalLayout() {
+                        tvStopRouteNo.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                        int availW = tvStopRouteNo.getWidth();
+                        if (availW <= 0) return;
+                        float sp = fs(20);
+                        while (sp > 8) {
+                            tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, sp);
+                            tvStopRouteNo.measure(
+                                android.view.View.MeasureSpec.makeMeasureSpec(availW, android.view.View.MeasureSpec.AT_MOST),
+                                android.view.View.MeasureSpec.UNSPECIFIED);
+                            if (tvStopRouteNo.getMeasuredWidth() <= availW) break;
+                            sp -= 1;
+                        }
+                    }
+                });
             LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             rNoLp2.setMargins(0, dpToPx(4), 0, 0);
