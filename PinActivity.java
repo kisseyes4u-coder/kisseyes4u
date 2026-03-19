@@ -193,6 +193,10 @@ public class PinActivity extends AppCompatActivity {
     private LinearLayout busResultContainer = null;
     private LinearLayout busFavSection2 = null;
     private android.widget.EditText busEtSearch = null;
+    private TextView busTabBus = null;  // 버스번호 탭 버튼
+    private TextView busTabStop = null; // 정류장 탭 버튼
+    private Runnable busUpdateTabStyle = null; // 탭 스타일 업데이트
+    private boolean[] busIsBusTab = {true}; // 현재 탭 상태
     private TextView splashLoadingTv = null;
     private android.widget.ProgressBar splashProgressBar = null;
     private TextView splashProgressTv = null;
@@ -223,27 +227,18 @@ public class PinActivity extends AppCompatActivity {
         try {
             android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
                     getAssets().open("stop.png"));
-            if (raw != null) {
-                int w = raw.getWidth(), h = raw.getHeight();
-                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
-                int[] pixels = new int[w * h];
-                raw.getPixels(pixels, 0, w, 0, 0, w, h);
-                for (int i = 0; i < pixels.length; i++) {
-                    int alpha = (pixels[i] >> 24) & 0xFF;
-                    if (alpha > 10) {
-                        // 불투명 픽셀(아이콘) → 지정 색상
-                        pixels[i] = (alpha << 24) | (argbColor & 0x00FFFFFF);
-                    } else {
-                        // 투명 픽셀(배경) → 그대로
-                        pixels[i] = 0x00000000;
-                    }
-                }
-                result.setPixels(pixels, 0, w, 0, 0, w, h);
-                raw.recycle();
-                return result;
-            }
+            if (raw == null) { android.util.Log.e("StopIcon","raw null"); return null; }
+            // 컬러 필터로 색상 입히기
+            android.graphics.Bitmap result = raw.copy(android.graphics.Bitmap.Config.ARGB_8888, true);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(result);
+            android.graphics.Paint paint = new android.graphics.Paint();
+            paint.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                    argbColor, android.graphics.PorterDuff.Mode.SRC_IN));
+            canvas.drawBitmap(raw, 0, 0, paint);
+            raw.recycle();
+            return result;
         } catch (Exception e) {
-            android.util.Log.e("StopIcon", "getStopIconColor error: " + e.getMessage());
+            android.util.Log.e("StopIcon", "error: " + e.getMessage());
         }
         return null;
     }
@@ -10027,16 +10022,19 @@ public class PinActivity extends AppCompatActivity {
         trLp.setMargins(0, 0, 0, dpToPx(8));
         tabRow.setLayoutParams(trLp);
 
-        final boolean[] isBusTab = {true}; // true=버스, false=정류장
+        final boolean[] isBusTab = busIsBusTab; // true=버스, false=정류장
 
-        TextView tabBus = new TextView(this);
+        busTabBus = new TextView(this);
+        TextView tabBus = busTabBus;
+        busIsBusTab[0] = true;
         tabBus.setText("버스 번호 검색");
         tabBus.setGravity(Gravity.CENTER);
         tabBus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
         tabBus.setTypeface(null, android.graphics.Typeface.BOLD);
         tabBus.setPadding(dpToPx(12), dpToPx(11), dpToPx(12), dpToPx(11));
 
-        TextView tabStop = new TextView(this);
+        busTabStop = new TextView(this);
+        TextView tabStop = busTabStop;
         tabStop.setText("정류장 검색");
         tabStop.setGravity(Gravity.CENTER);
         tabStop.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
@@ -10052,7 +10050,7 @@ public class PinActivity extends AppCompatActivity {
         unselBg.setCornerRadius(dpToPx(8));
         unselBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
 
-        Runnable updateTabStyle = () -> {
+        busUpdateTabStyle = () -> {
             if (isBusTab[0]) {
                 android.graphics.drawable.GradientDrawable b1 = new android.graphics.drawable.GradientDrawable();
                 b1.setColor(Color.parseColor("#5BA9F0")); b1.setCornerRadius(dpToPx(8));
@@ -10252,7 +10250,7 @@ public class PinActivity extends AppCompatActivity {
         tabBus.setOnClickListener(v -> {
             if (!isBusTab[0]) {
                 isBusTab[0] = true;
-                updateTabStyle.run();
+                if (busUpdateTabStyle != null) busUpdateTabStyle.run();
                 etSearch.setHint("버스 번호 입력");
                 etSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                 etSearch.setText("");
@@ -10264,7 +10262,7 @@ public class PinActivity extends AppCompatActivity {
         tabStop.setOnClickListener(v -> {
             if (isBusTab[0]) {
                 isBusTab[0] = false;
-                updateTabStyle.run();
+                if (busUpdateTabStyle != null) busUpdateTabStyle.run();
                 etSearch.setHint("정류장 이름 입력");
                 etSearch.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
                 etSearch.setText("");
@@ -10641,7 +10639,7 @@ public class PinActivity extends AppCompatActivity {
         if (!busBackStack.isEmpty()) busBackStack.pop();
 
         if (busBackStack.isEmpty()) {
-            // 스택 비면 버스 검색 화면으로
+            // 스택 비면 버스 검색 화면으로 - 완전 리셋
             if (busRefreshRunnable != null) {
                 busRefreshHandler.removeCallbacks(busRefreshRunnable);
                 busRefreshRunnable = null;
@@ -10649,7 +10647,21 @@ public class PinActivity extends AppCompatActivity {
             if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-            // post로 지연 비우기 - 현재 진행중인 runOnUiThread 완료 후 비움
+            // 입력창 초기화 + 탭을 버스번호 검색으로 리셋
+            if (busEtSearch != null) {
+                busEtSearch.setText("");
+                busEtSearch.setHint("버스 번호 입력");
+                busEtSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            }
+            // 탭 버스번호 검색으로 리셋
+            busIsBusTab[0] = true;
+            if (busUpdateTabStyle != null) busUpdateTabStyle.run();
+            // 키보드 숨김
+            android.view.inputmethod.InputMethodManager immBack =
+                (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+            if (immBack != null && busEtSearch != null)
+                immBack.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
+            // 결과 컨테이너 초기화
             if (busResultContainer != null) {
                 busResultContainer.removeAllViews();
                 busResultContainer.post(() -> busResultContainer.removeAllViews());
@@ -10992,6 +11004,11 @@ public class PinActivity extends AppCompatActivity {
                     s[2].isEmpty() ? "" : "정류소번호: " + s[2],
                     "", "#0984E3");
             card.setOnClickListener(v -> {
+                // 키보드 숨김
+                android.view.inputmethod.InputMethodManager imm2 =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                if (imm2 != null) imm2.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                if (getCurrentFocus() != null) getCurrentFocus().clearFocus();
                 // 검색화면에서 클릭 시 busSearchArea를 먼저 숨기고 도착화면으로 이동
                 if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
