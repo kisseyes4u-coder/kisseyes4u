@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">경로당</string>
+    <string name="accessibility_description">농협 잔액 변경 알림을 위해 문자 알림을 읽습니다</string>
+    <string name="widget_description">경로당 잔액 위젯</string>
+</resources>

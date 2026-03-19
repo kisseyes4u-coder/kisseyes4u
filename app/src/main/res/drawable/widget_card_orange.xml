@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 그림자: 아래로 퍼지는 5단계 (setShadowLayer 재현) -->
+    <item android:left="2dp" android:top="4dp" android:right="0dp" android:bottom="0dp">
+        <shape>
+            <solid android:color="#05000000"/>
+            <corners android:radius="20dp"/>
+        </shape>
+    </item>
+    <item android:left="2dp" android:top="3dp" android:right="0dp" android:bottom="0dp">
+        <shape>
+            <solid android:color="#08000000"/>
+            <corners android:radius="19dp"/>
+        </shape>
+    </item>
+    <item android:left="1dp" android:top="2dp" android:right="0dp" android:bottom="0dp">
+        <shape>
+            <solid android:color="#10000000"/>
+            <corners android:radius="18dp"/>
+        </shape>
+    </item>
+    <item android:left="1dp" android:top="2dp" android:right="0dp" android:bottom="0dp">
+        <shape>
+            <solid android:color="#14000000"/>
+            <corners android:radius="18dp"/>
+        </shape>
+    </item>
+    <item android:left="0dp" android:top="1dp" android:right="0dp" android:bottom="0dp">
+        <shape>
+            <solid android:color="#18000000"/>
+            <corners android:radius="18dp"/>
+        </shape>
+    </item>
+    <!-- 카드 본체: 테두리 없음, 흰배경 계열 -->
+    <item android:bottom="4dp" android:right="2dp">
+        <shape>
+            <solid android:color="#FEF9E7"/>
+            <corners android:radius="18dp"/>
+        </shape>
+    </item>
+</layer-list>

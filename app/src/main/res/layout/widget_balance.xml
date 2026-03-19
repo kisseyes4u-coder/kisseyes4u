@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="10dp">
+
+    <!-- 타이틀 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="6dp">
+        <ImageView
+            android:layout_width="15dp"
+            android:layout_height="15dp"
+            android:src="@mipmap/ic_launcher"
+            android:scaleType="fitCenter"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=" 네이처뷰 경로당"
+            android:textColor="#6C5CE7"
+            android:textSize="15dp"
+            android:textStyle="bold"
+            android:layout_marginStart="4dp"/>
+    </LinearLayout>
+
+    <!-- ── 업데이트 경고 (버전 불일치 시 표시, 기본 GONE) ── -->
+    <TextView
+        android:id="@+id/widget_update_msg"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:text="⚠  앱 업데이트가 필요합니다"
+        android:textColor="#E74C3C"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp"/>
+
+    <TextView
+        android:id="@+id/widget_update_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:text="Play Store 업데이트"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:padding="8dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="6dp"
+        android:background="#E74C3C"/>
+
+    <!-- 1행: 운영비 / 부식비 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <!-- 운영비 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/widget_card_blue"
+            android:layout_marginEnd="4dp"
+            android:padding="6dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="●  운영비"
+                android:textColor="#4A90D9"
+                android:textSize="15dp"
+                android:textStyle="bold"/>
+            <TextView
+                android:id="@+id/widget_bal_0"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="-"
+                android:textColor="#1A1A2E"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_marginTop="3dp"/>
+        </LinearLayout>
+
+        <!-- 부식비 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/widget_card_green"
+            android:layout_marginStart="4dp"
+            android:padding="6dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="●  부식비"
+                android:textColor="#27AE60"
+                android:textSize="15dp"
+                android:textStyle="bold"/>
+            <TextView
+                android:id="@+id/widget_bal_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="-"
+                android:textColor="#1A1A2E"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_marginTop="3dp"/>
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- 2행: 냉난방비 / 회비 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+
+        <!-- 냉난방비 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/widget_card_orange"
+            android:layout_marginEnd="4dp"
+            android:padding="6dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="●  냉난방비"
+                android:textColor="#E67E22"
+                android:textSize="15dp"
+                android:textStyle="bold"/>
+            <TextView
+                android:id="@+id/widget_bal_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="-"
+                android:textColor="#1A1A2E"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_marginTop="3dp"/>
+        </LinearLayout>
+
+        <!-- 회비 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/widget_card_purple"
+            android:layout_marginStart="4dp"
+            android:padding="6dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="●  회비"
+                android:textColor="#8E44AD"
+                android:textSize="15dp"
+                android:textStyle="bold"/>
+            <TextView
+                android:id="@+id/widget_bal_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="-"
+                android:textColor="#1A1A2E"
+                android:textSize="15dp"
+                android:textStyle="bold"
+                android:layout_marginTop="3dp"/>
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

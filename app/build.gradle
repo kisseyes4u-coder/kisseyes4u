@@ -1,0 +1,111 @@
+plugins {
+    alias(libs.plugins.android.application)
+    id 'com.google.gms.google-services'
+}
+
+android {
+    namespace 'com.sms2drive'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.sms2drive"
+        minSdk 26
+        targetSdk 36
+        versionCode 14
+        versionName "1.1.4"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("C:/Users/kisse/keystore/nature.jks")
+            storePassword "!qkrqo1004"
+            keyAlias "nature"
+            keyPassword "!qkrqo1004"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    bundle {
+        language { enableSplit = false }
+        density  { enableSplit = false }
+        abi      { enableSplit = false }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    packagingOptions {
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/NOTICE.txt'
+    }
+
+}
+
+tasks.whenTaskAdded { task ->
+    // AAB 빌드 완료 시 바탕화면에 복사
+    if (task.name == "bundleRelease") {
+        task.doLast {
+            def aabDir  = file("${buildDir}/outputs/bundle/release")
+            def destDir = file("C:/Users/kisse/OneDrive/바탕 화면")
+            if (!destDir.exists()) destDir.mkdirs()
+            aabDir.listFiles()?.each { f ->
+                if (f.name.endsWith(".aab")) {
+                    def destFile = new File(destDir, "app-release.aab")
+                    if (destFile.exists()) destFile.delete()
+                    destFile.bytes = f.bytes
+                    println "AAB saved to Desktop: app-release.aab"
+                }
+            }
+        }
+    }
+    // 디버그 APK는 기존대로 유지 (테스트용)
+    if (task.name == "packageDebug") {
+        task.doLast {
+            def apkDir  = file("${buildDir}/outputs/apk/debug")
+            def destDir = file("C:/Users/kisse/OneDrive/바탕 화면")
+            if (!destDir.exists()) destDir.mkdirs()
+            apkDir.listFiles()?.each { f ->
+                if (f.name.endsWith(".apk") && f.name != "update.apk") {
+                    def renamedFile = new File(apkDir, "update.apk")
+                    if (renamedFile.exists()) renamedFile.delete()
+                    f.renameTo(renamedFile)
+                    def destFile = new File(destDir, "update.apk")
+                    if (destFile.exists()) destFile.delete()
+                    destFile.bytes = renamedFile.bytes
+                    println "Debug APK saved to Desktop: update.apk"
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation platform('com.google.firebase:firebase-bom:32.7.4')
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
+    implementation libs.androidx.core.ktx
+    implementation libs.material
+    implementation libs.androidx.activity
+    implementation libs.androidx.constraintlayout
+    implementation 'com.google.android.gms:play-services-auth:21.0.0'
+    implementation 'com.google.api-client:google-api-client-android:1.33.0'
+    implementation 'com.google.apis:google-api-services-drive:v3-rev20240123-2.0.0'
+    implementation 'com.google.oauth-client:google-oauth-client-jetty:1.34.1'
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.junit
+    androidTestImplementation libs.androidx.espresso.core
+}
