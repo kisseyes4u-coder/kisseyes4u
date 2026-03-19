@@ -12653,9 +12653,9 @@ public class PinActivity extends AppCompatActivity {
                 if (!stopsStr.isEmpty()) {
                     String[] stopItems = stopsStr.split(";");
                     for (int si = 0; si < stopItems.length - 1; si++) {
-                        String[] sp = stopItems[si].split("\|");
+                        String[] sp = stopItems[si].split("\\|");
                         if (sp.length > 0 && sp[0].equals(nodeId)) {
-                            String[] spNext = stopItems[si + 1].split("\|");
+                            String[] spNext = stopItems[si + 1].split("\\|");
                             if (spNext.length > 1) nextStopNm = spNext[1];
                             break;
                         }
