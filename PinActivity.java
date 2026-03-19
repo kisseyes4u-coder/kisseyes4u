@@ -12447,184 +12447,7 @@ public class PinActivity extends AppCompatActivity {
                         tvEmpty.setLayoutParams(emLp);
                         container.addView(tvEmpty);
                     } else {
-                        for (String[] route : fAllRoutes) {
-                            String rno  = route[0];
-                            String stnm = route[2];
-                            String etnm = route[3];
-
-                            String[] ai = fArrMap.get(rno);
-                            String timeStr, prevStr, timeColor, endNm, nextNm;
-
-                            if (ai != null) {
-                                timeStr   = ai[0];
-                                prevStr   = ai[1];
-                                timeColor = ai[2];
-                                endNm     = !ai[3].isEmpty() ? ai[3] : etnm;
-                                nextNm    = ai[4];
-                            } else {
-                                // 실시간 없음 → bus_cache에서 운행정보 조회
-                                String fRid2 = route[1];
-                                String startTime = "", endTime2 = "", interval = "";
-                                if (!fRid2.isEmpty()) {
-                                    android.content.SharedPreferences bc =
-                                            getSharedPreferences("bus_cache", MODE_PRIVATE);
-                                    String cKey = "route_" + fRid2;
-                                    startTime = bc.getString(cKey + "_startTime", "");
-                                    endTime2  = bc.getString(cKey + "_endTime", "");
-                                    interval  = bc.getString(cKey + "_interval", "");
-                                }
-                                // 1순위: bustimes.json 배차시간표에서 다음 출발 시간 조회
-                                String nextDep = getNextDeparture(rno, true);
-                                if (nextDep.isEmpty()) nextDep = getNextDeparture(rno, false);
-
-                                // 2순위: bus_cache 운행정보에서 계산 (fallback)
-                                if (nextDep.isEmpty() && !fRid2.isEmpty()) {
-                                    android.content.SharedPreferences bc =
-                                            getSharedPreferences("bus_cache", MODE_PRIVATE);
-                                    String cKey = "route_" + fRid2;
-                                    startTime = bc.getString(cKey + "_startTime", "");
-                                    interval  = bc.getString(cKey + "_interval", "");
-                                    if (!startTime.isEmpty() && !interval.isEmpty()) {
-                                        try {
-                                            java.util.Calendar now2 = java.util.Calendar.getInstance();
-                                            int nowMin2 = now2.get(java.util.Calendar.HOUR_OF_DAY) * 60
-                                                    + now2.get(java.util.Calendar.MINUTE);
-                                            int stMin = Integer.parseInt(startTime.substring(0,2)) * 60
-                                                    + Integer.parseInt(startTime.substring(2,4));
-                                            int ivMin = Integer.parseInt(interval);
-                                            if (ivMin > 0) {
-                                                int dep = stMin;
-                                                while (dep < nowMin2) dep += ivMin;
-                                                int dH = dep / 60, dM = dep % 60;
-                                                nextDep = dH + "시 " + String.format("%02d", dM) + "분 출발";
-                                            }
-                                        } catch (Exception ig) {}
-                                    }
-                                }
-                                timeStr   = nextDep.isEmpty() ? "도착정보 없음" : nextDep;
-                                prevStr   = nextDep.isEmpty() ? "" : "[기점]";
-                                timeColor = "#555555";
-                                endNm     = etnm;
-                                nextNm    = "";
-                            }
-
-                            LinearLayout row = new LinearLayout(this);
-                            row.setOrientation(LinearLayout.HORIZONTAL);
-                            row.setGravity(Gravity.CENTER_VERTICAL);
-                            row.setBackgroundColor(Color.WHITE);
-                            row.setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14));
-                            row.setLayoutParams(new LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-
-                            LinearLayout leftCol = new LinearLayout(this);
-                            leftCol.setOrientation(LinearLayout.VERTICAL);
-                            leftCol.setLayoutParams(new LinearLayout.LayoutParams(
-                                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-                            TextView tvRno = new TextView(this);
-                            tvRno.setText(rno);
-                            tvRno.setTextColor(Color.parseColor("#0984E3"));
-                            tvRno.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
-                            tvRno.setTypeface(null, android.graphics.Typeface.BOLD);
-                            leftCol.addView(tvRno);
-
-                            String subTxt = "";
-                            String validNextNm = (!nextNm.isEmpty() && !nextNm.equals(nodeNm)) ? nextNm : "";
-                            if (!endNm.isEmpty() && !validNextNm.isEmpty()) {
-                                subTxt = endNm + "방면  다음 : " + validNextNm;
-                            } else if (!endNm.isEmpty()) {
-                                subTxt = endNm + "방면";
-                            } else if (!validNextNm.isEmpty()) {
-                                subTxt = "다음 : " + validNextNm;
-                            }
-                            if (!subTxt.isEmpty()) {
-                                TextView tvSub = new TextView(this);
-                                tvSub.setText(subTxt);
-                                tvSub.setTextColor(Color.parseColor("#888888"));
-                                tvSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                                tvSub.setSingleLine(true);
-                                tvSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                                LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
-                                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                                subLp.setMargins(0, dpToPx(3), 0, 0);
-                                tvSub.setLayoutParams(subLp);
-                                leftCol.addView(tvSub);
-                            }
-                            row.addView(leftCol);
-
-                            LinearLayout rightCol = new LinearLayout(this);
-                            rightCol.setOrientation(LinearLayout.HORIZONTAL);
-                            rightCol.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-                            rightCol.setLayoutParams(new LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-
-                            TextView tvTime = new TextView(this);
-                            tvTime.setText(timeStr);
-                            tvTime.setTextColor(Color.parseColor(timeColor));
-                            tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
-                            tvTime.setTypeface(null, android.graphics.Typeface.BOLD);
-                            rightCol.addView(tvTime);
-
-                            if (!prevStr.isEmpty()) {
-                                TextView tvPrev = new TextView(this);
-                                tvPrev.setText(" " + prevStr);
-                                tvPrev.setTextColor(Color.parseColor("#888888"));
-                                tvPrev.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                                rightCol.addView(tvPrev);
-                            }
-                            row.addView(rightCol);
-
-                            // 노선 카드 클릭 → 해당 노선 타임라인으로 이동
-                            final String fRno = rno;
-                            final String fRid = route[1]; // routeId
-                            final String fRtp = route.length > 4 ? route[4] : "";
-                            row.setOnClickListener(vr -> {
-                                // routeDbList에서 routeId 찾기
-                                String foundRid = fRid;
-                                String foundRtp = fRtp;
-                                if ((foundRid == null || foundRid.isEmpty()) && routeDbList != null) {
-                                    for (String[] rd : routeDbList) {
-                                        if (rd[1].equals(fRno)) {
-                                            foundRid = rd[0];
-                                            foundRtp = rd.length > 4 ? rd[4] : "";
-                                            break;
-                                        }
-                                    }
-                                }
-                                if (foundRid != null && !foundRid.isEmpty()) {
-                                    busFixedHeader.removeAllViews();
-                                    busResultContainer.removeAllViews();
-                                    final String finalRid = foundRid;
-                                    final String finalRtp = foundRtp;
-                                    busScreenLoadStops(finalRid, fRno, busResultContainer, "forward", finalRtp);
-                                } else {
-                                    android.widget.Toast.makeText(this,
-                                            fRno + "번 노선 정보를 찾을 수 없습니다",
-                                            android.widget.Toast.LENGTH_SHORT).show();
-                                }
-                            });
-                            row.setBackground(android.util.TypedValue.applyDimension(
-                                    android.util.TypedValue.COMPLEX_UNIT_DIP, 0,
-                                    getResources().getDisplayMetrics()) >= 0
-                                    ? new android.graphics.drawable.ColorDrawable(Color.WHITE) : null);
-                            row.setClickable(true);
-                            row.setFocusable(true);
-                            android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
-                            android.graphics.drawable.ColorDrawable pressed = new android.graphics.drawable.ColorDrawable(Color.parseColor("#E3F2FD"));
-                            android.graphics.drawable.ColorDrawable normal2 = new android.graphics.drawable.ColorDrawable(Color.WHITE);
-                            sld.addState(new int[]{android.R.attr.state_pressed}, pressed);
-                            sld.addState(new int[]{}, normal2);
-                            row.setBackground(sld);
-
-                            container.addView(row);
-
-                            View div = new View(this);
-                            div.setBackgroundColor(Color.parseColor("#EEEEEE"));
-                            div.setLayoutParams(new LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
-                            container.addView(div);
-                        }
-                    }
+                        renderArrivalRows(nodeId, nodeNm, nodeNo, filterRouteNo, container, fAllRoutes, fArrMap);
 
                     // 새로고침/안내문구 제거됨
                 });
@@ -12817,6 +12640,8 @@ public class PinActivity extends AppCompatActivity {
             if (isFavArr) { starBg2.setColor(Color.parseColor("#F39C12")); starBg2.setStroke(dpToPx(1), Color.parseColor("#F39C12")); tvStar2.setTextColor(Color.WHITE); }
             else          { starBg2.setColor(Color.WHITE); starBg2.setStroke(dpToPx(1), Color.parseColor("#AAAAAA")); tvStar2.setTextColor(Color.parseColor("#888888")); }
             tvStar2.setBackground(starBg2);
+            tvStar2.setClickable(true);
+            tvStar2.setFocusable(true);
             tvStar2.setOnClickListener(v2 -> {
                 boolean wasFav = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(favKey, false);
                 if (wasFav) {
@@ -12900,6 +12725,8 @@ public class PinActivity extends AppCompatActivity {
             if (isAlarmed2) { bellBg2.setColor(Color.parseColor("#0984E3")); bellBg2.setStroke(dpToPx(1), Color.parseColor("#0984E3")); tvBell2.setTextColor(Color.WHITE); }
             else            { bellBg2.setColor(Color.WHITE); bellBg2.setStroke(dpToPx(1), Color.parseColor("#AAAAAA")); tvBell2.setTextColor(Color.parseColor("#888888")); }
             tvBell2.setBackground(bellBg2);
+            tvBell2.setClickable(true);
+            tvBell2.setFocusable(true);
             tvBell2.setOnClickListener(vb -> android.widget.Toast.makeText(this, fRno + "번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
 
             // 버튼 행 (즐겨찾기 + 알림)
@@ -17164,17 +16991,7 @@ public class PinActivity extends AppCompatActivity {
         }
         if (favKeys.isEmpty() && favRouteKeys.isEmpty()) return;
 
-        // 즐겨찾기 타이틀
-        TextView tvFavTitle = new TextView(this);
-        tvFavTitle.setText("즐겨찾기");
-        tvFavTitle.setTextColor(Color.parseColor("#1A1A2E"));
-        tvFavTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-        tvFavTitle.setTypeface(null, android.graphics.Typeface.BOLD);
-        LinearLayout.LayoutParams ttLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        ttLp.setMargins(0, 0, 0, dpToPx(8));
-        tvFavTitle.setLayoutParams(ttLp);
-        favSection.addView(tvFavTitle);
+        // 즐겨찾기 타이틀 (숨김)
 
         // ── 노선 즐겨찾기 카드 (2열 그리드) ──────────────────
         LinearLayout routeGrid = new LinearLayout(this);
