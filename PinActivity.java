@@ -12758,23 +12758,32 @@ public class PinActivity extends AppCompatActivity {
                 leftCol.addView(tvSub);
             }
             row.addView(leftCol);
+            // 오른쪽 컬럼: 시간(위) + 즐겨찾기/알림(아래) 세로 배치
             LinearLayout rightCol = new LinearLayout(this);
-            rightCol.setOrientation(LinearLayout.HORIZONTAL);
-            rightCol.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-            rightCol.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            rightCol.setOrientation(LinearLayout.VERTICAL);
+            rightCol.setGravity(Gravity.END);
+            rightCol.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            // 시간 행
+            LinearLayout timeRow = new LinearLayout(this);
+            timeRow.setOrientation(LinearLayout.HORIZONTAL);
+            timeRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+            timeRow.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             TextView tvTime = new TextView(this);
             tvTime.setText(timeStr);
             tvTime.setTextColor(Color.parseColor(timeColor));
             tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
             tvTime.setTypeface(null, android.graphics.Typeface.BOLD);
-            rightCol.addView(tvTime);
+            timeRow.addView(tvTime);
             if (!prevStr.isEmpty()) {
                 TextView tvPrev = new TextView(this);
                 tvPrev.setText(" " + prevStr);
                 tvPrev.setTextColor(Color.parseColor("#888888"));
                 tvPrev.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                rightCol.addView(tvPrev);
+                timeRow.addView(tvPrev);
             }
+            rightCol.addView(timeRow);
             final String fRno = rno, fRid = route[1], fRtp = route.length > 4 ? route[4] : "";
             // 기존 즐겨찾기/알림 버튼 (타임라인과 동일 방식)
             final String favKey = "fav_stop_" + fRid + "_" + nodeId;
@@ -12874,7 +12883,7 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout.LayoutParams bellLp2 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             bellLp2.gravity = Gravity.CENTER_VERTICAL; bellLp2.setMargins(dpToPx(4),0,0,0); tvBell2.setLayoutParams(bellLp2);
             tvBell2.setOnClickListener(vb -> android.widget.Toast.makeText(this, fRno+"번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
-            // rightCol 하단에 즐겨찾기/알림 버튼 추가
+            // 즐겨찾기/알림 버튼 행을 rightCol 아래에 추가
             LinearLayout arrBtnRow = new LinearLayout(this);
             arrBtnRow.setOrientation(LinearLayout.HORIZONTAL);
             arrBtnRow.setGravity(Gravity.END);
@@ -12884,9 +12893,6 @@ public class PinActivity extends AppCompatActivity {
             arrBtnRow.setLayoutParams(arrBtnRowLp);
             arrBtnRow.addView(tvStar2);
             arrBtnRow.addView(tvBell2);
-            // rightCol을 VERTICAL로 변경해서 시간+버튼 세로 배치
-            rightCol.setOrientation(LinearLayout.VERTICAL);
-            rightCol.setGravity(Gravity.END);
             rightCol.addView(arrBtnRow);
             row.addView(rightCol);
             // 노선 카드 클릭
@@ -17687,7 +17693,7 @@ public class PinActivity extends AppCompatActivity {
             if (stopBusBmp != null) {
                 android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
                 ivStopBus.setImageBitmap(stopBusBmp);
-                int iconSize = isRouteStop ? dpToPx(32) : dpToPx(24);
+                int iconSize = isRouteStop ? dpToPx(32) : dpToPx(32);
                 LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(iconSize, iconSize);
                 stopBusLp.setMargins(0, 0, dpToPx(6), 0);
                 stopBusLp.gravity = Gravity.CENTER_VERTICAL;
