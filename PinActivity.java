@@ -10348,7 +10348,7 @@ public class PinActivity extends AppCompatActivity {
         btnBack.setTypeface(null, android.graphics.Typeface.BOLD);
         btnBack.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
         LinearLayout.LayoutParams backLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
-        backLp.setMargins(0, 0, dpToPx(4), 0);
+        backLp.setMargins(0, 0, dpToPx(2), 0);
         btnBack.setLayoutParams(backLp);
         btnBack.setOnClickListener(v -> busNavigateBack());
         btnBar.addView(btnBack);
