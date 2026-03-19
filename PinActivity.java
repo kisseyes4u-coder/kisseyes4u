@@ -12529,14 +12529,11 @@ public class PinActivity extends AppCompatActivity {
                             leftCol.addView(tvRno);
 
                             String subTxt = "";
-                            // 다음 정류장이 현재 정류장과 같으면 표시 안 함
                             String validNextNm = (!nextNm.isEmpty() && !nextNm.equals(nodeNm)) ? nextNm : "";
                             if (!endNm.isEmpty() && !validNextNm.isEmpty()) {
-                                String es = endNm.length() > 9 ? endNm.substring(0, 9) + "\u2026" : endNm;
-                                subTxt = es + "방면 다음 : " + validNextNm;
+                                subTxt = endNm + "방면  다음 : " + validNextNm;
                             } else if (!endNm.isEmpty()) {
-                                String es = endNm.length() > 9 ? endNm.substring(0, 9) + "\u2026" : endNm;
-                                subTxt = (!stnm.isEmpty() ? stnm + " \u2194 " : "") + es;
+                                subTxt = endNm + "방면";
                             } else if (!validNextNm.isEmpty()) {
                                 subTxt = "다음 : " + validNextNm;
                             }
@@ -17188,7 +17185,7 @@ public class PinActivity extends AppCompatActivity {
             rCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
             rCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             rCard.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
-            LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0, dpToPx(120), 1f);
+            LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0, dpToPx(108), 1f);
             rCardLp.setMargins(0, 0, routeColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             rCard.setLayoutParams(rCardLp);
 
@@ -17659,7 +17656,7 @@ public class PinActivity extends AppCompatActivity {
             card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
             card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             card.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
-            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(0, dpToPx(120), 1f);
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(0, dpToPx(108), 1f);
             cardLp.setMargins(0, 0, stopColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             card.setLayoutParams(cardLp);
 
@@ -17693,7 +17690,7 @@ public class PinActivity extends AppCompatActivity {
             if (stopBusBmp != null) {
                 android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
                 ivStopBus.setImageBitmap(stopBusBmp);
-                int iconSize = isRouteStop ? dpToPx(32) : dpToPx(32);
+                int iconSize = dpToPx(32);
                 LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(iconSize, iconSize);
                 stopBusLp.setMargins(0, 0, dpToPx(6), 0);
                 stopBusLp.gravity = Gravity.CENTER_VERTICAL;
@@ -18004,10 +18001,19 @@ public class PinActivity extends AppCompatActivity {
                 card.addView(tvStopSub);
             }
 
-            // 카드 탭 → 해당 노선 타임라인으로 이동
+            // 카드 탭 → 노선 있으면 타임라인, 없으면 정류소 도착화면
             card.setOnClickListener(v2 -> {
-                if (fRouteId.isEmpty()) return;
-                busScreenLoadStops(fRouteId, fRouteNo, busResultContainer, "forward", "");
+                if (!fRouteId.isEmpty()) {
+                    busScreenLoadStops(fRouteId, fRouteNo, busResultContainer, "forward", "");
+                } else {
+                    // 정류소만 즐겨찾기 → 도착화면으로 이동
+                    String nId = fCompositeKey; // compositeKey = nodeId
+                    String nNm = fStopName;
+                    String nNo = prefs.getString("fav_stop_no_" + nId, "");
+                    if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+                    if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+                    busScreenLoadArrival(nId, nNm, nNo, "", busResultContainer);
+                }
             });
 
             if (stopRow != null) stopRow.addView(card);
