@@ -215,33 +215,36 @@ public class PinActivity extends AppCompatActivity {
 
     /** assets/bus.png - 흰 배경 + 진한 보라 아이콘 (즐겨찾기 카드용) */
     private android.graphics.Bitmap getBusIconPurple() {
-        if (busIconPurpleBitmap == null) {
-            try {
-                android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
-                        getAssets().open("bus.png"));
-                if (raw != null) {
-                    int w = raw.getWidth(), h = raw.getHeight();
-                    android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
-                    int[] pixels = new int[w * h];
-                    raw.getPixels(pixels, 0, w, 0, 0, w, h);
-                    for (int i = 0; i < pixels.length; i++) {
-                        int r2 = (pixels[i] >> 16) & 0xFF;
-                        int g2 = (pixels[i] >> 8)  & 0xFF;
-                        int b2 =  pixels[i]         & 0xFF;
-                        int brightness = (r2 + g2 + b2) / 3;
-                        if (brightness > 128) {
-                            pixels[i] = 0xFF6C3FA0; // 진한 보라
-                        } else {
-                            pixels[i] = 0xFFFFFFFF; // 흰색 배경
-                        }
+        return getBusIconColor(0xFF6C3FA0);
+    }
+
+    /** assets/bus.png를 지정된 색상으로 렌더링 */
+    private android.graphics.Bitmap getBusIconColor(int argbColor) {
+        try {
+            android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                    getAssets().open("bus.png"));
+            if (raw != null) {
+                int w = raw.getWidth(), h = raw.getHeight();
+                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                int[] pixels = new int[w * h];
+                raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                for (int i = 0; i < pixels.length; i++) {
+                    int r2 = (pixels[i] >> 16) & 0xFF;
+                    int g2 = (pixels[i] >> 8)  & 0xFF;
+                    int b2 =  pixels[i]         & 0xFF;
+                    int brightness = (r2 + g2 + b2) / 3;
+                    if (brightness > 128) {
+                        pixels[i] = argbColor;
+                    } else {
+                        pixels[i] = 0xFFFFFFFF;
                     }
-                    result.setPixels(pixels, 0, w, 0, 0, w, h);
-                    busIconPurpleBitmap = result;
-                    raw.recycle();
                 }
-            } catch (Exception ignored) {}
-        }
-        return busIconPurpleBitmap;
+                result.setPixels(pixels, 0, w, 0, 0, w, h);
+                raw.recycle();
+                return result;
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     /** assets/bus.png 로드 - 검정 배경 투명화 + 흰색 픽셀 → 빨간색 (타임라인 버스 위치용) */
@@ -12674,18 +12677,21 @@ public class PinActivity extends AppCompatActivity {
 
     /** 노선유형 → [표시명, 배지색] */
     private String[] routeTypeBadge(String routeType) {
-        if (routeType == null || routeType.isEmpty()) return new String[]{"", "#AAAAAA"};
+        if (routeType == null || routeType.isEmpty()) return new String[]{"", "#0984E3"};
         if (routeType.contains("광역"))   return new String[]{"광역", "#8E44AD"};
         if (routeType.contains("직행"))   return new String[]{"직행", "#C0392B"};
         if (routeType.contains("급행"))   return new String[]{"급행", "#E74C3C"};
         if (routeType.contains("간선"))   return new String[]{"도시", "#0984E3"};
         if (routeType.contains("지선"))   return new String[]{"지선", "#27AE60"};
-        if (routeType.contains("마을"))   return new String[]{"마을", "#27AE60"};
+        if (routeType.contains("마을"))   return new String[]{"마을", "#00B894"};
         if (routeType.contains("외곽"))   return new String[]{"외곽", "#E67E22"};
         if (routeType.contains("순환"))   return new String[]{"순환", "#16A085"};
         if (routeType.contains("공항"))   return new String[]{"공항", "#2980B9"};
         if (routeType.contains("좌석"))   return new String[]{"좌석", "#D35400"};
         if (routeType.contains("도시"))   return new String[]{"도시", "#0984E3"};
+        if (routeType.contains("계룡"))   return new String[]{"계룡", "#6C5CE7"};
+        if (routeType.contains("농어촌")) return new String[]{"농촌", "#FDCB6E"};
+        if (routeType.contains("시외"))   return new String[]{"시외", "#636E72"};
         // 그 외는 앞 2글자
         String label = routeType.length() > 2 ? routeType.substring(0, 2) : routeType;
         return new String[]{label, "#636E72"};
@@ -16870,6 +16876,12 @@ public class PinActivity extends AppCompatActivity {
 
             // 오른쪽 위: 버스이미지 + 설정 + 알림 버튼 행
             final String fRKey = rKey;
+            // routeType 가져오기 (bus_cache에서)
+            String rTpCached = getSharedPreferences("bus_cache", MODE_PRIVATE)
+                    .getString("route_" + rId + "_rTp", "");
+            String[] rBadge = routeTypeBadge(rTpCached);
+            String rTypeColor = rBadge[1];
+            int rTypeColorInt = Color.parseColor(rTypeColor);
 
             LinearLayout iconBtnRow = new LinearLayout(this);
             iconBtnRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -16879,7 +16891,7 @@ public class PinActivity extends AppCompatActivity {
 
             // 버스 이미지 (설정 왼쪽)
             android.widget.ImageView ivFavBus = new android.widget.ImageView(this);
-            android.graphics.Bitmap favBusBmp = getBusIconPurple();
+            android.graphics.Bitmap favBusBmp = getBusIconColor(0xFF000000 | (rTypeColorInt & 0xFFFFFF));
             if (favBusBmp != null) ivFavBus.setImageBitmap(favBusBmp);
             LinearLayout.LayoutParams favBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
             favBusLp.setMargins(0, 0, dpToPx(6), 0);
@@ -17187,7 +17199,7 @@ public class PinActivity extends AppCompatActivity {
             // 버스 번호
             TextView tvRNo = new TextView(this);
             tvRNo.setText(rNo + "번");
-            tvRNo.setTextColor(Color.parseColor("#6C3FA0"));
+            tvRNo.setTextColor(Color.parseColor(rTypeColor));
             tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
             tvRNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
             tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -17344,9 +17356,15 @@ public class PinActivity extends AppCompatActivity {
             sIconBtnRow.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-            // 버스 아이콘 (왼쪽)
+            // 버스 아이콘 (왼쪽) - routeType 색상
+            String sTpCached = getSharedPreferences("bus_cache", MODE_PRIVATE)
+                    .getString("route_" + routeId + "_rTp", "");
+            String[] sBadge = routeTypeBadge(sTpCached);
+            String sTypeColor = sBadge[1];
+            int sTypeColorInt = Color.parseColor(sTypeColor);
+
             android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
-            android.graphics.Bitmap stopBusBmp = getBusIconPurple();
+            android.graphics.Bitmap stopBusBmp = getBusIconColor(0xFF000000 | (sTypeColorInt & 0xFFFFFF));
             if (stopBusBmp != null) ivStopBus.setImageBitmap(stopBusBmp);
             LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
             stopBusLp.setMargins(0, 0, dpToPx(6), 0);
@@ -17621,7 +17639,7 @@ public class PinActivity extends AppCompatActivity {
             // 노선 번호 (보라색)
             TextView tvStopRouteNo = new TextView(this);
             tvStopRouteNo.setText(routeNo + "번");
-            tvStopRouteNo.setTextColor(Color.parseColor("#6C3FA0"));
+            tvStopRouteNo.setTextColor(Color.parseColor(sTypeColor));
             tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
             tvStopRouteNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
             tvStopRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
