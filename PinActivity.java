@@ -12719,10 +12719,14 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setBackgroundColor(Color.WHITE);
             row.setPadding(dpToPx(14), dpToPx(8), dpToPx(10), dpToPx(8));
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            // 배경 먼저 설정 (자식뷰 addView 전)
+            android.graphics.drawable.StateListDrawable sldEarly = new android.graphics.drawable.StateListDrawable();
+            sldEarly.addState(new int[]{android.R.attr.state_pressed}, new android.graphics.drawable.ColorDrawable(Color.parseColor("#E3F2FD")));
+            sldEarly.addState(new int[]{}, new android.graphics.drawable.ColorDrawable(Color.WHITE));
+            row.setBackground(sldEarly);
 
             // ─ 왼쪽: 노선번호 + 서브텍스트 ─
             LinearLayout leftCol = new LinearLayout(this);
@@ -12917,10 +12921,6 @@ public class PinActivity extends AppCompatActivity {
 
             // 노선 카드 클릭 → 타임라인
             row.setClickable(true); row.setFocusable(true);
-            android.graphics.drawable.StateListDrawable sld2 = new android.graphics.drawable.StateListDrawable();
-            sld2.addState(new int[]{android.R.attr.state_pressed}, new android.graphics.drawable.ColorDrawable(Color.parseColor("#E3F2FD")));
-            sld2.addState(new int[]{}, new android.graphics.drawable.ColorDrawable(Color.WHITE));
-            row.setBackground(sld2);
             row.setOnClickListener(vr -> {
                 String foundRid = fRid;
                 String foundRtp = fRtp;
@@ -17166,7 +17166,7 @@ public class PinActivity extends AppCompatActivity {
 
         // 즐겨찾기 타이틀
         TextView tvFavTitle = new TextView(this);
-        tvFavTitle.setText("★ 즐겨찾기");
+        tvFavTitle.setText("즐겨찾기");
         tvFavTitle.setTextColor(Color.parseColor("#1A1A2E"));
         tvFavTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
         tvFavTitle.setTypeface(null, android.graphics.Typeface.BOLD);
