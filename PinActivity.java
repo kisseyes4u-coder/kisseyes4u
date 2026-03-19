@@ -15184,26 +15184,35 @@ public class PinActivity extends AppCompatActivity {
     private void loadBusTimesFromJson(String json) {
         try {
             java.util.Map<String, String[]> map = new java.util.HashMap<>();
-            int i = 0;
-            while (true) {
-                // 각 노선: "211":{"src":"...","dst":"...","s":["0540",...],"d":[...]}
-                int colon = json.indexOf("\":{", i);
-                if (colon < 0) break;
-                int keyStart = json.lastIndexOf("\"", colon - 1);
-                if (keyStart < 0) { i = colon + 1; continue; }
-                String rno = json.substring(keyStart + 1, colon);
-                // src, dst
-                int objStart = colon + 1;
-                int objEnd = json.indexOf("}}", objStart);
-                if (objEnd < 0) break;
-                String obj = json.substring(objStart, objEnd + 1);
-                String src = jsonVal(obj, "src");
-                String dst = jsonVal(obj, "dst");
-                // s 배열 파싱
-                String sTimes = parseJsonArray(obj, "\"s\":");
-                String dTimes = parseJsonArray(obj, "\"d\":");
-                if (!rno.isEmpty()) map.put(rno, new String[]{src, dst, sTimes, dTimes});
-                i = objEnd + 1;
+            int pos = 0;
+            while (pos < json.length()) {
+                // "211":{ 패턴 찾기
+                int qs = json.indexOf('"', pos);
+                if (qs < 0) break;
+                int qe = json.indexOf('"', qs + 1);
+                if (qe < 0) break;
+                String rno = json.substring(qs + 1, qe);
+                // ":{ 확인
+                int colonBrace = json.indexOf(":{", qe);
+                if (colonBrace != qe + 1) { pos = qe + 1; continue; }
+                int objOpen = colonBrace + 1; // { 위치
+                // 객체 끝 찾기: ] 다음 }
+                int sArr = json.indexOf('"s":', objOpen);
+                int dArr = json.indexOf('"d":', objOpen);
+                int sEnd = sArr >= 0 ? json.indexOf(']', json.indexOf('[', sArr)) : -1;
+                int dEnd = dArr >= 0 ? json.indexOf(']', json.indexOf('[', dArr)) : -1;
+                int objClose = Math.max(sEnd, dEnd);
+                if (objClose < 0) { pos = objOpen + 1; continue; }
+                // src, dst 추출
+                String src = extractJsonStr(json, objOpen, "src");
+                String dst = extractJsonStr(json, objOpen, "dst");
+                // s, d 배열 추출
+                String sTimes = extractJsonArr(json, objOpen, "s");
+                String dTimes = extractJsonArr(json, objOpen, "d");
+                if (!rno.isEmpty() && rno.length() <= 10) {
+                    map.put(rno, new String[]{src, dst, sTimes, dTimes});
+                }
+                pos = objClose + 2;
             }
             busTimesMap = map;
             android.util.Log.d("BusTimes", "loaded: " + map.size() + " routes");
@@ -15212,13 +15221,33 @@ public class PinActivity extends AppCompatActivity {
         }
     }
 
+    /** JSON 객체에서 문자열 값 추출: "key":"value" */
+    private String extractJsonStr(String json, int from, String key) {
+        String k = "\"" + key + "\":\"";
+        int s = json.indexOf(k, from);
+        if (s < 0) return "";
+        s += k.length();
+        int e = json.indexOf('"', s);
+        return e < 0 ? "" : json.substring(s, e);
+    }
+
+    /** JSON 객체에서 배열 추출: "key":["0540","0605",...] → "0540,0605,..." */
+    private String extractJsonArr(String json, int from, String key) {
+        String k = "\"" + key + "\":";
+        int idx = json.indexOf(k, from);
+        if (idx < 0) return "";
+        int start = json.indexOf('[', idx + k.length());
+        int end = json.indexOf(']', start);
+        if (start < 0 || end < 0) return "";
+        return json.substring(start + 1, end).replace("\"", "").replace(" ", "");
+    }
+
     private String parseJsonArray(String json, String key) {
         int idx = json.indexOf(key);
         if (idx < 0) return "";
         int start = json.indexOf('[', idx);
         int end = json.indexOf(']', start);
         if (start < 0 || end < 0) return "";
-        // "0540","0605",... → 0540,0605,...
         return json.substring(start + 1, end).replace("\"", "").replace(" ", "");
     }
 
