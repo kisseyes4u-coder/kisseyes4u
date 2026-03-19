@@ -11961,6 +11961,43 @@ public class PinActivity extends AppCompatActivity {
         d.show();
     }
 
+    /** [TEST] 블록 삭제 시 특정 사용자 + 관리자에게만 삭제 신호 FCM 전송 */
+    private void sendTestDeleteSignal(String targetEmail) {
+        new Thread(() -> {
+            try {
+                DriveReadHelper reader = new DriveReadHelper(this);
+                reader.readFile("fcm_tokens.txt", new DriveReadHelper.ReadCallback() {
+                    @Override public void onSuccess(String tokensContent) {
+                        String targetToken = null;
+                        String ownerToken  = null;
+                        for (String line : tokensContent.split("\r?\n")) {
+                            line = line.trim();
+                            if (line.isEmpty()) continue;
+                            String[] parts = line.split("\\|");
+                            if (parts.length < 2) continue;
+                            String email = parts[0].trim();
+                            String token = parts[1].trim();
+                            if (token.isEmpty()) continue;
+                            if (email.equalsIgnoreCase(targetEmail)) targetToken = token;
+                            if (email.equalsIgnoreCase(OWNER_EMAIL))  ownerToken  = token;
+                        }
+                        // 대상 사용자에게 삭제 신호
+                        if (targetToken != null)
+                            SmsReceiver.sendDeleteSignalToToken(PinActivity.this, targetToken);
+                        // 관리자에게도 (자신의 화면은 이미 갱신됐지만 pending 처리용)
+                        if (ownerToken != null && !ownerToken.equals(targetToken))
+                            SmsReceiver.sendDeleteSignalToToken(PinActivity.this, ownerToken);
+                    }
+                    @Override public void onFailure(String error) {
+                        android.util.Log.e("FCM_TEST", "토큰 읽기 실패: " + error);
+                    }
+                });
+            } catch (Exception e) {
+                android.util.Log.e("FCM_TEST", "sendTestDeleteSignal 오류: " + e.getMessage());
+            }
+        }).start();
+    }
+
     /** FCM 테스트를 특정 이메일에게만 전송 */
     private void sendFcmTestToSpecificUser(String fakeBody, String targetEmail) {
         String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss",
@@ -13700,19 +13737,24 @@ public class PinActivity extends AppCompatActivity {
                 }
                 // 삭제 후 balance.txt 갱신 (남은 블록에서 최신 잔액 재파싱)
                 updateBalanceTxtFromBlocks(remaining);
-                // 삭제된 블록 중 [TEST] 블록만 있으면 FCM 신호 생략
-                // (Drive에 저장 안 된 테스트 블록 삭제 시 불필요한 FCM 전송 방지)
+                // 삭제된 블록 분류: 실제 블록 / [TEST] 블록
                 boolean hasRealDelete = false;
+                boolean hasTestDelete = false;
                 for (int si = 0; si < cachedBlocks.size(); si++) {
                     if (selectedIdx.contains(si)) {
                         String delBlock = cachedBlocks.get(si);
-                        if (!delBlock.contains("[TEST]")) { hasRealDelete = true; break; }
+                        if (delBlock.contains("[TEST]")) hasTestDelete = true;
+                        else hasRealDelete = true;
                     }
                 }
                 if (hasRealDelete) {
+                    // 실제 블록 삭제 → 전체 사용자에게 삭제 신호
                     SmsReceiver.sendFcmDeleteSignal(PinActivity.this);
-                } else {
-                    android.util.Log.d("DELETE_DEBUG", "[TEST] 블록 삭제 → FCM 신호 생략");
+                }
+                if (hasTestDelete && !hasRealDelete) {
+                    // [TEST] 블록만 삭제 → kisseyes4uu + 관리자에게만 삭제 신호
+                    android.util.Log.d("DELETE_DEBUG", "[TEST] 블록 삭제 → kisseyes4uu + 관리자에게만 FCM 전송");
+                    sendTestDeleteSignal("kisseyes4uu@gmail.com");
                 }
                 runOnUiThread(() -> {
                     // 캐시를 삭제 결과로 즉시 교체 (Drive 재읽기 불필요)
