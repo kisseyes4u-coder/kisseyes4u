@@ -17966,7 +17966,7 @@ public class PinActivity extends AppCompatActivity {
             gridRow.addView(emptyFav);
         }
         if (colIdx > 0) favSection.addView(grid);
-
+    }
 
     /** fav_order에 항목 추가 (중복 방지) */
     private void favOrderAdd(String typeKey) {
