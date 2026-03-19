@@ -15225,8 +15225,6 @@ public class PinActivity extends AppCompatActivity {
             }
             busTimesMap = map;
             android.util.Log.d("BusTimes", "loaded: " + map.size() + " routes");
-            runOnUiThread(() -> android.widget.Toast.makeText(this,
-                    "배차시간표 " + map.size() + "개 노선 로드", android.widget.Toast.LENGTH_SHORT).show());
         } catch (Exception e) {
             android.util.Log.e("BusTimes", "parse error: " + e.getMessage());
         }
