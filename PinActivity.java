@@ -11971,8 +11971,10 @@ public class PinActivity extends AppCompatActivity {
             if (c != null && !c.isEmpty()) convertedArr[0] = c;
         } catch (Exception ignored) {}
         final String converted = convertedArr[0];
-        // ★ [TEST] 태그 추가 - Drive 저장 안 함, 관리자 화면에서 구분 표시, 삭제 시 FCM 신호 생략
+        // ★ [TEST] 태그 추가 - Test.txt에 저장, sms_raw는 건드리지 않음
         final String newBlock = timestamp + "\n[TEST]\n" + converted;
+        // Test.txt 저장 엔트리 (구분자 포함)
+        final String testEntry = newBlock + "\n-----------------------------------\n";
 
         // 제목/본문 파싱
         String title = "[TEST] 잔액 변경", body2 = "[테스트] 통장 잔액이 변경되었습니다.";
@@ -11986,10 +11988,27 @@ public class PinActivity extends AppCompatActivity {
 
         new Thread(() -> {
             try {
+                // ── 1. Test.txt에 이어쓰기 (sms_raw는 건드리지 않음) ──
                 DriveReadHelper reader = new DriveReadHelper(this);
-                reader.readFile("fcm_tokens.txt", new DriveReadHelper.ReadCallback() {
+                reader.readFile("Test.txt", new DriveReadHelper.ReadCallback() {
+                    @Override public void onSuccess(String existing) {
+                        saveTestFile(existing + testEntry);
+                    }
+                    @Override public void onFailure(String error) {
+                        // Test.txt 없으면 새로 생성
+                        saveTestFile(testEntry);
+                    }
+                });
+            } catch (Exception e) {
+                android.util.Log.e("FCM_TEST", "Test.txt 읽기 오류: " + e.getMessage());
+                saveTestFile(testEntry); // 오류 시 새로 생성
+            }
+
+            // ── 2. fcm_tokens.txt에서 토큰 수집 후 FCM 전송 ──
+            try {
+                DriveReadHelper reader2 = new DriveReadHelper(this);
+                reader2.readFile("fcm_tokens.txt", new DriveReadHelper.ReadCallback() {
                     @Override public void onSuccess(String tokensContent) {
-                        // 대상 이메일 토큰 + 관리자 토큰 수집
                         String targetToken = null;
                         String ownerToken  = null;
                         for (String line : tokensContent.split("\r?\n")) {
@@ -12008,12 +12027,11 @@ public class PinActivity extends AppCompatActivity {
                                     targetEmail + " 토큰 없음", android.widget.Toast.LENGTH_SHORT).show());
                             return;
                         }
-                        // ★ Drive 저장 없이 FCM만 직접 전송
-                        // 대상 사용자
+                        // 대상 사용자에게 FCM 전송
                         SmsReceiver.sendFcmToSpecificToken(
                                 PinActivity.this, targetToken, fTitle, fBody, newBlock);
                         android.util.Log.d("FCM_TEST", "특정 사용자 전송: " + targetEmail);
-                        // 관리자 (테스트 확인용) - 대상과 다른 토큰일 때만
+                        // 관리자에게도 FCM 전송 (테스트 확인용)
                         if (ownerToken != null && !ownerToken.equals(targetToken)) {
                             SmsReceiver.sendFcmToSpecificToken(
                                     PinActivity.this, ownerToken, fTitle, fBody, newBlock);
@@ -12026,7 +12044,20 @@ public class PinActivity extends AppCompatActivity {
                     }
                 });
             } catch (Exception e) {
-                android.util.Log.e("FCM_TEST", "오류: " + e.getMessage());
+                android.util.Log.e("FCM_TEST", "FCM 전송 오류: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    /** Test.txt Drive 저장 */
+    private void saveTestFile(String content) {
+        new Thread(() -> {
+            try {
+                DriveUploadHelper up = new DriveUploadHelper(this);
+                up.uploadFileSync(content, "Test.txt");
+                android.util.Log.d("FCM_TEST", "Test.txt 저장 완료");
+            } catch (Exception e) {
+                android.util.Log.e("FCM_TEST", "Test.txt 저장 실패: " + e.getMessage());
             }
         }).start();
     }
@@ -13628,7 +13659,7 @@ public class PinActivity extends AppCompatActivity {
             }
         }
         android.util.Log.d("DELETE_DEBUG", "삭제 후 남은 블록: " + remaining.size());
-        // ── 연도별로 분리해서 각 파일에 저장 ──
+        // ── 연도별 + Test.txt로 분리해서 각 파일에 저장 ──
         java.util.Map<String, StringBuilder> yearMap = new java.util.LinkedHashMap<>();
         java.util.Calendar cal = java.util.Calendar.getInstance();
         int curYear  = cal.get(java.util.Calendar.YEAR);
@@ -13637,8 +13668,14 @@ public class PinActivity extends AppCompatActivity {
         String prevFile = SmsReceiver.getSmsRawFile(prevYear);
         yearMap.put(curFile,  new StringBuilder());
         yearMap.put(prevFile, new StringBuilder());
+        yearMap.put("Test.txt", new StringBuilder()); // 테스트 블록용
 
         for (String b : remaining) {
+            if (b.contains("[TEST]")) {
+                // [TEST] 블록은 Test.txt에 저장
+                yearMap.get("Test.txt").append(b).append("-----------------------------------\n");
+                continue;
+            }
             // 블록 첫 줄에서 연도 추출 (yyyy-MM-dd HH:mm:ss)
             String blockYear = String.valueOf(curYear); // 기본값: 현재 연도
             java.util.regex.Matcher ym = java.util.regex.Pattern
@@ -14365,32 +14402,49 @@ public class PinActivity extends AppCompatActivity {
         // 현재 연도 파일 읽기
         reader.readFile(curFile, new DriveReadHelper.ReadCallback() {
             @Override public void onSuccess(String curContent) {
-                // 이전 연도 파일도 읽기
                 DriveReadHelper reader2 = new DriveReadHelper(PinActivity.this);
                 reader2.readFile(prevFile, new DriveReadHelper.ReadCallback() {
                     @Override public void onSuccess(String prevContent) {
-                        // 이전 + 현재 순서로 합침 (이전이 더 오래됐으므로 앞에)
-                        callback.onSuccess(prevContent + curContent);
+                        // 이전 + 현재 + Test.txt 순서로 합침
+                        readTestTxtAndMerge(prevContent + curContent, callback);
                     }
                     @Override public void onFailure(String error) {
-                        // 이전 연도 파일 없으면 현재 연도만
-                        callback.onSuccess(curContent);
+                        readTestTxtAndMerge(curContent, callback);
                     }
                 });
             }
             @Override public void onFailure(String error) {
-                // 현재 연도 파일 없으면 이전 연도 시도
                 DriveReadHelper reader2 = new DriveReadHelper(PinActivity.this);
                 reader2.readFile(prevFile, new DriveReadHelper.ReadCallback() {
                     @Override public void onSuccess(String prevContent) {
-                        callback.onSuccess(prevContent);
+                        readTestTxtAndMerge(prevContent, callback);
                     }
                     @Override public void onFailure(String err2) {
-                        callback.onFailure("파일 없음");
+                        // sms_raw 없어도 Test.txt는 읽기 시도
+                        readTestTxtAndMerge("", callback);
                     }
                 });
             }
         });
+    }
+
+    /** Test.txt를 읽어서 기존 내용 뒤에 합쳐서 callback */
+    private void readTestTxtAndMerge(String baseContent, DriveReadHelper.ReadCallback callback) {
+        try {
+            DriveReadHelper testReader = new DriveReadHelper(this);
+            testReader.readFile("Test.txt", new DriveReadHelper.ReadCallback() {
+                @Override public void onSuccess(String testContent) {
+                    // Test.txt 내용을 뒤에 붙임 (최신 순 정렬은 renderMessages에서 역순으로)
+                    callback.onSuccess(baseContent + testContent);
+                }
+                @Override public void onFailure(String error) {
+                    // Test.txt 없으면 기존 내용만
+                    callback.onSuccess(baseContent);
+                }
+            });
+        } catch (Exception e) {
+            callback.onSuccess(baseContent);
+        }
     }
 
     /** 시스템 글자 크기 설정 무시 - dp 고정 크기 적용 */
