@@ -218,6 +218,38 @@ public class PinActivity extends AppCompatActivity {
         return getBusIconColor(0xFF6C3FA0);
     }
 
+    /** assets/stop.png를 지정된 색상으로 렌더링 (정류소 즐겨찾기 아이콘용) */
+    private android.graphics.Bitmap getStopIconColor(int argbColor) {
+        try {
+            android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                    getAssets().open("stop.png"));
+            if (raw != null) {
+                int w = raw.getWidth(), h = raw.getHeight();
+                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                int[] pixels = new int[w * h];
+                raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                for (int i = 0; i < pixels.length; i++) {
+                    int alpha = (pixels[i] >> 24) & 0xFF;
+                    int r2 = (pixels[i] >> 16) & 0xFF;
+                    int g2 = (pixels[i] >> 8)  & 0xFF;
+                    int b2 =  pixels[i]         & 0xFF;
+                    int brightness = (r2 + g2 + b2) / 3;
+                    if (alpha > 10 && brightness < 128) {
+                        // 어두운 픽셀 → 지정 색상
+                        pixels[i] = (alpha << 24) | (argbColor & 0x00FFFFFF);
+                    } else {
+                        // 밝거나 투명한 픽셀 → 투명
+                        pixels[i] = 0x00000000;
+                    }
+                }
+                result.setPixels(pixels, 0, w, 0, 0, w, h);
+                raw.recycle();
+                return result;
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     /** assets/bus.png를 지정된 색상으로 렌더링 */
     private android.graphics.Bitmap getBusIconColor(int argbColor) {
         try {
@@ -17402,7 +17434,7 @@ public class PinActivity extends AppCompatActivity {
             int sTypeColorInt = Color.parseColor(sTypeColor);
 
             android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
-            android.graphics.Bitmap stopBusBmp = getBusIconColor(0xFF000000 | (sTypeColorInt & 0xFFFFFF));
+            android.graphics.Bitmap stopBusBmp = getStopIconColor(0xFF000000 | (sTypeColorInt & 0xFFFFFF));
             if (stopBusBmp != null) ivStopBus.setImageBitmap(stopBusBmp);
             LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
             stopBusLp.setMargins(0, 0, dpToPx(6), 0);
