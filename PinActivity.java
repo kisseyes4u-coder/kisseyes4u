@@ -15747,13 +15747,18 @@ public class PinActivity extends AppCompatActivity {
         dtrLp.setMargins(0, dpToPx(8), 0, dpToPx(6));
         dayTabRow.setLayoutParams(dtrLp);
 
-        // 시간 그리드 영역
+        // 시간 그리드 영역 - 세로스크롤(ScrollView) + 가로스크롤(HorizontalScrollView)
         ScrollView sv = new ScrollView(this);
         sv.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(320)));
+        HorizontalScrollView hsv = new HorizontalScrollView(PinActivity.this);
+        hsv.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        hsv.setHorizontalScrollBarEnabled(true);
         LinearLayout gridWrap = new LinearLayout(this);
         gridWrap.setOrientation(LinearLayout.VERTICAL);
-        sv.addView(gridWrap);
+        hsv.addView(gridWrap);
+        sv.addView(hsv);
 
         // 현재 시간
         java.util.Calendar nowCal = java.util.Calendar.getInstance();
@@ -15867,6 +15872,13 @@ public class PinActivity extends AppCompatActivity {
                     String label = rowLine.substring(0, ci).trim();
                     String[] cs = rowLine.substring(ci+1).split(",", -1);
                     if (label.isEmpty()) continue;
+
+                    // 빈 행 스킵 - 모든 열이 비어있으면 표시 안 함
+                    boolean hasAnyData = false;
+                    for (int c = 0; c < cs.length && c < visibleCols; c++) {
+                        if (!cs[c].trim().isEmpty()) { hasAnyData = true; break; }
+                    }
+                    if (!hasAnyData) continue;
 
                     // 이 행의 기점 출발 시간 (짝수 인덱스) 중 현재 시간 이후 첫 번째
                     boolean hasNext = false;
