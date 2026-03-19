@@ -12361,11 +12361,18 @@ public class PinActivity extends AppCompatActivity {
                         if (sec >= 0) minSec.put(rno, sec);
 
                         String timeStr, timeColor;
-                        if (prev == 0 || sec <= 0) {
-                            java.util.Calendar cal = java.util.Calendar.getInstance();
-                            timeStr  = cal.get(java.util.Calendar.HOUR_OF_DAY) + "시 "
-                                    + String.format("%02d", cal.get(java.util.Calendar.MINUTE)) + "분 출발";
-                            timeColor = "#555555";
+                        if (sec <= 0 || prev == 0) {
+                            // 기점 대기 또는 정보 없음 → 배차시간표에서 다음 출발 시간
+                            String nd = getNextDeparture(rno, true);
+                            if (nd.isEmpty()) nd = getNextDeparture(rno, false);
+                            if (!nd.isEmpty()) {
+                                timeStr = nd; timeColor = "#555555";
+                            } else {
+                                java.util.Calendar cal = java.util.Calendar.getInstance();
+                                timeStr = cal.get(java.util.Calendar.HOUR_OF_DAY) + "시 "
+                                        + String.format("%02d", cal.get(java.util.Calendar.MINUTE)) + "분 출발";
+                                timeColor = "#555555";
+                            }
                         } else if (sec < 60) {
                             timeStr = "곧 도착"; timeColor = "#E74C3C";
                         } else if (sec / 60 <= 5) {
@@ -17358,9 +17365,16 @@ public class PinActivity extends AppCompatActivity {
             tvRNo.setTextColor(Color.parseColor(rTypeColor));
             tvRNo.setSingleLine(true);
             tvRNo.setEllipsize(null);
-            // 글자수 6자 초과 시 15dp로 축소
-            if ((rNo + "번").length() > 6) {
-                tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+            // 글자수에 따라 크기 조정
+            {
+                String rNoTxt = rNo + "번";
+                if (rNoTxt.length() > 9) {
+                    tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                    tvRNo.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                } else if (rNoTxt.length() > 6) {
+                    tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                    tvRNo.setEllipsize(null);
+                }
             }
             tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
             tvRNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
@@ -17821,9 +17835,16 @@ public class PinActivity extends AppCompatActivity {
             tvStopRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStopRouteNo.setSingleLine(true);
             tvStopRouteNo.setEllipsize(null);
-            // 글자수 6자 초과 시 15dp로 축소
-            if (tvStopRouteNo.getText().toString().length() > 6) {
-                tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+            // 글자수에 따라 크기 조정
+            {
+                String txt = tvStopRouteNo.getText().toString();
+                if (txt.length() > 9) {
+                    tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                    tvStopRouteNo.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                } else if (txt.length() > 6) {
+                    tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                    tvStopRouteNo.setEllipsize(null);
+                }
             }
             LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
