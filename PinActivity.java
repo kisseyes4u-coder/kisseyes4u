@@ -12469,13 +12469,13 @@ public class PinActivity extends AppCompatActivity {
                                     ssb.append(busText);
                                     ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor(badge2[1])),
                                             start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                    ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)(fs(26)*getResources().getDisplayMetrics().density)),
+                                    ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)(fs(30)*getResources().getDisplayMetrics().density)),
                                             start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                     ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
                                             start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                 }
                                 ((TextView)ph).setText(ssb);
-                                ((TextView)ph).setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(22));
+                                ((TextView)ph).setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(30));
                                 ((TextView)ph).setTypeface(null, android.graphics.Typeface.BOLD);
                                 ((TextView)ph).setGravity(Gravity.START);
                             }
@@ -12644,11 +12644,31 @@ public class PinActivity extends AppCompatActivity {
             leftCol.addView(rnoRow);
 
             // 서브텍스트 (방면+다음정류소)
-            // nodenm = 현재버스위치 정류소명 (다음정류소 아님)
-            // endnodenm = 종점방면 표시용
+            // 다음 정류소: bus_cache의 route_RID_stops에서 nodeId 다음 항목
+            String nextStopNm = "";
+            String rId4Next = route.length > 1 ? route[1] : "";
+            if (!rId4Next.isEmpty()) {
+                android.content.SharedPreferences bc4 = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                String stopsStr = bc4.getString("route_" + rId4Next + "_stops", "");
+                if (!stopsStr.isEmpty()) {
+                    String[] stopItems = stopsStr.split(";");
+                    for (int si = 0; si < stopItems.length - 1; si++) {
+                        String[] sp = stopItems[si].split("\|");
+                        if (sp.length > 0 && sp[0].equals(nodeId)) {
+                            String[] spNext = stopItems[si + 1].split("\|");
+                            if (spNext.length > 1) nextStopNm = spNext[1];
+                            break;
+                        }
+                    }
+                }
+            }
             String subTxt = "";
-            if (!endNm.isEmpty()) {
+            if (!endNm.isEmpty() && !nextStopNm.isEmpty()) {
+                subTxt = endNm + "방면  다음 : " + nextStopNm;
+            } else if (!endNm.isEmpty()) {
                 subTxt = endNm + "방면";
+            } else if (!nextStopNm.isEmpty()) {
+                subTxt = "다음 : " + nextStopNm;
             }
             if (!subTxt.isEmpty()) {
                 TextView tvSub = new TextView(this);
