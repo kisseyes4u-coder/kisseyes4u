@@ -11969,31 +11969,41 @@ public class PinActivity extends AppCompatActivity {
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             titleBar.addView(tvTitle);
 
-            // 정류소 즐겨찾기 버튼 (오른쪽 끝) - 정류소만 즐겨찾기
+            // 정류소 즐겨찾기 버튼 (기존 스타일)
             final String stopOnlyFavKey = "fav_stop_" + nodeId;
             boolean stopOnlyFaved = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(stopOnlyFavKey, false);
             TextView tvStopOnlyFav = new TextView(this);
-            tvStopOnlyFav.setText(stopOnlyFaved ? "★" : "☆");
-            tvStopOnlyFav.setTextColor(Color.parseColor(stopOnlyFaved ? "#F39C12" : "#AAAAAA"));
-            tvStopOnlyFav.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(22));
+            tvStopOnlyFav.setText("즐겨찾기");
+            tvStopOnlyFav.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvStopOnlyFav.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStopOnlyFav.setGravity(Gravity.CENTER);
-            tvStopOnlyFav.setPadding(dpToPx(8), dpToPx(4), dpToPx(4), dpToPx(4));
+            tvStopOnlyFav.setPadding(dpToPx(7), dpToPx(4), dpToPx(7), dpToPx(4));
+            android.graphics.drawable.GradientDrawable hFavBg = new android.graphics.drawable.GradientDrawable();
+            hFavBg.setCornerRadius(dpToPx(4));
+            if (stopOnlyFaved) { hFavBg.setColor(Color.parseColor("#F39C12")); hFavBg.setStroke(dpToPx(1),Color.parseColor("#F39C12")); tvStopOnlyFav.setTextColor(Color.WHITE); }
+            else               { hFavBg.setColor(Color.WHITE); hFavBg.setStroke(dpToPx(1),Color.parseColor("#AAAAAA")); tvStopOnlyFav.setTextColor(Color.parseColor("#888888")); }
+            tvStopOnlyFav.setBackground(hFavBg);
+            LinearLayout.LayoutParams hFavLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            hFavLp.gravity = Gravity.CENTER_VERTICAL; hFavLp.setMargins(dpToPx(4),0,0,0);
+            tvStopOnlyFav.setLayoutParams(hFavLp);
             tvStopOnlyFav.setOnClickListener(vf -> {
                 boolean cur = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(stopOnlyFavKey, false);
+                android.graphics.drawable.GradientDrawable newBg = new android.graphics.drawable.GradientDrawable();
+                newBg.setCornerRadius(dpToPx(4));
                 if (cur) {
                     getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
-                        .remove(stopOnlyFavKey)
-                        .remove("fav_stop_name_" + nodeId)
-                        .remove("fav_stop_no_" + nodeId).apply();
-                    tvStopOnlyFav.setText("☆"); tvStopOnlyFav.setTextColor(Color.parseColor("#AAAAAA"));
-                    android.widget.Toast.makeText(this, nodeNm + " 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
+                        .remove(stopOnlyFavKey).remove("fav_stop_name_"+nodeId).remove("fav_stop_no_"+nodeId).apply();
+                    newBg.setColor(Color.WHITE); newBg.setStroke(dpToPx(1),Color.parseColor("#AAAAAA"));
+                    tvStopOnlyFav.setTextColor(Color.parseColor("#888888")); tvStopOnlyFav.setBackground(newBg);
+                    android.widget.Toast.makeText(this, nodeNm+" 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
                 } else {
                     getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
                         .putBoolean(stopOnlyFavKey, true)
-                        .putString("fav_stop_name_" + nodeId, nodeNm)
-                        .putString("fav_stop_no_" + nodeId, nodeNo).apply();
-                    tvStopOnlyFav.setText("★"); tvStopOnlyFav.setTextColor(Color.parseColor("#F39C12"));
-                    android.widget.Toast.makeText(this, nodeNm + " 즐겨찾기 추가", android.widget.Toast.LENGTH_SHORT).show();
+                        .putString("fav_stop_name_"+nodeId, nodeNm)
+                        .putString("fav_stop_no_"+nodeId, nodeNo).apply();
+                    newBg.setColor(Color.parseColor("#F39C12")); newBg.setStroke(dpToPx(1),Color.parseColor("#F39C12"));
+                    tvStopOnlyFav.setTextColor(Color.WHITE); tvStopOnlyFav.setBackground(newBg);
+                    android.widget.Toast.makeText(this, nodeNm+" 즐겨찾기 추가", android.widget.Toast.LENGTH_SHORT).show();
                 }
                 busFavDirty = true;
             });
@@ -12849,9 +12859,34 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout.LayoutParams bellLp2 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             bellLp2.gravity = Gravity.CENTER_VERTICAL; bellLp2.setMargins(dpToPx(4),0,0,0); tvBell2.setLayoutParams(bellLp2);
             tvBell2.setOnClickListener(vb -> android.widget.Toast.makeText(this, fRno+"번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
-            row.addView(rightCol);
-            row.addView(tvStar2);
-            row.addView(tvBell2);
+            // 기존 즐겨찾기/알림 버튼을 시간 아래에 배치 (세로)
+            LinearLayout rightWrap = new LinearLayout(this);
+            rightWrap.setOrientation(LinearLayout.VERTICAL);
+            rightWrap.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+            rightWrap.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            // 시간 row
+            LinearLayout timeRow = new LinearLayout(this);
+            timeRow.setOrientation(LinearLayout.HORIZONTAL);
+            timeRow.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+            timeRow.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            // rightCol의 자식뷰(시간+이전정보)를 timeRow로 이동
+            for (int ci = rightCol.getChildCount()-1; ci >= 0; ci--) {
+                android.view.View cv = rightCol.getChildAt(ci);
+                rightCol.removeViewAt(ci);
+                timeRow.addView(cv, 0);
+            }
+            // 즐겨찾기/알림 버튼 row
+            LinearLayout arrBtnRow = new LinearLayout(this);
+            arrBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+            arrBtnRow.setGravity(Gravity.END);
+            LinearLayout.LayoutParams arrBtnRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            arrBtnRowLp.setMargins(0, dpToPx(4), 0, 0);
+            arrBtnRow.setLayoutParams(arrBtnRowLp);
+            arrBtnRow.addView(tvStar2);
+            arrBtnRow.addView(tvBell2);
+            rightWrap.addView(timeRow);
+            rightWrap.addView(arrBtnRow);
+            row.addView(rightWrap);
             // 노선 카드 클릭
             row.setClickable(true); row.setFocusable(true);
             android.graphics.drawable.StateListDrawable sld2 = new android.graphics.drawable.StateListDrawable();
