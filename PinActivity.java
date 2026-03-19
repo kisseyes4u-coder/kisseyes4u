@@ -17537,6 +17537,8 @@ public class PinActivity extends AppCompatActivity {
                     busScreenLoadStops(fRId, fRNo, resultContainer, fRDirKey, "");
                 }
             });
+            rCard.setTag("R:" + rKey);
+            allCards.add(rCard);
             if (gridRow != null) gridRow.addView(rCard);
             colIdx++;
         }
@@ -17944,6 +17946,8 @@ public class PinActivity extends AppCompatActivity {
 
             if (gridRow != null) gridRow.addView(card);
             colIdx++;
+            card.setTag("S:" + compositeKey);
+            allCards.add(card);
         }
 
         // 홀수개면 빈 공간 채우기
@@ -17957,58 +17961,71 @@ public class PinActivity extends AppCompatActivity {
         if (colIdx > 0) favSection.addView(grid);
 
         // ── 꾹 눌러서 드래그 순서 변경 ──────────────────────────
+        // dragFromIdx: 드래그 중인 카드 인덱스 (-1이면 비활성)
         final int[] dragFromIdx = {-1};
-        final LinearLayout[] dragCard = {null};
-        final float[] dragStartY = {0};
+        final LinearLayout[] dragCardRef = {null};
+        // 드래그 중 진입한 인덱스 추적 (중복 처리 방지)
+        final int[] lastEnteredIdx = {-1};
+
         for (int di = 0; di < allCards.size(); di++) {
             final int cardIdx = di;
             LinearLayout card2 = allCards.get(di);
+
+            // 꾹 누르면 드래그 시작
             card2.setOnLongClickListener(vl -> {
                 dragFromIdx[0] = cardIdx;
-                dragCard[0] = card2;
-                dragStartY[0] = 0;
-                // 드래그 시작 시각 효과
-                card2.setAlpha(0.6f);
-                card2.setScaleX(1.05f);
-                card2.setScaleY(1.05f);
-                // Android 드래그 시작
+                dragCardRef[0] = card2;
+                lastEnteredIdx[0] = cardIdx;
+                card2.setAlpha(0.55f);
+                card2.setScaleX(1.04f);
+                card2.setScaleY(1.04f);
+                android.content.ClipData cd = android.content.ClipData.newPlainText("fav", String.valueOf(cardIdx));
                 android.view.View.DragShadowBuilder shadow = new android.view.View.DragShadowBuilder(card2);
-                android.os.Bundle dragData = new android.os.Bundle();
-                dragData.putInt("from", cardIdx);
-                card2.startDragAndDrop(android.content.ClipData.newPlainText("fav_drag", String.valueOf(cardIdx)),
-                        shadow, dragData, 0);
+                card2.startDragAndDrop(cd, shadow, null, 0);
                 return true;
             });
+
+            // 드래그 이벤트 수신
             card2.setOnDragListener((v2, event) -> {
                 switch (event.getAction()) {
                     case android.view.DragEvent.ACTION_DRAG_ENTERED:
-                        // 이 카드 위로 드래그 진입
-                        int fromIdx = dragFromIdx[0];
-                        int toIdx = cardIdx;
-                        if (fromIdx >= 0 && fromIdx != toIdx && fromIdx < allCardInfos.size() && toIdx < allCardInfos.size()) {
-                            // 순서 변경
-                            String[] moved = allCardInfos.remove(fromIdx);
-                            allCardInfos.add(toIdx, moved);
-                            dragFromIdx[0] = toIdx;
-                            // 순서 저장
-                            StringBuilder sb = new StringBuilder();
-                            for (String[] ci : allCardInfos) {
-                                if (sb.length() > 0) sb.append(",");
-                                sb.append(ci[0]).append(":").append(ci[1]);
-                            }
-                            prefs.edit().putString("fav_order", sb.toString()).apply();
-                            busFavDirty = false;
-                            // 즉시 갱신
-                            refreshBusFavorites(favSection, resultContainer);
-                        }
+                        int from = dragFromIdx[0];
+                        int to   = cardIdx;
+                        // 같은 위치 중복 진입 무시
+                        if (from < 0 || from == to || to == lastEnteredIdx[0]) return true;
+                        if (from >= allCardInfos.size() || to >= allCardInfos.size()) return true;
+                        lastEnteredIdx[0] = to;
+                        // 순서 변경
+                        String[] moved = allCardInfos.remove(from);
+                        allCardInfos.add(to, moved);
+                        dragFromIdx[0] = to;
+                        // 카드 뷰 이동 - 그리드 재배치
+                        rearrangeGrid(grid, allCards, allCardInfos);
                         return true;
-                    case android.view.DragEvent.ACTION_DRAG_ENDED:
-                        if (dragCard[0] != null) {
-                            dragCard[0].setAlpha(1f);
-                            dragCard[0].setScaleX(1f);
-                            dragCard[0].setScaleY(1f);
-                            dragCard[0] = null;
+
+                    case android.view.DragEvent.ACTION_DROP:
+                        // 최종 순서 저장
+                        StringBuilder sb2 = new StringBuilder();
+                        for (String[] ci : allCardInfos) {
+                            if (sb2.length() > 0) sb2.append(",");
+                            sb2.append(ci[0]).append(":").append(ci[1]);
                         }
+                        prefs.edit().putString("fav_order", sb2.toString()).apply();
+                        return true;
+
+                    case android.view.DragEvent.ACTION_DRAG_ENDED:
+                        // 원래 모습 복원
+                        for (LinearLayout c : allCards) { c.setAlpha(1f); c.setScaleX(1f); c.setScaleY(1f); }
+                        dragFromIdx[0] = -1;
+                        dragCardRef[0] = null;
+                        lastEnteredIdx[0] = -1;
+                        // 최종 순서 저장 (DROP 안 됐을 경우 대비)
+                        StringBuilder sb3 = new StringBuilder();
+                        for (String[] ci : allCardInfos) {
+                            if (sb3.length() > 0) sb3.append(",");
+                            sb3.append(ci[0]).append(":").append(ci[1]);
+                        }
+                        prefs.edit().putString("fav_order", sb3.toString()).apply();
                         return true;
                 }
                 return true;
@@ -18022,6 +18039,47 @@ public class PinActivity extends AppCompatActivity {
         divLp.setMargins(0, dpToPx(4), 0, dpToPx(12));
         div.setLayoutParams(divLp);
         favSection.addView(div);
+    }
+
+    // ── 즐겨찾기 드래그 재배치 ──────────────────────────────
+    private void rearrangeGrid(LinearLayout grid, java.util.List<LinearLayout> allCards,
+                                java.util.List<String[]> allCardInfos) {
+        // grid의 모든 행 제거
+        grid.removeAllViews();
+        // allCardInfos 순서대로 카드 재배치
+        LinearLayout row = null;
+        for (int i = 0; i < allCardInfos.size(); i++) {
+            String key = allCardInfos.get(i)[1];
+            String type = allCardInfos.get(i)[0];
+            // 해당 카드 찾기
+            LinearLayout card = null;
+            for (LinearLayout c : allCards) {
+                Object tag = c.getTag();
+                if (tag != null && tag.toString().equals(type + ":" + key)) { card = c; break; }
+            }
+            if (card == null) continue;
+            if (i % 2 == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setWeightSum(2f);
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rowLp.setMargins(0, 0, 0, dpToPx(8));
+                row.setLayoutParams(rowLp);
+                grid.addView(row);
+            }
+            // 카드 마진 조정
+            LinearLayout.LayoutParams cardLp = (LinearLayout.LayoutParams) card.getLayoutParams();
+            if (cardLp != null) cardLp.setMargins(0, 0, i % 2 == 0 ? dpToPx(6) : 0, 0);
+            if (card.getParent() != null) ((android.view.ViewGroup) card.getParent()).removeView(card);
+            if (row != null) row.addView(card);
+        }
+        // 홀수개면 빈 공간
+        if (allCardInfos.size() % 2 == 1 && row != null) {
+            android.view.View empty = new android.view.View(this);
+            empty.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(110), 1f));
+            row.addView(empty);
+        }
     }
 
     // ── 헬퍼 ──────────────────────────────────────────────
