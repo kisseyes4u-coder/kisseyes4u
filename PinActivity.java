@@ -375,13 +375,9 @@ public class PinActivity extends AppCompatActivity {
                                 else userMenuBuilder.build(false);
                             }
                         } else if (isOnSubScreen) {
-                            // 버스 타임라인 화면(검색창 숨겨진 상태)이면 검색 화면으로
+                            // 버스 화면이면 백스택 기반 뒤로가기
                             if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.GONE) {
-                                busSearchArea.setVisibility(android.view.View.VISIBLE);
-                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                                if (busResultContainer != null) busResultContainer.removeAllViews();
+                                busNavigateBack();
                             } else {
                                 isOnSubScreen = false;
                                 if (isOwner) ownerMenuBuilder.build();
@@ -11053,8 +11049,6 @@ public class PinActivity extends AppCompatActivity {
                 tvRouteStar.setTextColor(Color.parseColor("#888888"));
                 tvRouteStar.setBackground(offBg);
                 android.widget.Toast.makeText(this, routeNo + "번 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
-                if (busFavSection != null && busResultContainer != null)
-                    refreshBusFavorites(busFavSection, busResultContainer);
             } else {
                 String existingMemo = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
                         .getString("fav_route_memo_" + routeId + "_" + direction, "");
@@ -11173,9 +11167,6 @@ public class PinActivity extends AppCompatActivity {
                     tvRouteStar.setTextColor(Color.WHITE); tvRouteStar.setBackground(onBg);
                     android.widget.Toast.makeText(this, routeNo + "번 " + shortDir + " 즐겨찾기 추가",
                             android.widget.Toast.LENGTH_SHORT).show();
-                    // 즐겨찾기 추가 후 타임라인 유지 (화면 전환 없음)
-                    if (busFavSection2 != null && busResultContainer != null)
-                        refreshBusFavorites(busFavSection2, busResultContainer);
                 });
                 btnRow.addView(btnFavOk);
                 dlgLayout.addView(btnRow);
@@ -11565,8 +11556,6 @@ public class PinActivity extends AppCompatActivity {
                 tvStar.setBackground(newBg);
                 android.widget.Toast.makeText(this, nowFav3?stopName+" 즐겨찾기 추가":stopName+" 즐겨찾기 해제",
                         android.widget.Toast.LENGTH_SHORT).show();
-                if (busFavSection != null && busResultContainer != null)
-                    refreshBusFavorites(busFavSection, busResultContainer);
             });
             row.addView(tvStar);
 
@@ -11639,13 +11628,7 @@ public class PinActivity extends AppCompatActivity {
             tvBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(26));
             tvBack.setTypeface(null, android.graphics.Typeface.BOLD);
             tvBack.setPadding(0, 0, dpToPx(10), 0);
-            tvBack.setOnClickListener(v -> {
-                busFixedHeader.setVisibility(android.view.View.GONE);
-                busFixedHeader.removeAllViews();
-                if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                container.removeAllViews();
-            });
+            tvBack.setOnClickListener(v -> busNavigateBack());
             titleBar.addView(tvBack);
 
             TextView tvTitle = new TextView(this);
@@ -16379,14 +16362,7 @@ public class PinActivity extends AppCompatActivity {
     private void refreshBusFavorites(LinearLayout favSection, LinearLayout resultContainer) {
         busFavSection = favSection;
         favSection.removeAllViews();
-        if (resultContainer != null) resultContainer.removeAllViews(); // 타임라인 등 이전 내용 제거
-        // 고정헤더도 숨김
-        if (busFixedHeader != null) {
-            busFixedHeader.setVisibility(android.view.View.GONE);
-            busFixedHeader.removeAllViews();
-        }
-        if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+        // 화면 이동 없이 즐겨찾기 섹션만 갱신 (busSearchArea/busFixedHeader 건드리지 않음)
         android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         // 키: fav_stop_routeId_nodeId (boolean=true인 것만)
         java.util.List<String> favKeys = new java.util.ArrayList<>();
