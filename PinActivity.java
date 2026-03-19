@@ -171,6 +171,7 @@ public class PinActivity extends AppCompatActivity {
     private java.util.List<String[]> stopDbList  = null; // 미사용 (세션 캐시로 대체)
     // 버스 화면 백스택: ["type", params...] type=timeline/arrival/search
     private final java.util.Deque<String[]> busBackStack = new java.util.ArrayDeque<>();
+    private boolean busFavDirty = false; // 즐겨찾기 변경 시 true → 검색화면 복귀 시 갱신
     // nodeno(표시번호) → 노선번호 목록 (예: "46820" → "211,212,601,708")
     private java.util.Map<String, String> nodeNoToRoutes = new java.util.HashMap<>();
     // 배차시간표: 노선번호 → {src, dst, s:[출발시간들], d:[종점출발시간들]}
@@ -10602,9 +10603,11 @@ public class PinActivity extends AppCompatActivity {
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             if (busResultContainer != null) busResultContainer.removeAllViews();
-            // 즐겨찾기 목록 갱신
-            if (busFavSection != null && busResultContainer != null)
+            // 즐겨찾기 변경됐을 때만 갱신
+            if (busFavDirty && busFavSection != null && busResultContainer != null) {
                 refreshBusFavorites(busFavSection, busResultContainer);
+                busFavDirty = false;
+            }
             return;
         }
 
@@ -10633,9 +10636,11 @@ public class PinActivity extends AppCompatActivity {
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             if (busResultContainer != null) busResultContainer.removeAllViews();
-            // 즐겨찾기 목록 갱신
-            if (busFavSection != null && busResultContainer != null)
+            // 즐겨찾기 변경됐을 때만 갱신
+            if (busFavDirty && busFavSection != null && busResultContainer != null) {
                 refreshBusFavorites(busFavSection, busResultContainer);
+                busFavDirty = false;
+            }
         }
     }
 
@@ -11054,6 +11059,7 @@ public class PinActivity extends AppCompatActivity {
                 tvRouteStar.setTextColor(Color.parseColor("#888888"));
                 tvRouteStar.setBackground(offBg);
                 android.widget.Toast.makeText(this, routeNo + "번 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
+                busFavDirty = true;
             } else {
                 String existingMemo = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
                         .getString("fav_route_memo_" + routeId + "_" + direction, "");
@@ -11172,6 +11178,7 @@ public class PinActivity extends AppCompatActivity {
                     tvRouteStar.setTextColor(Color.WHITE); tvRouteStar.setBackground(onBg);
                     android.widget.Toast.makeText(this, routeNo + "번 " + shortDir + " 즐겨찾기 추가",
                             android.widget.Toast.LENGTH_SHORT).show();
+                    busFavDirty = true;
                 });
                 btnRow.addView(btnFavOk);
                 dlgLayout.addView(btnRow);
@@ -11561,6 +11568,7 @@ public class PinActivity extends AppCompatActivity {
                 tvStar.setBackground(newBg);
                 android.widget.Toast.makeText(this, nowFav3?stopName+" 즐겨찾기 추가":stopName+" 즐겨찾기 해제",
                         android.widget.Toast.LENGTH_SHORT).show();
+                busFavDirty = true;
             });
             row.addView(tvStar);
 
@@ -16692,6 +16700,7 @@ public class PinActivity extends AppCompatActivity {
                                         .remove("fav_route_id_"     + fRKey)
                                         .remove("fav_route_dirkey_" + fRKey)
                                         .remove("fav_route_memo_"   + fRKey).apply();
+                                busFavDirty = true;
                                 android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 삭제",
                                         android.widget.Toast.LENGTH_SHORT).show();
                                 refreshBusFavorites(favSection, resultContainer);
@@ -16941,6 +16950,7 @@ public class PinActivity extends AppCompatActivity {
                         .remove("fav_stop_no_"      + fCompositeKey)
                         .remove("fav_stop_route_"   + fCompositeKey)
                         .remove("fav_stop_routeid_" + fCompositeKey).apply();
+                busFavDirty = true;
                 android.widget.Toast.makeText(this, fStopName + " 즐겨찾기 해제",
                         android.widget.Toast.LENGTH_SHORT).show();
                 refreshBusFavorites(favSection, resultContainer);
