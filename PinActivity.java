@@ -227,18 +227,28 @@ public class PinActivity extends AppCompatActivity {
         try {
             android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
                     getAssets().open("stop.png"));
-            if (raw == null) { android.util.Log.e("StopIcon","raw null"); return null; }
-            // 컬러 필터로 색상 입히기
-            android.graphics.Bitmap result = raw.copy(android.graphics.Bitmap.Config.ARGB_8888, true);
-            android.graphics.Canvas canvas = new android.graphics.Canvas(result);
-            android.graphics.Paint paint = new android.graphics.Paint();
-            paint.setColorFilter(new android.graphics.PorterDuffColorFilter(
-                    argbColor, android.graphics.PorterDuff.Mode.SRC_IN));
-            canvas.drawBitmap(raw, 0, 0, paint);
+            if (raw == null) return null;
+            int w = raw.getWidth(), h = raw.getHeight();
+            int[] pixels = new int[w * h];
+            raw.getPixels(pixels, 0, w, 0, 0, w, h);
             raw.recycle();
+            int tr = (argbColor >> 16) & 0xFF;
+            int tg = (argbColor >> 8)  & 0xFF;
+            int tb =  argbColor        & 0xFF;
+            for (int i = 0; i < pixels.length; i++) {
+                int a = (pixels[i] >> 24) & 0xFF;
+                if (a > 10) {
+                    pixels[i] = (a << 24) | (tr << 16) | (tg << 8) | tb;
+                } else {
+                    pixels[i] = 0;
+                }
+            }
+            android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h,
+                    android.graphics.Bitmap.Config.ARGB_8888);
+            result.setPixels(pixels, 0, w, 0, 0, w, h);
             return result;
         } catch (Exception e) {
-            android.util.Log.e("StopIcon", "error: " + e.getMessage());
+            android.util.Log.e("StopIcon", "err:" + e.getMessage());
         }
         return null;
     }
@@ -10347,13 +10357,13 @@ public class PinActivity extends AppCompatActivity {
 
         // 새로고침 버튼
         Button btnRefreshBar = new Button(this);
-        btnRefreshBar.setText("↺");
+        btnRefreshBar.setText("↺ 새로고침");
         btnRefreshBar.setBackground(makeShadowCardDrawable("#D5EFF9", 14, 6));
         btnRefreshBar.setTextColor(Color.parseColor("#0984E3"));
-        btnRefreshBar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
+        btnRefreshBar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
         btnRefreshBar.setTypeface(null, android.graphics.Typeface.BOLD);
         btnRefreshBar.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-        btnRefreshBar.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(56), dpToPx(50)));
+        btnRefreshBar.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(50)));
         btnRefreshBar.setOnClickListener(v -> {
             // 현재 화면 새로고침
             if (!busBackStack.isEmpty()) {
@@ -17500,7 +17510,7 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout stopBusWrapper = new LinearLayout(this);
             stopBusWrapper.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             stopBusWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-            android.graphics.Bitmap stopBusBmp = getStopIconColor(0xFF000000 | (sTypeColorInt & 0xFFFFFF));
+            android.graphics.Bitmap stopBusBmp = getStopIconColor(sTypeColorInt);
             if (stopBusBmp != null) {
                 android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
                 ivStopBus.setImageBitmap(stopBusBmp);
