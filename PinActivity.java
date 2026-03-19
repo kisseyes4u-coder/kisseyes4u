@@ -2683,9 +2683,10 @@ public class PinActivity extends AppCompatActivity {
     private void loadStopDbFromDriveIfNeeded(Runnable onDone) {
         android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
 
-        // 배차시간표 로드 (캐시 있으면 바로, 없으면 Drive에서)
+        // 배차시간표 로드 - 내부 파일 우선, 없으면 SharedPreferences, 없으면 Drive
         if (busTimesMap.isEmpty()) {
-            String btCached = p.getString("bustimes_txt_cache", "");
+            String btCached = loadBusTimes(); // 내부 파일에서 읽기
+            if (btCached.isEmpty()) btCached = p.getString("bustimes_txt_cache", "");
             // 유효성 검사: 9필드(|구분) 확인
             boolean cacheValid = false;
             if (!btCached.isEmpty()) {
@@ -2695,15 +2696,18 @@ public class PinActivity extends AppCompatActivity {
             if (cacheValid) {
                 loadBusTimesFromJson(btCached);
             } else {
+                // 구버전 캐시 삭제 후 Drive에서 새로 받기
                 p.edit().remove("bustimes_txt_cache").apply();
+                saveBusTimes(""); // 내부 파일도 초기화
                 new Thread(() -> {
                     try {
                         DriveReadHelper dr = new DriveReadHelper(this);
                         dr.readFile(BUS_TIME_FILE, new DriveReadHelper.ReadCallback() {
-                            @Override public void onSuccess(String content) {
-                                if (!content.isEmpty()) {
-                                    p.edit().putString("bustimes_txt_cache", content).apply();
-                                    loadBusTimesFromJson(content);
+                            @Override public void onSuccess(String txt) {
+                                if (!txt.isEmpty()) {
+                                    p.edit().putString("bustimes_txt_cache", txt).apply();
+                                    saveBusTimes(txt); // 내부 파일에도 저장
+                                    loadBusTimesFromJson(txt);
                                 }
                             }
                             @Override public void onFailure(String e) {}
@@ -4048,6 +4052,7 @@ public class PinActivity extends AppCompatActivity {
                     new DriveUploadHelper(this).uploadFileSync(json, BUS_TIME_FILE);
                     getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
                             .putString("bustimes_txt_cache", json).apply();
+                    saveBusTimes(json); // 내부 파일에 영구 저장
                     loadBusTimesFromJson(json);
 
                     runOnUiThread(() -> {
@@ -15179,6 +15184,30 @@ public class PinActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
     }
 
+    /** 배차시간표를 내부 저장소 파일에 저장 */
+    private void saveBusTimes(String content) {
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), "bustimes.txt");
+            if (content.isEmpty()) { f.delete(); return; }
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+            fos.write(content.getBytes("UTF-8"));
+            fos.close();
+        } catch (Exception ignored) {}
+    }
+
+    /** 내부 저장소에서 배차시간표 읽기 */
+    private String loadBusTimes() {
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), "bustimes.txt");
+            if (!f.exists()) return "";
+            java.io.FileInputStream fis = new java.io.FileInputStream(f);
+            byte[] buf = new byte[(int) f.length()];
+            fis.read(buf);
+            fis.close();
+            return new String(buf, "UTF-8");
+        } catch (Exception ignored) { return ""; }
+    }
+
     /** bustimes.txt → busTimesMap 파싱
      * 형식: rno|src|dst|ws|wd|ss|sd|hs|hd
      * ws=평일기점출발, wd=평일종점출발, ss=토요일기점, sd=토요일종점, hs=휴일기점, hd=휴일종점
@@ -15433,6 +15462,7 @@ public class PinActivity extends AppCompatActivity {
                         @Override public void onSuccess(String content) {
                             if (!content.isEmpty()) {
                                 p.edit().putString("bustimes_txt_cache", content).apply();
+                                saveBusTimes(content); // 내부 파일에 영구 저장
                                 loadBusTimesFromJson(content);
                             }
                             synchronized(lock) { lock.notifyAll(); }
