@@ -17038,14 +17038,40 @@ public class PinActivity extends AppCompatActivity {
         }
         if (favKeys.isEmpty() && favRouteKeys.isEmpty()) return;
 
+        // 저장된 순서 적용 - "fav_order" 에 콤마 구분 저장
+        String savedOrder = prefs.getString("fav_order", "");
+        if (!savedOrder.isEmpty()) {
+            java.util.List<String> allRaw = new java.util.ArrayList<>();
+            allRaw.addAll(favRouteKeys.stream().map(k -> "R:" + k).collect(java.util.stream.Collectors.toList()));
+            allRaw.addAll(favKeys.stream().map(k -> "S:" + k).collect(java.util.stream.Collectors.toList()));
+            java.util.List<String> orderedRoute = new java.util.ArrayList<>();
+            java.util.List<String> orderedStop  = new java.util.ArrayList<>();
+            for (String tok : savedOrder.split(",")) {
+                if (tok.startsWith("R:") && favRouteKeys.contains(tok.substring(2))) orderedRoute.add(tok.substring(2));
+                else if (tok.startsWith("S:") && favKeys.contains(tok.substring(2))) orderedStop.add(tok.substring(2));
+            }
+            // 새로 추가된 항목은 맨 뒤에
+            for (String k : favRouteKeys) { if (!orderedRoute.contains(k)) orderedRoute.add(k); }
+            for (String k : favKeys)      { if (!orderedStop.contains(k))  orderedStop.add(k); }
+            favRouteKeys.clear(); favRouteKeys.addAll(orderedRoute);
+            favKeys.clear();      favKeys.addAll(orderedStop);
+        }
+
         // 즐겨찾기 타이틀 (숨김)
 
         // ── 노선 즐겨찾기 카드 (2열 그리드) ──────────────────
         // ── 통합 2열 그리드 (노선+정류소 함께) ──────────────────
+        // 드래그용 전체 카드 리스트 (순서 추적용)
+        final java.util.List<String[]> allCardInfos = new java.util.ArrayList<>();
+        // [0]=type(R/S), [1]=key
+        for (String k : favRouteKeys) allCardInfos.add(new String[]{"R", k});
+        for (String k : favKeys)      allCardInfos.add(new String[]{"S", k});
+
         LinearLayout grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
         grid.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        final java.util.List<LinearLayout> allCards = new java.util.ArrayList<>();
         LinearLayout gridRow = null;
         int colIdx = 0;
 
@@ -17929,6 +17955,65 @@ public class PinActivity extends AppCompatActivity {
             gridRow.addView(emptyFav);
         }
         if (colIdx > 0) favSection.addView(grid);
+
+        // ── 꾹 눌러서 드래그 순서 변경 ──────────────────────────
+        final int[] dragFromIdx = {-1};
+        final LinearLayout[] dragCard = {null};
+        final float[] dragStartY = {0};
+        for (int di = 0; di < allCards.size(); di++) {
+            final int cardIdx = di;
+            LinearLayout card2 = allCards.get(di);
+            card2.setOnLongClickListener(vl -> {
+                dragFromIdx[0] = cardIdx;
+                dragCard[0] = card2;
+                dragStartY[0] = 0;
+                // 드래그 시작 시각 효과
+                card2.setAlpha(0.6f);
+                card2.setScaleX(1.05f);
+                card2.setScaleY(1.05f);
+                // Android 드래그 시작
+                android.view.View.DragShadowBuilder shadow = new android.view.View.DragShadowBuilder(card2);
+                android.os.Bundle dragData = new android.os.Bundle();
+                dragData.putInt("from", cardIdx);
+                card2.startDragAndDrop(android.content.ClipData.newPlainText("fav_drag", String.valueOf(cardIdx)),
+                        shadow, dragData, 0);
+                return true;
+            });
+            card2.setOnDragListener((v2, event) -> {
+                switch (event.getAction()) {
+                    case android.view.DragEvent.ACTION_DRAG_ENTERED:
+                        // 이 카드 위로 드래그 진입
+                        int fromIdx = dragFromIdx[0];
+                        int toIdx = cardIdx;
+                        if (fromIdx >= 0 && fromIdx != toIdx && fromIdx < allCardInfos.size() && toIdx < allCardInfos.size()) {
+                            // 순서 변경
+                            String[] moved = allCardInfos.remove(fromIdx);
+                            allCardInfos.add(toIdx, moved);
+                            dragFromIdx[0] = toIdx;
+                            // 순서 저장
+                            StringBuilder sb = new StringBuilder();
+                            for (String[] ci : allCardInfos) {
+                                if (sb.length() > 0) sb.append(",");
+                                sb.append(ci[0]).append(":").append(ci[1]);
+                            }
+                            prefs.edit().putString("fav_order", sb.toString()).apply();
+                            busFavDirty = false;
+                            // 즉시 갱신
+                            refreshBusFavorites(favSection, resultContainer);
+                        }
+                        return true;
+                    case android.view.DragEvent.ACTION_DRAG_ENDED:
+                        if (dragCard[0] != null) {
+                            dragCard[0].setAlpha(1f);
+                            dragCard[0].setScaleX(1f);
+                            dragCard[0].setScaleY(1f);
+                            dragCard[0] = null;
+                        }
+                        return true;
+                }
+                return true;
+            });
+        }
         // 구분선
         View div = new View(this);
         div.setBackgroundColor(Color.parseColor("#EEEEEE"));
