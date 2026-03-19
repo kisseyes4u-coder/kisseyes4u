@@ -12457,9 +12457,10 @@ public class PinActivity extends AppCompatActivity {
                                 ssb.append(timeLabel);
                                 ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")),
                                         0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)(fs(22)*getResources().getDisplayMetrics().density)),
+                                // AbsoluteSizeSpan(dp, true) - 두번째 인자 true = dp단위
+                                ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(22), true),
                                         0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                // 각 버스번호 - 종류별 색상, 크게
+                                // 각 버스번호 - 종류별 색상, 30dp 크게
                                 for (String rn : fSoonRnoList) {
                                     String rtp2 = "";
                                     for (String[] ar : fAllRoutes) { if (ar[0].equals(rn)) { rtp2 = ar.length>4?ar[4]:""; break; } }
@@ -12469,14 +12470,13 @@ public class PinActivity extends AppCompatActivity {
                                     ssb.append(busText);
                                     ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor(badge2[1])),
                                             start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                    ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)(fs(30)*getResources().getDisplayMetrics().density)),
+                                    ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(30), true),
                                             start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                     ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
                                             start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                 }
                                 ((TextView)ph).setText(ssb);
-                                ((TextView)ph).setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(30));
-                                ((TextView)ph).setTypeface(null, android.graphics.Typeface.BOLD);
+                                // setTextSize 제거 - AbsoluteSizeSpan이 크기를 직접 지정
                                 ((TextView)ph).setGravity(Gravity.START);
                             }
                         }
