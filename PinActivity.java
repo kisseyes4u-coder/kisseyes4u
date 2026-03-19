@@ -242,7 +242,9 @@ public class PinActivity extends AppCompatActivity {
                 raw.recycle();
                 return result;
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            android.util.Log.e("StopIcon", "getStopIconColor error: " + e.getMessage());
+        }
         return null;
     }
 
@@ -10989,7 +10991,12 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout card = makeBusCard(s[1],
                     s[2].isEmpty() ? "" : "정류소번호: " + s[2],
                     "", "#0984E3");
-            card.setOnClickListener(v -> busScreenLoadArrival(s[0], s[1], s[2], "", container));
+            card.setOnClickListener(v -> {
+                // 검색화면에서 클릭 시 busSearchArea를 먼저 숨기고 도착화면으로 이동
+                if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+                busScreenLoadArrival(s[0], s[1], s[2], "", busResultContainer);
+            });
             container.addView(card);
         }
     }
@@ -17429,18 +17436,31 @@ public class PinActivity extends AppCompatActivity {
             String sTypeColor = sBadge[1];
             int sTypeColorInt = Color.parseColor(sTypeColor);
 
-            android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
-            android.graphics.Bitmap stopBusBmp = getStopIconColor(0xFF000000 | (sTypeColorInt & 0xFFFFFF));
-            if (stopBusBmp != null) ivStopBus.setImageBitmap(stopBusBmp);
-            LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
-            stopBusLp.setMargins(0, 0, dpToPx(6), 0);
-            stopBusLp.gravity = Gravity.CENTER_VERTICAL;
-            ivStopBus.setLayoutParams(stopBusLp);
-            ivStopBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
             LinearLayout stopBusWrapper = new LinearLayout(this);
             stopBusWrapper.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             stopBusWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-            stopBusWrapper.addView(ivStopBus);
+            android.graphics.Bitmap stopBusBmp = getStopIconColor(0xFF000000 | (sTypeColorInt & 0xFFFFFF));
+            if (stopBusBmp != null) {
+                android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
+                ivStopBus.setImageBitmap(stopBusBmp);
+                LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
+                stopBusLp.setMargins(0, 0, dpToPx(6), 0);
+                stopBusLp.gravity = Gravity.CENTER_VERTICAL;
+                ivStopBus.setLayoutParams(stopBusLp);
+                ivStopBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                stopBusWrapper.addView(ivStopBus);
+            } else {
+                // 폴백: 이모지 텍스트
+                TextView tvStopEmoji = new TextView(this);
+                tvStopEmoji.setText("🚏");
+                tvStopEmoji.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
+                tvStopEmoji.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams eLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                eLp.setMargins(0, 0, dpToPx(4), 0);
+                tvStopEmoji.setLayoutParams(eLp);
+                stopBusWrapper.addView(tvStopEmoji);
+            }
             sIconBtnRow.addView(stopBusWrapper);
 
             // 설정 버튼
