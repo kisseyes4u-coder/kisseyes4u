@@ -17339,7 +17339,7 @@ public class PinActivity extends AppCompatActivity {
                                         .remove("fav_route_id_"     + fRKey)
                                         .remove("fav_route_dirkey_" + fRKey)
                                         .remove("fav_route_memo_"   + fRKey).apply();
-                                busFavDirty = true;
+                                busFavDirty = false;
                                 refreshBusFavorites(favSection, resultContainer);
                                 android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 삭제",
                                         android.widget.Toast.LENGTH_SHORT).show();
@@ -17793,7 +17793,7 @@ public class PinActivity extends AppCompatActivity {
                 btnSgDel.setOnClickListener(vv -> {
                     stopSettingDlg.dismiss();
                     showConfirmDialog("삭제", stopName + " 즐겨찾기 삭제", "즐겨찾기에서 삭제하시겠습니까?", () -> {
-                        busFavDirty = true;
+                        busFavDirty = false;
                         prefs.edit().remove(favKey2)
                                 .remove("fav_stop_name_" + fCompositeKey)
                                 .remove("fav_stop_no_" + fCompositeKey)
