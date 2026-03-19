@@ -12809,8 +12809,6 @@ public class PinActivity extends AppCompatActivity {
         // 노선유형 배지
         if (!routeType.isEmpty()) {
             String[] badgeInfo = routeTypeBadge(routeType);
-            // 버스 번호도 routeType 색상으로
-            tvTitle.setTextColor(Color.parseColor(badgeInfo[1]));
             TextView tvBadge = new TextView(this);
             tvBadge.setText(badgeInfo[0]);
             tvBadge.setTextColor(Color.WHITE);
@@ -15203,7 +15201,9 @@ public class PinActivity extends AppCompatActivity {
 
         TextView tvTitle = new TextView(this);
         tvTitle.setText(title);
-        tvTitle.setTextColor(Color.parseColor(color));
+        // routeType 있으면 routeType 색상, 없으면 titleColor
+        String finalTitleColor = (!routeType.isEmpty()) ? routeTypeBadge(routeType)[1] : color;
+        tvTitle.setTextColor(Color.parseColor(finalTitleColor));
         tvTitle.setTextSize(17);
         tvTitle.setTypeface(null, Typeface.BOLD);
         tvTitle.setShadowLayer(3f, 1f, 1f, Color.parseColor("#22000000"));
