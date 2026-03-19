@@ -70,10 +70,41 @@ public class PinActivity extends AppCompatActivity {
         @Override
         public void onReceive(android.content.Context ctx, android.content.Intent i) {
             if ("com.sms2drive.SMS_UPDATED".equals(i.getAction())) {
+                String newBlock = i.getStringExtra("new_block");
                 android.util.Log.d("SMS_RECV", "브로드캐스트 수신 / isOwner=" + isOwner
                         + " / isOnBalanceScreen=" + isOnBalanceScreen
-                        + " / isOnMenuScreen=" + isOnMenuScreen);
-                runOnUiThread(() -> forceReloadMessages());
+                        + " / isOnMenuScreen=" + isOnMenuScreen
+                        + " / new_block 길이=" + (newBlock != null ? newBlock.length() : 0));
+
+                if (newBlock != null && !newBlock.isEmpty()) {
+                    // ★ new_block이 있으면 Drive 읽기 없이 캐시에 즉시 추가 → 화면 즉시 갱신
+                    final String fNewBlock = newBlock;
+                    runOnUiThread(() -> {
+                        // cachedBlocks에 새 블록 추가
+                        if (cachedBlocks == null) cachedBlocks = new java.util.ArrayList<>();
+                        cachedBlocks.add(fNewBlock);
+                        lastKnownBlockCount = cachedBlocks.size();
+                        android.util.Log.d("SMS_RECV", "new_block 즉시 추가 → 총 " + cachedBlocks.size() + "개");
+
+                        // 잔액 갱신 (UI + 위젯 + SharedPreferences)
+                        if (tvBalValues != null) updateBalanceValues(cachedBlocks);
+                        else updateWidgetFromBlocks(cachedBlocks);
+
+                        // 통장 잔액 현황 화면 즉시 갱신
+                        if (isOnBalanceScreen && msgContainer != null) {
+                            displayedCount = Math.min(Math.max(displayedCount, PAGE_SIZE), cachedBlocks.size());
+                            renderMessages(cachedBlocks, currentTabFilter);
+                        }
+                        // 메뉴 잔액 카드 갱신
+                        if (menuBalTv != null && isOnMenuScreen) updateMenuBalCards(cachedBlocks);
+
+                        // cachedBalValues 무효화 (balance.txt 재로드 유도)
+                        cachedBalValues = null;
+                    });
+                } else {
+                    // new_block 없으면 기존 방식 (Drive 전체 읽기)
+                    runOnUiThread(() -> forceReloadMessages());
+                }
             }
         }
     };
@@ -5839,6 +5870,12 @@ public class PinActivity extends AppCompatActivity {
         cachedBlocks    = null;
         cachedBalValues = null;
         android.util.Log.d("FORCE_RELOAD", "시작 isOwner=" + isOwner + " isOnBalanceScreen=" + isOnBalanceScreen + " isOnMenuScreen=" + isOnMenuScreen);
+
+        // ★ Drive 캐시 무효화 (캐시된 구버전 파일을 읽는 버그 방지)
+        int curYear  = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR);
+        DriveReadHelper.invalidateCache(SmsReceiver.getSmsRawFile(curYear));
+        DriveReadHelper.invalidateCache(SmsReceiver.getSmsRawFile(curYear - 1));
+
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
             if (isDeleting) return;
             android.util.Log.d("FORCE_RELOAD", "Drive 읽기 시작");
