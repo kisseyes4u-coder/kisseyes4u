@@ -10630,7 +10630,7 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout card = makeBusCard(
                     r[1] + "번",
                     (r[2].isEmpty()?"기점":r[2]) + "  ↔  " + (r[3].isEmpty()?"종점":r[3]),
-                    "", "#0984E3", routeTp);
+                    "", routeTypeBadge(routeTp)[1], routeTp);
             card.setOnClickListener(v -> {
                 if (busEtSearch != null) busEtSearch.setText("");
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
@@ -11169,7 +11169,7 @@ public class PinActivity extends AppCompatActivity {
         }
         TextView tvRouteNo = new TextView(this);
         tvRouteNo.setText(routeNo);
-        tvRouteNo.setTextColor(Color.parseColor("#1A1A2E"));
+        tvRouteNo.setTextColor(Color.parseColor(routeTypeBadge(fRTp)[1]));
         tvRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
         tvRouteNo.setShadowLayer(5f, 0f, 2f, 0x50000000);
         tvRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -12566,7 +12566,10 @@ public class PinActivity extends AppCompatActivity {
 
             TextView tvRno = new TextView(this);
             tvRno.setText(rno);
-            tvRno.setTextColor(Color.parseColor("#0984E3"));
+            // routeType 기반 색상
+            String rnoTp = getSharedPreferences("bus_cache", MODE_PRIVATE).getString("route_" + fRid + "_rTp", "");
+            String rnoColor = routeTypeBadge(rnoTp.isEmpty() ? (route.length > 4 ? fRtp : "") : rnoTp)[1];
+            tvRno.setTextColor(Color.parseColor(rnoColor));
             tvRno.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
             tvRno.setTypeface(null, android.graphics.Typeface.BOLD);
             tvRno.setSingleLine(true);
@@ -12806,6 +12809,8 @@ public class PinActivity extends AppCompatActivity {
         // 노선유형 배지
         if (!routeType.isEmpty()) {
             String[] badgeInfo = routeTypeBadge(routeType);
+            // 버스 번호도 routeType 색상으로
+            tvTitle.setTextColor(Color.parseColor(badgeInfo[1]));
             TextView tvBadge = new TextView(this);
             tvBadge.setText(badgeInfo[0]);
             tvBadge.setTextColor(Color.WHITE);
