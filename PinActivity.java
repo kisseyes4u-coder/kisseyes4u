@@ -222,11 +222,17 @@ public class PinActivity extends AppCompatActivity {
         return getBusIconColor(0xFF6C3FA0);
     }
 
-    /** assets/stop.png를 지정된 색상으로 렌더링 (getBusIconColor와 완전 동일) */
+    /** assets/stop.png(정류소 전용) 또는 pngwing_com.png(노선+정류소) 색상 렌더링 */
     private android.graphics.Bitmap getStopIconColor(int argbColor) {
+        return loadColoredIcon("stop.png", argbColor);
+    }
+    private android.graphics.Bitmap getStopRouteIconColor(int argbColor) {
+        return loadColoredIcon("pngwing_com.png", argbColor);
+    }
+    private android.graphics.Bitmap loadColoredIcon(String fileName, int argbColor) {
         try {
             android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
-                    getAssets().open("stop.png"));
+                    getAssets().open(fileName));
             if (raw != null) {
                 int w = raw.getWidth(), h = raw.getHeight();
                 android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
@@ -17509,8 +17515,11 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout stopBusWrapper = new LinearLayout(this);
             stopBusWrapper.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             stopBusWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-            // stop.png 로딩 (bus.png와 동일한 방식)
-            android.graphics.Bitmap stopBusBmp = getStopIconColor(0xFF000000 | (sTypeColorInt & 0xFFFFFF));
+            // routeId 있으면 노선+정류소(pngwing_com.png), 없으면 정류소만(stop.png=pngwing-stio_1.png)
+            int stopArgbColor = 0xFF000000 | (sTypeColorInt & 0xFFFFFF);
+            android.graphics.Bitmap stopBusBmp = (!routeId.isEmpty())
+                    ? getStopRouteIconColor(stopArgbColor)
+                    : getStopIconColor(stopArgbColor);
             if (stopBusBmp != null) {
                 android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
                 ivStopBus.setImageBitmap(stopBusBmp);
