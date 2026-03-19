@@ -11167,11 +11167,15 @@ public class PinActivity extends AppCompatActivity {
             qCard.addView(tvQLabel);
             if (qi == 1) {
                 qCard.setOnClickListener(v2 -> {
-                    String msg = "노선번호: " + routeNo + "번\n기점: " + fStartNm + "\n종점: " + fEndNm
-                            + "\n첫차: " + fStF + "\n막차: " + fEtF
-                            + "\n배차간격: " + (fInterval.isEmpty() ? "-" : fInterval + "분");
-                    new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                            .setTitle("\u23f1 운행 정보").setMessage(msg).setPositiveButton("확인", null).show();
+                    if (busTimesMap.containsKey(routeNo)) {
+                        showBusTimeTableDialog(routeNo, true);
+                    } else {
+                        String msg = "노선번호: " + routeNo + "번\n기점: " + fStartNm + "\n종점: " + fEndNm
+                                + "\n첫차: " + fStF + "\n막차: " + fEtF
+                                + "\n배차간격: " + (fInterval.isEmpty() ? "-" : fInterval + "분");
+                        new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                                .setTitle("\u23f1 운행 정보").setMessage(msg).setPositiveButton("확인", null).show();
+                    }
                 });
             }
             quickMenu.addView(qCard);
@@ -11277,10 +11281,15 @@ public class PinActivity extends AppCompatActivity {
         intBg.setColor(Color.parseColor("#EBF5FB")); intBg.setCornerRadius(dpToPx(8));
         intBg.setStroke(dpToPx(1), Color.parseColor("#AED6F1")); tvIntervalBtn.setBackground(intBg);
         tvIntervalBtn.setOnClickListener(v2 -> {
-            String msg = "평일 배차간격: " + (fInterval.isEmpty()?"-":fInterval+"분")
-                    + "\n\n첫차: " + fStF + "\n막차: " + fEtF;
-            new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                    .setTitle("\u23f1 배차 시간").setMessage(msg).setPositiveButton("확인",null).show();
+            // busTimesMap에 데이터 있으면 배차시간표 다이얼로그, 없으면 기본 정보
+            if (busTimesMap.containsKey(routeNo)) {
+                showBusTimeTableDialog(routeNo, true);
+            } else {
+                String msg = "평일 배차간격: " + (fInterval.isEmpty()?"-":fInterval+"분")
+                        + "\n\n첫차: " + fStF + "\n막차: " + fEtF;
+                new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                        .setTitle("\u23f1 배차 시간").setMessage(msg).setPositiveButton("확인",null).show();
+            }
         });
         runBanner.addView(tvIntervalBtn);
         container.addView(runBanner);
@@ -15452,12 +15461,48 @@ public class PinActivity extends AppCompatActivity {
 
     /** 배차시간표 다이얼로그 표시 */
     private void showBusTimeTableDialog(String routeNo, boolean fromSrc) {
+        // busTimesMap 비어있으면 캐시에서 즉시 로드
+        if (busTimesMap.isEmpty()) {
+            String cached = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
+                    .getString("bustimes_cache", "");
+            if (!cached.isEmpty()) {
+                loadBusTimesFromJson(cached);
+            }
+        }
         // busTimesMap에서 데이터 찾기
         String[] data = busTimesMap.get(routeNo);
         if (data == null || data.length < 4) {
-            android.widget.Toast.makeText(this,
-                    routeNo + "번 배차시간표 데이터가 없습니다.\n관리자 메뉴에서 배차시간표를 업데이트해주세요.",
-                    android.widget.Toast.LENGTH_LONG).show();
+            // Drive에서 로드 시도 후 재표시
+            new Thread(() -> {
+                try {
+                    android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
+                    DriveReadHelper dr = new DriveReadHelper(this);
+                    final Object lock = new Object();
+                    dr.readFile(BUS_TIME_FILE, new DriveReadHelper.ReadCallback() {
+                        @Override public void onSuccess(String content) {
+                            if (!content.isEmpty()) {
+                                p.edit().putString("bustimes_cache", content).apply();
+                                loadBusTimesFromJson(content);
+                            }
+                            synchronized(lock) { lock.notifyAll(); }
+                        }
+                        @Override public void onFailure(String e) {
+                            synchronized(lock) { lock.notifyAll(); }
+                        }
+                    });
+                    synchronized(lock) { lock.wait(10000); }
+                } catch (Exception ignored) {}
+                runOnUiThread(() -> {
+                    String[] d2 = busTimesMap.get(routeNo);
+                    if (d2 != null && d2.length >= 4) {
+                        showBusTimeTableDialog(routeNo, fromSrc);
+                    } else {
+                        android.widget.Toast.makeText(this,
+                                routeNo + "번 배차시간표 데이터가 없습니다.\n관리자 메뉴에서 배차시간표를 업데이트해주세요.",
+                                android.widget.Toast.LENGTH_LONG).show();
+                    }
+                });
+            }).start();
             return;
         }
         String srcNm = data[0], dstNm = data[1];
