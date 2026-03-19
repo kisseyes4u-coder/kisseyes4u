@@ -17052,16 +17052,16 @@ public class PinActivity extends AppCompatActivity {
         // 저장된 순서 적용 - "fav_order" 에 콤마 구분 저장
         String savedOrder = prefs.getString("fav_order", "");
         if (!savedOrder.isEmpty()) {
-            java.util.List<String> allRaw = new java.util.ArrayList<>();
-            allRaw.addAll(favRouteKeys.stream().map(k -> "R:" + k).collect(java.util.stream.Collectors.toList()));
-            allRaw.addAll(favKeys.stream().map(k -> "S:" + k).collect(java.util.stream.Collectors.toList()));
             java.util.List<String> orderedRoute = new java.util.ArrayList<>();
             java.util.List<String> orderedStop  = new java.util.ArrayList<>();
             for (String tok : savedOrder.split(",")) {
-                if (tok.startsWith("R:") && favRouteKeys.contains(tok.substring(2))) orderedRoute.add(tok.substring(2));
-                else if (tok.startsWith("S:") && favKeys.contains(tok.substring(2))) orderedStop.add(tok.substring(2));
+                tok = tok.trim();
+                if (tok.startsWith("R:") && favRouteKeys.contains(tok.substring(2)))
+                    orderedRoute.add(tok.substring(2));
+                else if (tok.startsWith("S:") && favKeys.contains(tok.substring(2)))
+                    orderedStop.add(tok.substring(2));
             }
-            // 새로 추가된 항목은 맨 뒤에
+            // 새로 추가된 항목은 맨 뒤에 (savedOrder에 없는 것)
             for (String k : favRouteKeys) { if (!orderedRoute.contains(k)) orderedRoute.add(k); }
             for (String k : favKeys)      { if (!orderedStop.contains(k))  orderedStop.add(k); }
             favRouteKeys.clear(); favRouteKeys.addAll(orderedRoute);
@@ -18028,15 +18028,17 @@ public class PinActivity extends AppCompatActivity {
                         rearrangeGrid(grid, allCards, allCardInfos);
                         return true;
                     case android.view.DragEvent.ACTION_DRAG_ENDED:
-                        // 모든 카드 알파 복원
-                        for (LinearLayout c : allCards) {
-                            c.setAlpha(1f); c.setScaleX(1f); c.setScaleY(1f);
-                        }
-                        // 드래그한 카드 자체도 복원
+                        // 드래그한 카드 직접 복원 (가장 중요)
                         card2.setAlpha(1f); card2.setScaleX(1f); card2.setScaleY(1f);
+                        // allCards 전체 복원 (혹시 다른 카드 효과 남아있을 경우)
+                        runOnUiThread(() -> {
+                            for (LinearLayout c : allCards) {
+                                c.setAlpha(1f); c.setScaleX(1f); c.setScaleY(1f);
+                            }
+                        });
                         dragFromIdx[0] = -1;
                         lastEnteredIdx[0] = -1;
-                        // 순서 저장
+                        // 순서 자동 저장
                         StringBuilder sbEnd = new StringBuilder();
                         for (String[] ci : allCardInfos) {
                             if (sbEnd.length() > 0) sbEnd.append(",");
