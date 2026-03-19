@@ -3504,17 +3504,17 @@ public class PinActivity extends AppCompatActivity {
             dlg.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
 
             // 제목
-            TextView tvTitle = new TextView(this);
-            tvTitle.setText("📡  FCM 테스트 전송");
-            tvTitle.setTextColor(Color.parseColor("#E74C3C"));
-            tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
-            tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvTitle.setGravity(Gravity.CENTER);
+            TextView fcmDlgTitle = new TextView(this);
+            fcmDlgTitle.setText("📡  FCM 테스트 전송");
+            fcmDlgTitle.setTextColor(Color.parseColor("#E74C3C"));
+            fcmDlgTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+            fcmDlgTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+            fcmDlgTitle.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams ttLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             ttLp.setMargins(0, 0, 0, dpToPx(6));
-            tvTitle.setLayoutParams(ttLp);
-            dlg.addView(tvTitle);
+            fcmDlgTitle.setLayoutParams(ttLp);
+            dlg.addView(fcmDlgTitle);
 
             // 부제목
             TextView tvSub = new TextView(this);
