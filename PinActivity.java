@@ -12450,18 +12450,32 @@ public class PinActivity extends AppCompatActivity {
                             android.view.View ph = ((LinearLayout)infoBoxV).findViewWithTag("soon_ph");
                             if (ph instanceof TextView && !fSoonRno.isEmpty() && fSoonSec < Integer.MAX_VALUE) {
                                 int fm = fSoonSec / 60;
-                                // 여러 버스 표시
-                                StringBuilder sb = new StringBuilder();
-                                sb.append(fSoonSec == 0 ? "곧 도착" : fm + "분 후");
+                                String timeLabel = fSoonSec == 0 ? "곧 도착" : fm + "분 후";
+                                // SpannableString으로 색상+크기 적용
+                                android.text.SpannableStringBuilder ssb = new android.text.SpannableStringBuilder();
+                                // "X분 후" - 빨강, 크게
+                                ssb.append(timeLabel);
+                                ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")),
+                                        0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)(fs(22)*getResources().getDisplayMetrics().density)),
+                                        0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                // 각 버스번호 - 종류별 색상, 크게
                                 for (String rn : fSoonRnoList) {
                                     String rtp2 = "";
                                     for (String[] ar : fAllRoutes) { if (ar[0].equals(rn)) { rtp2 = ar.length>4?ar[4]:""; break; } }
                                     String[] badge2 = routeTypeBadge(rtp2);
-                                    sb.append("  [").append(badge2[0]).append("] ").append(rn).append("번");
+                                    String busText = "  " + rn + "번";
+                                    int start = ssb.length();
+                                    ssb.append(busText);
+                                    ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor(badge2[1])),
+                                            start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                    ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)(fs(26)*getResources().getDisplayMetrics().density)),
+                                            start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                    ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
+                                            start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                 }
-                                ((TextView)ph).setText(sb.toString());
-                                ((TextView)ph).setTextColor(Color.parseColor("#E74C3C"));
-                                ((TextView)ph).setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                                ((TextView)ph).setText(ssb);
+                                ((TextView)ph).setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(22));
                                 ((TextView)ph).setTypeface(null, android.graphics.Typeface.BOLD);
                                 ((TextView)ph).setGravity(Gravity.START);
                             }
@@ -12630,14 +12644,11 @@ public class PinActivity extends AppCompatActivity {
             leftCol.addView(rnoRow);
 
             // 서브텍스트 (방면+다음정류소)
-            String validNextNm = (!nextNm.isEmpty() && !nextNm.equals(nodeNm)) ? nextNm : "";
+            // nodenm = 현재버스위치 정류소명 (다음정류소 아님)
+            // endnodenm = 종점방면 표시용
             String subTxt = "";
-            if (!endNm.isEmpty() && !validNextNm.isEmpty()) {
-                subTxt = endNm + "방면  다음 : " + validNextNm;
-            } else if (!endNm.isEmpty()) {
+            if (!endNm.isEmpty()) {
                 subTxt = endNm + "방면";
-            } else if (!validNextNm.isEmpty()) {
-                subTxt = "다음 : " + validNextNm;
             }
             if (!subTxt.isEmpty()) {
                 TextView tvSub = new TextView(this);
