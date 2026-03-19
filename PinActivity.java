@@ -17449,17 +17449,6 @@ public class PinActivity extends AppCompatActivity {
                 ivStopBus.setLayoutParams(stopBusLp);
                 ivStopBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
                 stopBusWrapper.addView(ivStopBus);
-            } else {
-                // 폴백: 이모지 텍스트
-                TextView tvStopEmoji = new TextView(this);
-                tvStopEmoji.setText("🚏");
-                tvStopEmoji.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
-                tvStopEmoji.setGravity(Gravity.CENTER_VERTICAL);
-                LinearLayout.LayoutParams eLp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                eLp.setMargins(0, 0, dpToPx(4), 0);
-                tvStopEmoji.setLayoutParams(eLp);
-                stopBusWrapper.addView(tvStopEmoji);
             }
             sIconBtnRow.addView(stopBusWrapper);
 
