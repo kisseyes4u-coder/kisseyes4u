@@ -10339,10 +10339,40 @@ public class PinActivity extends AppCompatActivity {
         btnBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14);
         btnBack.setTypeface(null, android.graphics.Typeface.BOLD);
         btnBack.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-        btnBack.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50)));
+        LinearLayout.LayoutParams backLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
+        backLp.setMargins(0, 0, dpToPx(8), 0);
+        btnBack.setLayoutParams(backLp);
         btnBack.setOnClickListener(v -> busNavigateBack());
         btnBar.addView(btnBack);
+
+        // 새로고침 버튼
+        Button btnRefreshBar = new Button(this);
+        btnRefreshBar.setText("↺");
+        btnRefreshBar.setBackground(makeShadowCardDrawable("#D5EFF9", 14, 6));
+        btnRefreshBar.setTextColor(Color.parseColor("#0984E3"));
+        btnRefreshBar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
+        btnRefreshBar.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnRefreshBar.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+        btnRefreshBar.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(56), dpToPx(50)));
+        btnRefreshBar.setOnClickListener(v -> {
+            // 현재 화면 새로고침
+            if (!busBackStack.isEmpty()) {
+                String[] cur = busBackStack.peek();
+                if ("timeline".equals(cur[0])) {
+                    // 타임라인 새로고침
+                    busResultContainer.removeAllViews();
+                    busFixedHeader.removeAllViews();
+                    busScreenLoadStops(cur[1], cur[2], busResultContainer, cur[3], cur[4]);
+                } else if ("arrival".equals(cur[0])) {
+                    // 도착화면 새로고침
+                    arrivalSessionCache.remove(cur[1]);
+                    busResultContainer.removeAllViews();
+                    busFixedHeader.removeAllViews();
+                    busScreenLoadArrival(cur[1], cur[2], cur[3], cur[4], busResultContainer);
+                }
+            }
+        });
+        btnBar.addView(btnRefreshBar);
         root.addView(btnBar);
 
         setContentView(root);
@@ -10671,10 +10701,10 @@ public class PinActivity extends AppCompatActivity {
             busIsBusTab[0] = true;
             if (busUpdateTabStyle != null) busUpdateTabStyle.run();
             // 키보드 숨김
-            android.view.inputmethod.InputMethodManager immBack =
+            android.view.inputmethod.InputMethodManager immBack2 =
                 (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-            if (immBack != null && busEtSearch != null)
-                immBack.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
+            if (immBack2 != null && busEtSearch != null)
+                immBack2.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
             // 결과 컨테이너 초기화
             if (busResultContainer != null) {
                 busResultContainer.removeAllViews();
