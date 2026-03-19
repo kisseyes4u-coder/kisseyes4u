@@ -12072,14 +12072,11 @@ public class PinActivity extends AppCompatActivity {
                                     }
                                 }
                                 if (foundRid != null && !foundRid.isEmpty()) {
-                                    // 버스 화면 초기화 후 타임라인 로드
-                                    busSearchArea.setVisibility(android.view.View.VISIBLE);
-                                    busFavSection2.setVisibility(android.view.View.VISIBLE);
                                     busFixedHeader.removeAllViews();
-                                    container.removeAllViews();
+                                    busResultContainer.removeAllViews();
                                     final String finalRid = foundRid;
                                     final String finalRtp = foundRtp;
-                                    busScreenLoadStops(finalRid, fRno, container, "normal", finalRtp);
+                                    busScreenLoadStops(finalRid, fRno, busResultContainer, "normal", finalRtp);
                                 } else {
                                     android.widget.Toast.makeText(this,
                                             fRno + "번 노선 정보를 찾을 수 없습니다",
