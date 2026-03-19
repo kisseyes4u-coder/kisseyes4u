@@ -10562,6 +10562,11 @@ public class PinActivity extends AppCompatActivity {
         busRefreshRunnable = new Runnable() {
             @Override public void run() {
                 if (!isOnSubScreen) return;
+                // 검색화면(busSearchArea 보임)이면 갱신 안 함
+                if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) {
+                    busRefreshHandler.postDelayed(this, 30000);
+                    return;
+                }
                 new Thread(() -> {
                     try {
                         String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
@@ -10606,7 +10611,7 @@ public class PinActivity extends AppCompatActivity {
             if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-            if (busResultContainer != null) busResultContainer.removeAllViews();
+            if (busResultContainer != null) { busResultContainer.removeAllViews(); busResultContainer.setVisibility(android.view.View.VISIBLE); }
             // 즐겨찾기 변경됐을 때만 갱신
             if (busFavDirty && busFavSection != null && busResultContainer != null) {
                 refreshBusFavorites(busFavSection, busResultContainer);
@@ -11315,7 +11320,10 @@ public class PinActivity extends AppCompatActivity {
                         if ("forward".equals(dKey)) {
                             busTimelineSv.smoothScrollTo(0, 0);
                         } else {
-                            if (busTurnRowY >= 0) busTimelineSv.smoothScrollTo(0, busTurnRowY);
+                            if (busTurnRowY >= 0) {
+                                int offset = busTimelineSv.getHeight() / 3;
+                                busTimelineSv.smoothScrollTo(0, Math.max(0, busTurnRowY - offset));
+                            }
                         }
                     }
                 } else {
@@ -11615,7 +11623,10 @@ public class PinActivity extends AppCompatActivity {
                         // 대기 중인 스크롤 처리
                         if ("reverse".equals(busPendingScrollDir)) {
                             busPendingScrollDir = null;
-                            busTimelineSv.post(() -> busTimelineSv.smoothScrollTo(0, busTurnRowY));
+                            busTimelineSv.post(() -> {
+                                int offset = busTimelineSv.getHeight() / 3;
+                                busTimelineSv.smoothScrollTo(0, Math.max(0, busTurnRowY - offset));
+                            });
                         }
                     }
                 });
