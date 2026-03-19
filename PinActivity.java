@@ -15197,8 +15197,8 @@ public class PinActivity extends AppCompatActivity {
                 if (colonBrace != qe + 1) { pos = qe + 1; continue; }
                 int objOpen = colonBrace + 1; // { 위치
                 // 객체 끝 찾기: ] 다음 }
-                int sArr = json.indexOf('"s":', objOpen);
-                int dArr = json.indexOf('"d":', objOpen);
+                int sArr = json.indexOf("\"s\":", objOpen);
+                int dArr = json.indexOf("\"d\":", objOpen);
                 int sEnd = sArr >= 0 ? json.indexOf(']', json.indexOf('[', sArr)) : -1;
                 int dEnd = dArr >= 0 ? json.indexOf(']', json.indexOf('[', dArr)) : -1;
                 int objClose = Math.max(sEnd, dEnd);
