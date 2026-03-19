@@ -11214,6 +11214,9 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout.LayoutParams tLp2 = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             tLp2.setMargins(0,dpToPx(3),0,0); tvTime.setLayoutParams(tLp2); dc.addView(tvTime);
+            // 첫차~막차 클릭 → 배차시간표 팝업
+            final boolean fFromSrc = (d == 0); // d==0: 기점→종점, d==1: 종점→기점
+            tvTime.setOnClickListener(v2 -> showBusTimeTableDialog(routeNo, fFromSrc));
             final String dKey = dirKeys[d];
             dc.setOnClickListener(v2 -> busScreenLoadStops(routeId, routeNo, container, dKey, fRTp));
             dirRow.addView(dc);
@@ -11978,8 +11981,10 @@ public class PinActivity extends AppCompatActivity {
                                 tvSub.setText(subTxt);
                                 tvSub.setTextColor(Color.parseColor("#888888"));
                                 tvSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                                tvSub.setSingleLine(true);
+                                tvSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
                                 LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
-                                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
                                 subLp.setMargins(0, dpToPx(3), 0, 0);
                                 tvSub.setLayoutParams(subLp);
                                 leftCol.addView(tvSub);
@@ -15414,6 +15419,230 @@ public class PinActivity extends AppCompatActivity {
             if (h > 23) return null;
             return String.format("%02d%02d", h, m);
         } catch (Exception ig) { return null; }
+    }
+
+    /** 배차시간표 다이얼로그 표시 */
+    private void showBusTimeTableDialog(String routeNo, boolean fromSrc) {
+        // busTimesMap에서 데이터 찾기
+        String[] data = busTimesMap.get(routeNo);
+        if (data == null || data.length < 4) {
+            android.widget.Toast.makeText(this,
+                    routeNo + "번 배차시간표 데이터가 없습니다.\n관리자 메뉴에서 배차시간표를 업데이트해주세요.",
+                    android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        String srcNm = data[0], dstNm = data[1];
+        String timesStr = fromSrc ? data[2] : data[3];
+        String[] times = timesStr.isEmpty() ? new String[0] : timesStr.split(",");
+
+        // 다이얼로그 구성
+        android.app.Dialog dlg = new android.app.Dialog(this);
+        dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        dlg.setCancelable(true);
+        if (dlg.getWindow() != null) {
+            dlg.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+            dlg.getWindow().setLayout((int)(getResources().getDisplayMetrics().widthPixels * 0.92),
+                    android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+        }
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.WHITE);
+        android.graphics.drawable.GradientDrawable rootBg = new android.graphics.drawable.GradientDrawable();
+        rootBg.setColor(Color.WHITE);
+        rootBg.setCornerRadius(dpToPx(16));
+        root.setBackground(rootBg);
+        root.setPadding(dpToPx(20), dpToPx(20), dpToPx(20), dpToPx(20));
+
+        // 제목
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText(routeNo + "번 배차시간표");
+        tvTitle.setTextColor(Color.parseColor("#1A1A2E"));
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvTitle.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.addView(tvTitle);
+
+        // 방향 선택 탭
+        LinearLayout tabRow = new LinearLayout(this);
+        tabRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams tabRowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        tabRowLp.setMargins(0, dpToPx(12), 0, dpToPx(8));
+        tabRow.setLayoutParams(tabRowLp);
+
+        String[] dirLabels2 = {srcNm + " 출발", dstNm + " 출발"};
+        final int[] curDir = {fromSrc ? 0 : 1};
+        TextView[] tabBtns = new TextView[2];
+
+        // 시간 그리드 컨테이너
+        ScrollView sv = new ScrollView(this);
+        sv.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(320)));
+        LinearLayout gridWrap = new LinearLayout(this);
+        gridWrap.setOrientation(LinearLayout.VERTICAL);
+        sv.addView(gridWrap);
+
+        // 현재 시간
+        java.util.Calendar nowCal = java.util.Calendar.getInstance();
+        int nowMin = nowCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + nowCal.get(java.util.Calendar.MINUTE);
+
+        Runnable buildGrid = new Runnable() {
+            @Override public void run() {
+                gridWrap.removeAllViews();
+                String[] ts = curDir[0] == 0
+                        ? (data[2].isEmpty() ? new String[0] : data[2].split(","))
+                        : (data[3].isEmpty() ? new String[0] : data[3].split(","));
+
+                if (ts.length == 0) {
+                    TextView tvEmpty2 = new TextView(PinActivity.this);
+                    tvEmpty2.setText("시간표 정보가 없습니다");
+                    tvEmpty2.setTextColor(Color.parseColor("#AAAAAA"));
+                    tvEmpty2.setGravity(Gravity.CENTER);
+                    tvEmpty2.setPadding(0, dpToPx(20), 0, dpToPx(20));
+                    gridWrap.addView(tvEmpty2);
+                    return;
+                }
+
+                // 시간별 그룹핑 (시 단위)
+                java.util.Map<Integer, java.util.List<String>> hourMap = new java.util.TreeMap<>();
+                for (String t : ts) {
+                    if (t.length() != 4) continue;
+                    try {
+                        int h = Integer.parseInt(t.substring(0, 2));
+                        int m = Integer.parseInt(t.substring(2, 4));
+                        hourMap.computeIfAbsent(h, k -> new java.util.ArrayList<>()).add(String.format("%02d", m));
+                    } catch (Exception ig) {}
+                }
+
+                for (java.util.Map.Entry<Integer, java.util.List<String>> e : hourMap.entrySet()) {
+                    int h = e.getKey();
+                    java.util.List<String> mins = e.getValue();
+
+                    LinearLayout hRow = new LinearLayout(PinActivity.this);
+                    hRow.setOrientation(LinearLayout.HORIZONTAL);
+                    hRow.setGravity(Gravity.CENTER_VERTICAL);
+                    LinearLayout.LayoutParams hRowLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    hRowLp.setMargins(0, dpToPx(2), 0, dpToPx(2));
+                    hRow.setLayoutParams(hRowLp);
+
+                    // 시 레이블
+                    TextView tvH = new TextView(PinActivity.this);
+                    tvH.setText(String.format("%02d", h));
+                    tvH.setTextColor(Color.parseColor("#0984E3"));
+                    tvH.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    tvH.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvH.setWidth(dpToPx(36));
+                    tvH.setGravity(Gravity.CENTER);
+                    hRow.addView(tvH);
+
+                    // 구분선
+                    android.view.View divV = new android.view.View(PinActivity.this);
+                    divV.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                    divV.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(1), LinearLayout.LayoutParams.MATCH_PARENT));
+                    hRow.addView(divV);
+
+                    // 분 목록
+                    LinearLayout minsWrap = new LinearLayout(PinActivity.this);
+                    minsWrap.setOrientation(LinearLayout.HORIZONTAL);
+                    minsWrap.setPadding(dpToPx(8), dpToPx(4), 0, dpToPx(4));
+                    LinearLayout.LayoutParams mwLp = new LinearLayout.LayoutParams(0,
+                            LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                    minsWrap.setLayoutParams(mwLp);
+
+                    // 분들 flex wrap (여러 줄)
+                    android.widget.TextView tvMins = new android.widget.TextView(PinActivity.this);
+                    StringBuilder mb = new StringBuilder();
+                    for (String m2 : mins) {
+                        int tMin = h * 60 + Integer.parseInt(m2);
+                        boolean isPast = tMin < nowMin;
+                        if (mb.length() > 0) mb.append("  ");
+                        mb.append(isPast ? m2 : m2);
+                    }
+                    tvMins.setText(mb.toString());
+                    tvMins.setTextColor(Color.parseColor("#333333"));
+                    tvMins.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    tvMins.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    minsWrap.addView(tvMins);
+                    hRow.addView(minsWrap);
+
+                    // 지난 시간대면 흐리게
+                    boolean allPast = (h * 60 + 59) < nowMin;
+                    tvH.setAlpha(allPast ? 0.4f : 1f);
+                    tvMins.setAlpha(allPast ? 0.4f : 1f);
+
+                    // 현재 시간대 강조
+                    if (h == nowCal.get(java.util.Calendar.HOUR_OF_DAY)) {
+                        hRow.setBackgroundColor(Color.parseColor("#F0F8FF"));
+                    }
+
+                    gridWrap.addView(hRow);
+
+                    // 구분선
+                    android.view.View hdiv = new android.view.View(PinActivity.this);
+                    hdiv.setBackgroundColor(Color.parseColor("#F0F0F0"));
+                    hdiv.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+                    gridWrap.addView(hdiv);
+                }
+            }
+        };
+
+        for (int i = 0; i < 2; i++) {
+            final int di = i;
+            tabBtns[i] = new TextView(this);
+            tabBtns[i].setText(dirLabels2[i]);
+            tabBtns[i].setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tabBtns[i].setGravity(Gravity.CENTER);
+            tabBtns[i].setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8));
+            tabBtns[i].setSingleLine(true);
+            tabBtns[i].setEllipsize(android.text.TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams tbLp = new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            tbLp.setMargins(i == 0 ? 0 : dpToPx(4), 0, 0, 0);
+            tabBtns[i].setLayoutParams(tbLp);
+            final TextView[] fTabs = tabBtns;
+            tabBtns[i].setOnClickListener(vt -> {
+                curDir[0] = di;
+                for (int j = 0; j < 2; j++) {
+                    boolean sel = j == di;
+                    android.graphics.drawable.GradientDrawable tbg = new android.graphics.drawable.GradientDrawable();
+                    tbg.setColor(sel ? Color.parseColor("#0984E3") : Color.parseColor("#F0F0F0"));
+                    tbg.setCornerRadius(dpToPx(8));
+                    fTabs[j].setBackground(tbg);
+                    fTabs[j].setTextColor(sel ? Color.WHITE : Color.parseColor("#555555"));
+                }
+                buildGrid.run();
+            });
+            // 초기 스타일
+            android.graphics.drawable.GradientDrawable tbg0 = new android.graphics.drawable.GradientDrawable();
+            tbg0.setColor(i == curDir[0] ? Color.parseColor("#0984E3") : Color.parseColor("#F0F0F0"));
+            tbg0.setCornerRadius(dpToPx(8));
+            tabBtns[i].setBackground(tbg0);
+            tabBtns[i].setTextColor(i == curDir[0] ? Color.WHITE : Color.parseColor("#555555"));
+            tabRow.addView(tabBtns[i]);
+        }
+        root.addView(tabRow);
+        root.addView(sv);
+
+        // 닫기 버튼
+        TextView tvClose = new TextView(this);
+        tvClose.setText("닫기");
+        tvClose.setGravity(Gravity.CENTER);
+        tvClose.setTextColor(Color.parseColor("#888888"));
+        tvClose.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        closeLp.setMargins(0, dpToPx(12), 0, 0);
+        tvClose.setLayoutParams(closeLp);
+        tvClose.setOnClickListener(vc -> dlg.dismiss());
+        root.addView(tvClose);
+
+        buildGrid.run();
+        dlg.setContentView(root);
+        dlg.show();
     }
 
     private String jsonVal(String obj, String key) {
