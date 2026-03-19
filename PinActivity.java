@@ -15526,72 +15526,94 @@ public class PinActivity extends AppCompatActivity {
                     } catch (Exception ig) {}
                 }
 
+                // 다음 출발 시간 (현재 이후 첫 번째)
+                int nextH = -1, nextM2 = -1;
+                outer:
+                for (java.util.Map.Entry<Integer, java.util.List<String>> e : hourMap.entrySet()) {
+                    for (String mm : e.getValue()) {
+                        try {
+                            int tMin = e.getKey() * 60 + Integer.parseInt(mm);
+                            if (tMin >= nowMin) { nextH = e.getKey(); nextM2 = Integer.parseInt(mm); break outer; }
+                        } catch (Exception ig) {}
+                    }
+                }
+                final int fNextH = nextH, fNextM = nextM2;
+
                 for (java.util.Map.Entry<Integer, java.util.List<String>> e : hourMap.entrySet()) {
                     int h = e.getKey();
                     java.util.List<String> mins = e.getValue();
+                    boolean allPast = (h * 60 + 59) < nowMin;
+                    boolean isCurHour = (h == nowCal.get(java.util.Calendar.HOUR_OF_DAY));
 
                     LinearLayout hRow = new LinearLayout(PinActivity.this);
                     hRow.setOrientation(LinearLayout.HORIZONTAL);
                     hRow.setGravity(Gravity.CENTER_VERTICAL);
                     LinearLayout.LayoutParams hRowLp = new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    hRowLp.setMargins(0, dpToPx(2), 0, dpToPx(2));
+                    hRowLp.setMargins(0, dpToPx(1), 0, dpToPx(1));
                     hRow.setLayoutParams(hRowLp);
+                    if (isCurHour) hRow.setBackgroundColor(Color.parseColor("#F0F8FF"));
 
                     // 시 레이블
                     TextView tvH = new TextView(PinActivity.this);
                     tvH.setText(String.format("%02d", h));
-                    tvH.setTextColor(Color.parseColor("#0984E3"));
-                    tvH.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    tvH.setTextColor(allPast ? Color.parseColor("#CCCCCC") : Color.parseColor("#0984E3"));
+                    tvH.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
                     tvH.setTypeface(null, android.graphics.Typeface.BOLD);
-                    tvH.setWidth(dpToPx(36));
+                    tvH.setWidth(dpToPx(32));
                     tvH.setGravity(Gravity.CENTER);
                     hRow.addView(tvH);
 
-                    // 구분선
+                    // 세로 구분선
                     android.view.View divV = new android.view.View(PinActivity.this);
-                    divV.setBackgroundColor(Color.parseColor("#EEEEEE"));
-                    divV.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(1), LinearLayout.LayoutParams.MATCH_PARENT));
+                    divV.setBackgroundColor(Color.parseColor("#DDDDDD"));
+                    LinearLayout.LayoutParams dvLp = new LinearLayout.LayoutParams(dpToPx(1),
+                            LinearLayout.LayoutParams.MATCH_PARENT);
+                    dvLp.setMargins(0, dpToPx(4), 0, dpToPx(4));
+                    divV.setLayoutParams(dvLp);
                     hRow.addView(divV);
 
-                    // 분 목록
+                    // 분들 FlowLayout 대신 단순 TextView로 : 구분
                     LinearLayout minsWrap = new LinearLayout(PinActivity.this);
                     minsWrap.setOrientation(LinearLayout.HORIZONTAL);
-                    minsWrap.setPadding(dpToPx(8), dpToPx(4), 0, dpToPx(4));
+                    minsWrap.setPadding(dpToPx(6), dpToPx(5), dpToPx(4), dpToPx(5));
+                    minsWrap.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
                     LinearLayout.LayoutParams mwLp = new LinearLayout.LayoutParams(0,
                             LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
                     minsWrap.setLayoutParams(mwLp);
 
-                    // 분들 flex wrap (여러 줄)
-                    android.widget.TextView tvMins = new android.widget.TextView(PinActivity.this);
-                    StringBuilder mb = new StringBuilder();
                     for (String m2 : mins) {
-                        int tMin = h * 60 + Integer.parseInt(m2);
-                        boolean isPast = tMin < nowMin;
-                        if (mb.length() > 0) mb.append("  ");
-                        mb.append(isPast ? m2 : m2);
+                        try {
+                            int tMin = h * 60 + Integer.parseInt(m2);
+                            boolean isPast = tMin < nowMin;
+                            boolean isNext = (h == fNextH && Integer.parseInt(m2) == fNextM);
+
+                            TextView tvMin = new TextView(PinActivity.this);
+                            tvMin.setText(m2);
+                            tvMin.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                            tvMin.setPadding(dpToPx(4), dpToPx(2), dpToPx(4), dpToPx(2));
+
+                            if (isNext) {
+                                // 다음 출발 - 빨간 배경 강조
+                                android.graphics.drawable.GradientDrawable nextBg =
+                                        new android.graphics.drawable.GradientDrawable();
+                                nextBg.setColor(Color.parseColor("#E74C3C"));
+                                nextBg.setCornerRadius(dpToPx(4));
+                                tvMin.setBackground(nextBg);
+                                tvMin.setTextColor(Color.WHITE);
+                                tvMin.setTypeface(null, android.graphics.Typeface.BOLD);
+                            } else if (isPast) {
+                                tvMin.setTextColor(Color.parseColor("#CCCCCC"));
+                            } else {
+                                tvMin.setTextColor(Color.parseColor("#333333"));
+                            }
+                            minsWrap.addView(tvMin);
+                        } catch (Exception ig) {}
                     }
-                    tvMins.setText(mb.toString());
-                    tvMins.setTextColor(Color.parseColor("#333333"));
-                    tvMins.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
-                    tvMins.setLayoutParams(new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-                    minsWrap.addView(tvMins);
                     hRow.addView(minsWrap);
-
-                    // 지난 시간대면 흐리게
-                    boolean allPast = (h * 60 + 59) < nowMin;
-                    tvH.setAlpha(allPast ? 0.4f : 1f);
-                    tvMins.setAlpha(allPast ? 0.4f : 1f);
-
-                    // 현재 시간대 강조
-                    if (h == nowCal.get(java.util.Calendar.HOUR_OF_DAY)) {
-                        hRow.setBackgroundColor(Color.parseColor("#F0F8FF"));
-                    }
-
                     gridWrap.addView(hRow);
 
-                    // 구분선
+                    // 가로 구분선
                     android.view.View hdiv = new android.view.View(PinActivity.this);
                     hdiv.setBackgroundColor(Color.parseColor("#F0F0F0"));
                     hdiv.setLayoutParams(new LinearLayout.LayoutParams(
