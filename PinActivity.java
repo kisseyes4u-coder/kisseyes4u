@@ -15244,9 +15244,11 @@ public class PinActivity extends AppCompatActivity {
         } catch (Exception ignored) { return ""; }
     }
 
-    /** bustimes.txt → busTimesMap 파싱
-     * 형식: rno|src|dst|ws|wd|ss|sd|hs|hd
-     * ws=평일기점출발, wd=평일종점출발, ss=토요일기점, sd=토요일종점, hs=휴일기점, hd=휴일종점
+    /**
+     * bustimes_v4.txt → busTimesMap 파싱
+     * 형식: rno|src|dst|company|oneway||W|interval|rows||S|interval|rows||H|interval|rows
+     * rows: "구분레이블:c2,c3,...c21" ~ 구분
+     * busTimesMap value: [src,dst,company,oneway, W_inv,W_rows, S_inv,S_rows, H_inv,H_rows]
      */
     private void loadBusTimesFromJson(String txt) {
         try {
@@ -15254,16 +15256,73 @@ public class PinActivity extends AppCompatActivity {
             for (String line : txt.split("\n")) {
                 line = line.trim();
                 if (line.isEmpty()) continue;
-                String[] p = line.split("\\|", 9);
-                if (p.length < 9) continue;
-                // [0]=rno [1]=src [2]=dst [3]=ws [4]=wd [5]=ss [6]=sd [7]=hs [8]=hd
-                if (!p[0].isEmpty()) map.put(p[0], new String[]{p[1],p[2],p[3],p[4],p[5],p[6],p[7],p[8]});
+                // 헤더와 요일 블록 분리 (|| 구분)
+                String[] blocks = line.split("\\|\\|");
+                if (blocks.length < 2) continue;
+                String[] h = blocks[0].split("\\|", 5);
+                if (h.length < 5) continue;
+                String rno=h[0], src=h[1], dst=h[2], company=h[3], oneway=h[4];
+                // 요일 블록 파싱
+                String wInv="", wRows="", sInv="", sRows="", hInv="", hRows="";
+                for (int bi = 1; bi < blocks.length && bi <= 3; bi++) {
+                    String[] dp = blocks[bi].split("\\|", 3);
+                    if (dp.length < 3) continue;
+                    String dayKey=dp[0], inv=dp[1], rows=dp[2];
+                    if ("W".equals(dayKey)) { wInv=inv; wRows=rows; }
+                    else if ("S".equals(dayKey)) { sInv=inv; sRows=rows; }
+                    else if ("H".equals(dayKey)) { hInv=inv; hRows=rows; }
+                }
+                // 기존 호환: ws/wd 추출 (짝수/홀수 열 합산)
+                String ws2=extractTimesFromRows(wRows,true), wd=extractTimesFromRows(wRows,false);
+                String ss=extractTimesFromRows(sRows,true), sd=extractTimesFromRows(sRows,false);
+                String hs=extractTimesFromRows(hRows,true), hd=extractTimesFromRows(hRows,false);
+                if (!rno.isEmpty()) {
+                    map.put(rno, new String[]{src,dst,company,oneway,
+                            wInv,wRows, sInv,sRows, hInv,hRows,
+                            ws2,wd, ss,sd, hs,hd});
+                }
             }
             busTimesMap = map;
             android.util.Log.d("BusTimes", "loaded: " + map.size() + " routes");
         } catch (Exception e) {
             android.util.Log.e("BusTimes", "parse error: " + e.getMessage());
         }
+    }
+
+    /** rows 문자열에서 출발 시간 추출 (src=true: 짝수열, false: 홀수열) */
+    private String extractTimesFromRows(String rows, boolean src) {
+        if (rows == null || rows.isEmpty()) return "";
+        java.util.Set<String> times = new java.util.TreeSet<>();
+        for (String row : rows.split("~")) {
+            int colon = row.indexOf(':');
+            if (colon < 0) continue;
+            String[] cols = row.substring(colon + 1).split(",", -1);
+            // cols[0]=B, cols[1]=C, ... 짝수인덱스(0,2,4...)=기점, 홀수=종점
+            for (int i = src ? 0 : 1; i < cols.length; i += 2) {
+                String t = cols[i].trim().replace(":", "");
+                if (t.length() == 4) {
+                    try { Integer.parseInt(t); times.add(t); } catch (Exception ig) {}
+                }
+            }
+        }
+        return String.join(",", times);
+    }
+
+    /** 배차시간표 표에 셀 추가 헬퍼 */
+    private void addCell(LinearLayout row, String text, int width, int height,
+                         int color, float size, boolean bold) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextColor(color);
+        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, size);
+        tv.setGravity(Gravity.CENTER);
+        tv.setWidth(width);
+        if (height > 0) tv.setMinHeight(height);
+        tv.setPadding(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2));
+        if (bold) tv.setTypeface(null, android.graphics.Typeface.BOLD);
+        tv.setSingleLine(true);
+        tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        row.addView(tv);
     }
 
     private String[] splitTimes(String s) {
@@ -15273,14 +15332,14 @@ public class PinActivity extends AppCompatActivity {
 
     private String getNextDeparture(String routeNo, boolean fromSrc) {
         String[] data = busTimesMap.get(routeNo);
-        if (data == null || data.length < 8) return "";
-        // 오늘 요일에 맞는 데이터 선택
+        if (data == null || data.length < 16) return "";
+        // v4: [10]=ws,[11]=wd,[12]=ss,[13]=sd,[14]=hs,[15]=hd
         java.util.Calendar now = java.util.Calendar.getInstance();
         int dow = now.get(java.util.Calendar.DAY_OF_WEEK);
         int srcIdx, dstIdx;
-        if (dow == java.util.Calendar.SATURDAY) { srcIdx=4; dstIdx=5; }
-        else if (dow == java.util.Calendar.SUNDAY) { srcIdx=6; dstIdx=7; }
-        else { srcIdx=2; dstIdx=3; }
+        if (dow == java.util.Calendar.SATURDAY) { srcIdx=12; dstIdx=13; }
+        else if (dow == java.util.Calendar.SUNDAY) { srcIdx=14; dstIdx=15; }
+        else { srcIdx=10; dstIdx=11; }
         String timesStr = fromSrc ? data[srcIdx] : data[dstIdx];
         if (timesStr.isEmpty()) { timesStr = fromSrc ? data[2] : data[3]; } // fallback 평일
         if (timesStr.isEmpty()) return "";
@@ -15398,28 +15457,78 @@ public class PinActivity extends AppCompatActivity {
 
             // 각 노선 평일/토/휴 파싱
             StringBuilder sb = new StringBuilder();
+            String[] dayKeys = {"W", "S", "H"};
             for (java.util.Map.Entry<String, java.util.List<Integer>> entry : routeBlocks.entrySet()) {
                 String rno = entry.getKey();
                 java.util.List<Integer> blocks = entry.getValue();
                 if (blocks.isEmpty()) continue;
 
-                // 기점/종점 (첫 블록 기준)
                 int hdr0 = blocks.get(0);
                 String srcNm = rows.getOrDefault(hdr0, new java.util.TreeMap<>()).getOrDefault(8, "");
                 String dstNm = rows.getOrDefault(hdr0, new java.util.TreeMap<>()).getOrDefault(12, "");
+                // 운행사, 편도
+                String company = rows.getOrDefault(hdr0+2, new java.util.TreeMap<>()).getOrDefault(3, "");
+                String oneway = excelTimeToHHMM(rows.getOrDefault(hdr0+2, new java.util.TreeMap<>()).getOrDefault(20, ""));
+                if (oneway == null) oneway = "";
+                else {
+                    // HHMM → H:MM
+                    if (oneway.length()==4) oneway = Integer.parseInt(oneway.substring(0,2)) + ":" + oneway.substring(2);
+                }
 
-                String ws="", wd="", ss3="", sd="", hs="", hd="";
-                String[][] dayData = parseAllDayBlocks(rows, blocks);
-                if (dayData.length > 0) { ws = dayData[0][0]; wd = dayData[0][1]; }
-                if (dayData.length > 1) { ss3 = dayData[1][0]; sd = dayData[1][1]; }
-                if (dayData.length > 2) { hs = dayData[2][0]; hd = dayData[2][1]; }
+                if (sb.length() > 0) sb.append("\n");
+                sb.append(rno).append("|").append(srcNm).append("|").append(dstNm)
+                  .append("|").append(company.trim()).append("|").append(oneway);
 
-                if (!ws.isEmpty() || !wd.isEmpty()) {
-                    if (sb.length() > 0) sb.append("\n");
-                    sb.append(rno).append("|").append(srcNm).append("|").append(dstNm)
-                      .append("|").append(ws).append("|").append(wd)
-                      .append("|").append(ss3).append("|").append(sd)
-                      .append("|").append(hs).append("|").append(hd);
+                for (int bi = 0; bi < Math.min(blocks.size(), 3); bi++) {
+                    int hdr = blocks.get(bi);
+                    // 평균간격 계산
+                    java.util.List<Integer> srcTimes = new java.util.ArrayList<>();
+                    for (int dr = hdr+6; dr < hdr+50; dr++) {
+                        java.util.TreeMap<Integer, String> drow = rows.get(dr);
+                        if (drow == null || drow.getOrDefault(1,"").isEmpty()) break;
+                        for (int dc = 2; dc <= 21; dc += 2) {
+                            String ts2 = excelTimeToHHMM(drow.getOrDefault(dc,""));
+                            if (ts2 != null) {
+                                int h=Integer.parseInt(ts2.substring(0,2)), m=Integer.parseInt(ts2.substring(2,4));
+                                srcTimes.add(h*60+m);
+                            }
+                        }
+                    }
+                    java.util.Collections.sort(srcTimes);
+                    int interval = 0;
+                    if (srcTimes.size() >= 2) {
+                        java.util.List<Integer> gaps = new java.util.ArrayList<>();
+                        for (int g=0; g<srcTimes.size()-1; g++) {
+                            int gap = srcTimes.get(g+1)-srcTimes.get(g);
+                            if (gap>0 && gap<120) gaps.add(gap);
+                        }
+                        if (!gaps.isEmpty()) {
+                            int sum=0; for(int g:gaps) sum+=g;
+                            interval = Math.round((float)sum/gaps.size());
+                        }
+                    }
+
+                    // 데이터 행 파싱
+                    StringBuilder rowsSb = new StringBuilder();
+                    for (int dr = hdr+6; dr < hdr+50; dr++) {
+                        java.util.TreeMap<Integer, String> drow = rows.get(dr);
+                        if (drow == null || drow.getOrDefault(1,"").isEmpty()) break;
+                        String labelRaw = drow.getOrDefault(1,"").replace("\n"," ").replace("|","").replace("~","").trim();
+                        if (labelRaw.isEmpty()) break;
+                        if (rowsSb.length() > 0) rowsSb.append("~");
+                        rowsSb.append(labelRaw).append(":");
+                        for (int dc = 2; dc <= 21; dc++) {
+                            if (dc > 2) rowsSb.append(",");
+                            String ts2 = excelTimeToHHMM(drow.getOrDefault(dc,""));
+                            if (ts2 != null) {
+                                rowsSb.append(Integer.parseInt(ts2.substring(0,2)))
+                                      .append(":").append(ts2.substring(2,4));
+                            }
+                        }
+                    }
+
+                    sb.append("||").append(dayKeys[bi]).append("|").append(interval)
+                      .append("|").append(rowsSb);
                 }
             }
             return sb.toString();
@@ -15511,11 +15620,20 @@ public class PinActivity extends AppCompatActivity {
             return;
         }
 
-        // 요일별 시간 데이터 (fromSrc: 기점출발, !fromSrc: 종점출발)
-        // data: [src,dst, ws,wd, ss,sd, hs,hd]
-        String[] weekdayTimes = splitTimes(fromSrc ? data[2] : data[3]);
-        String[] satTimes     = splitTimes(fromSrc ? data[4] : data[5]);
-        String[] holTimes     = splitTimes(fromSrc ? data[6] : data[7]);
+        // 요일별 시간 데이터
+        // v4: [10]=ws,[11]=wd,[12]=ss,[13]=sd,[14]=hs,[15]=hd
+        String[] weekdayTimes = splitTimes(fromSrc ? data[10] : data[11]);
+        String[] satTimes     = splitTimes(fromSrc ? data[12] : data[13]);
+        String[] holTimes     = splitTimes(fromSrc ? data[14] : data[15]);
+        // 상세 정보
+        String company = data.length > 2 ? data[2] : "";
+        String oneway  = data.length > 3 ? data[3] : "";
+        // 요일별 평균간격
+        java.util.Calendar nowForDay = java.util.Calendar.getInstance();
+        int todayDow = nowForDay.get(java.util.Calendar.DAY_OF_WEEK);
+        String todayInterval = todayDow == java.util.Calendar.SATURDAY ? (data.length>6?data[6]:"")
+                : todayDow == java.util.Calendar.SUNDAY ? (data.length>8?data[8]:"")
+                : (data.length>4?data[4]:"");
 
         // 다이얼로그 구성
         android.app.Dialog dlg = new android.app.Dialog(this);
@@ -15546,21 +15664,66 @@ public class PinActivity extends AppCompatActivity {
         tvTitle.setGravity(Gravity.CENTER_HORIZONTAL);
         root.addView(tvTitle);
 
+        // 운행사 / 평균간격 / 편도 정보 행
+        if (!company.isEmpty()) {
+            LinearLayout infoRow = new LinearLayout(this);
+            infoRow.setOrientation(LinearLayout.HORIZONTAL);
+            infoRow.setGravity(Gravity.CENTER_VERTICAL);
+            infoRow.setBackgroundColor(Color.parseColor("#F8F8F8"));
+            infoRow.setPadding(dpToPx(8), dpToPx(5), dpToPx(8), dpToPx(5));
+            LinearLayout.LayoutParams irLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            irLp.setMargins(0, dpToPx(6), 0, 0);
+            infoRow.setLayoutParams(irLp);
+
+            // 운행사 (좌측 flex)
+            TextView tvCompany = new TextView(this);
+            tvCompany.setText("🚌 " + company.trim());
+            tvCompany.setTextColor(Color.parseColor("#555555"));
+            tvCompany.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvCompany.setSingleLine(true);
+            tvCompany.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            tvCompany.setLayoutParams(new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            infoRow.addView(tvCompany);
+
+            // 편도 시간
+            if (!oneway.isEmpty()) {
+                TextView tvOneway = new TextView(this);
+                tvOneway.setText("편도 " + oneway);
+                tvOneway.setTextColor(Color.parseColor("#0984E3"));
+                tvOneway.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvOneway.setPadding(dpToPx(8), 0, dpToPx(4), 0);
+                infoRow.addView(tvOneway);
+            }
+
+            // 평균간격
+            if (!todayInterval.isEmpty() && !todayInterval.equals("0")) {
+                TextView tvInterval = new TextView(this);
+                tvInterval.setText("배차 " + todayInterval + "분");
+                tvInterval.setTextColor(Color.parseColor("#E67E22"));
+                tvInterval.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvInterval.setTypeface(null, android.graphics.Typeface.BOLD);
+                infoRow.addView(tvInterval);
+            }
+            root.addView(infoRow);
+        }
+
         // 평일 / 토요일 / 공휴일 탭
         String[] dayLabels = {"평일", "토요일", "공휴일"};
-        final int[] curDay = {0}; // 0=평일(현재만 지원)
+        final int[] curDay = {0};
         TextView[] dayTabs = new TextView[3];
         LinearLayout dayTabRow = new LinearLayout(this);
         dayTabRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams dtrLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        dtrLp.setMargins(0, dpToPx(10), 0, dpToPx(8));
+        dtrLp.setMargins(0, dpToPx(8), 0, dpToPx(6));
         dayTabRow.setLayoutParams(dtrLp);
 
         // 시간 그리드 영역
         ScrollView sv = new ScrollView(this);
         sv.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(340)));
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(320)));
         LinearLayout gridWrap = new LinearLayout(this);
         gridWrap.setOrientation(LinearLayout.VERTICAL);
         sv.addView(gridWrap);
@@ -15572,10 +15735,16 @@ public class PinActivity extends AppCompatActivity {
         Runnable buildGrid = new Runnable() {
             @Override public void run() {
                 gridWrap.removeAllViews();
-                String[] ts = (curDay[0] == 0) ? weekdayTimes
-                           : (curDay[0] == 1) ? satTimes : holTimes;
+                // 요일별 rows 데이터 가져오기
+                // v4: [4]=wInv,[5]=wRows, [6]=sInv,[7]=sRows, [8]=hInv,[9]=hRows
+                String rowsStr = (curDay[0] == 0) ? (data.length>5?data[5]:"")
+                               : (curDay[0] == 1) ? (data.length>7?data[7]:"")
+                               : (data.length>9?data[9]:"");
+                String curInterval = (curDay[0] == 0) ? (data.length>4?data[4]:"")
+                                   : (curDay[0] == 1) ? (data.length>6?data[6]:"")
+                                   : (data.length>8?data[8]:"");
 
-                if (ts.length == 0) {
+                if (rowsStr.isEmpty()) {
                     TextView tvEmpty = new TextView(PinActivity.this);
                     tvEmpty.setText(dayLabels[curDay[0]] + " 시간표 데이터가 없습니다");
                     tvEmpty.setTextColor(Color.parseColor("#AAAAAA"));
@@ -15585,111 +15754,167 @@ public class PinActivity extends AppCompatActivity {
                     return;
                 }
 
-                // 시간별 그룹핑
-                java.util.Map<Integer, java.util.List<String>> hourMap = new java.util.TreeMap<>();
-                for (String t : ts) {
-                    if (t.length() != 4) continue;
-                    try {
-                        int h = Integer.parseInt(t.substring(0, 2));
-                        int m = Integer.parseInt(t.substring(2, 4));
-                        hourMap.computeIfAbsent(h, k -> new java.util.ArrayList<>())
-                               .add(String.format("%02d", m));
-                    } catch (Exception ig) {}
+                // 현재 시간
+                java.util.Calendar nowBg = java.util.Calendar.getInstance();
+                int nowMinBg = nowBg.get(java.util.Calendar.HOUR_OF_DAY)*60 + nowBg.get(java.util.Calendar.MINUTE);
+
+                // 간격 표시
+                if (!curInterval.isEmpty() && !curInterval.equals("0")) {
+                    TextView tvInv = new TextView(PinActivity.this);
+                    tvInv.setText("평균 배차간격: " + curInterval + "분");
+                    tvInv.setTextColor(Color.parseColor("#E67E22"));
+                    tvInv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    tvInv.setPadding(dpToPx(4), dpToPx(4), 0, dpToPx(4));
+                    gridWrap.addView(tvInv);
                 }
 
-                // 다음 출발 시간 찾기
-                int nextH = -1, nextMm = -1;
-                outer:
-                for (java.util.Map.Entry<Integer, java.util.List<String>> e : hourMap.entrySet()) {
-                    for (String mm : e.getValue()) {
-                        try {
-                            if (e.getKey() * 60 + Integer.parseInt(mm) >= nowMin) {
-                                nextH = e.getKey(); nextMm = Integer.parseInt(mm); break outer;
-                            }
-                        } catch (Exception ig) {}
+                // 각 행 파싱: "구분레이블:c1,c2,...c20"
+                String[] rowArr = rowsStr.split("~");
+
+                // 헤더: 구분 | 기점 | 종점 반복 (최대 10쌍)
+                // 열 수 파악
+                int maxCols = 0;
+                for (String row : rowArr) {
+                    int ci = row.indexOf(':');
+                    if (ci < 0) continue;
+                    String[] cs = row.substring(ci+1).split(",", -1);
+                    int nonEmpty = 0;
+                    for (String c : cs) if (!c.trim().isEmpty()) nonEmpty = cs.length;
+                    if (nonEmpty > maxCols) maxCols = nonEmpty;
+                }
+                maxCols = Math.min(maxCols, 20);
+                // 실제 데이터 있는 최대 열 찾기
+                int lastDataCol = 0;
+                for (String row : rowArr) {
+                    int ci = row.indexOf(':');
+                    if (ci < 0) continue;
+                    String[] cs = row.substring(ci+1).split(",", -1);
+                    for (int c = cs.length-1; c >= 0; c--) {
+                        if (!cs[c].trim().isEmpty()) { if(c>lastDataCol) lastDataCol=c; break; }
                     }
                 }
-                final int fNH = nextH, fNM = nextMm;
+                int visibleCols = Math.min(lastDataCol+1, 20);
 
-                for (java.util.Map.Entry<Integer, java.util.List<String>> e : hourMap.entrySet()) {
-                    int h = e.getKey();
-                    boolean allPast = (h * 60 + 59) < nowMin;
-                    boolean isCurH = (h == nowCal.get(java.util.Calendar.HOUR_OF_DAY));
+                // 열 너비 계산
+                int cellW = dpToPx(42);
+                int labelW = dpToPx(50);
 
-                    LinearLayout hRow = new LinearLayout(PinActivity.this);
-                    hRow.setOrientation(LinearLayout.HORIZONTAL);
-                    hRow.setGravity(Gravity.CENTER_VERTICAL);
-                    hRow.setPadding(0, dpToPx(3), 0, dpToPx(3));
-                    if (isCurH) hRow.setBackgroundColor(Color.parseColor("#F0F8FF"));
-                    hRow.setLayoutParams(new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT));
+                // 열 쌍 수 (구암역/보훈병원 반복)
+                int pairCount = (visibleCols + 1) / 2;
 
-                    // "HH시" 레이블
+                // 헤더1: 구분 | 1 | 2 | 3 ...
+                LinearLayout hdr1 = new LinearLayout(PinActivity.this);
+                hdr1.setOrientation(LinearLayout.HORIZONTAL);
+                hdr1.setBackgroundColor(Color.parseColor("#00ACC1")); // 청록
+                addCell(hdr1, "구분", labelW, dpToPx(22), Color.WHITE, fs(10), true);
+                for (int p = 0; p < pairCount; p++) {
+                    // 쌍 헤더 (숫자, 2열 span)
                     TextView tvH = new TextView(PinActivity.this);
-                    tvH.setText(String.format("%02d시", h));
-                    tvH.setTextColor(allPast ? Color.parseColor("#CCCCCC") : Color.parseColor("#0984E3"));
-                    tvH.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                    tvH.setText(String.valueOf(p+1));
+                    tvH.setTextColor(Color.WHITE);
+                    tvH.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
                     tvH.setTypeface(null, android.graphics.Typeface.BOLD);
-                    tvH.setMinWidth(dpToPx(36));
-                    tvH.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-                    hRow.addView(tvH);
+                    tvH.setGravity(Gravity.CENTER);
+                    tvH.setWidth(cellW * 2);
+                    tvH.setPadding(0, dpToPx(3), 0, dpToPx(3));
+                    hdr1.addView(tvH);
+                }
+                gridWrap.addView(hdr1);
 
-                    // " | " 구분선 텍스트
-                    TextView tvBar = new TextView(PinActivity.this);
-                    tvBar.setText("  |  ");
-                    tvBar.setTextColor(Color.parseColor("#DDDDDD"));
-                    tvBar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                    hRow.addView(tvBar);
+                // 헤더2: 구분 | 기점 | 종점 반복
+                LinearLayout hdr2 = new LinearLayout(PinActivity.this);
+                hdr2.setOrientation(LinearLayout.HORIZONTAL);
+                hdr2.setBackgroundColor(Color.parseColor("#B2EBF2"));
+                addCell(hdr2, "", labelW, dpToPx(20), Color.parseColor("#555555"), fs(10), false);
+                for (int p = 0; p < pairCount; p++) {
+                    addCell(hdr2, data[0], cellW, dpToPx(20), Color.parseColor("#0984E3"), fs(9), false);
+                    addCell(hdr2, data[1], cellW, dpToPx(20), Color.parseColor("#E74C3C"), fs(9), false);
+                }
+                gridWrap.addView(hdr2);
 
-                    // 분 목록 (FlowLayout 대신 wrap_content LinearLayout)
-                    LinearLayout minsWrap = new LinearLayout(PinActivity.this);
-                    minsWrap.setOrientation(LinearLayout.HORIZONTAL);
-                    minsWrap.setLayoutParams(new LinearLayout.LayoutParams(0,
-                            LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                // 데이터 행
+                for (int ri = 0; ri < rowArr.length; ri++) {
+                    String rowLine = rowArr[ri];
+                    int ci = rowLine.indexOf(':');
+                    if (ci < 0) continue;
+                    String label = rowLine.substring(0, ci).trim();
+                    String[] cs = rowLine.substring(ci+1).split(",", -1);
+                    if (label.isEmpty()) continue;
 
-                    for (String m2 : e.getValue()) {
-                        try {
-                            int tMin = h * 60 + Integer.parseInt(m2);
-                            boolean isPast = tMin < nowMin;
-                            boolean isNext = (h == fNH && Integer.parseInt(m2) == fNM);
-
-                            TextView tvMin = new TextView(PinActivity.this);
-                            tvMin.setText(m2 + "분 ");
-                            tvMin.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                            tvMin.setPadding(dpToPx(2), dpToPx(2), dpToPx(4), dpToPx(2));
-
-                            if (isNext) {
-                                android.graphics.drawable.GradientDrawable nb =
-                                        new android.graphics.drawable.GradientDrawable();
-                                nb.setColor(Color.parseColor("#E74C3C"));
-                                nb.setCornerRadius(dpToPx(4));
-                                tvMin.setBackground(nb);
-                                tvMin.setTextColor(Color.WHITE);
-                                tvMin.setTypeface(null, android.graphics.Typeface.BOLD);
-                            } else if (isPast) {
-                                tvMin.setTextColor(Color.parseColor("#CCCCCC"));
-                            } else {
-                                tvMin.setTextColor(Color.parseColor("#333333"));
-                            }
-                            minsWrap.addView(tvMin);
-                        } catch (Exception ig) {}
+                    // 이 행의 기점 출발 시간 (짝수 인덱스) 중 현재 시간 이후 첫 번째
+                    boolean hasNext = false;
+                    for (int c = 0; c < cs.length && c < visibleCols; c+=2) {
+                        String t = cs[c].trim();
+                        if (t.length() == 5) {
+                            try {
+                                int h=Integer.parseInt(t.substring(0,2)), m=Integer.parseInt(t.substring(3,5));
+                                if (h*60+m >= nowMinBg) { hasNext = true; break; }
+                            } catch(Exception ig){}
+                        }
                     }
-                    hRow.addView(minsWrap);
-                    gridWrap.addView(hRow);
+
+                    LinearLayout dataRow = new LinearLayout(PinActivity.this);
+                    dataRow.setOrientation(LinearLayout.HORIZONTAL);
+                    dataRow.setBackgroundColor((ri%2==0) ? Color.WHITE : Color.parseColor("#FAFAFA"));
+
+                    // 구분 레이블
+                    TextView tvLabel = new TextView(PinActivity.this);
+                    tvLabel.setText(label);
+                    tvLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(9));
+                    tvLabel.setTextColor(Color.parseColor("#333333"));
+                    tvLabel.setGravity(Gravity.CENTER);
+                    tvLabel.setWidth(labelW);
+                    tvLabel.setPadding(dpToPx(2), dpToPx(4), dpToPx(2), dpToPx(4));
+                    dataRow.addView(tvLabel);
+
+                    // 시간 셀들
+                    for (int c = 0; c < visibleCols; c++) {
+                        String t = c < cs.length ? cs[c].trim() : "";
+                        boolean isSrc = (c % 2 == 0); // 짝수=기점, 홀수=종점
+
+                        TextView tvCell = new TextView(PinActivity.this);
+                        tvCell.setText(t.isEmpty() ? "" : t);
+                        tvCell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                        tvCell.setGravity(Gravity.CENTER);
+                        tvCell.setWidth(cellW);
+                        tvCell.setPadding(dpToPx(1), dpToPx(3), dpToPx(1), dpToPx(3));
+
+                        // 현재 시간 이후 첫 번째 → 노란 강조
+                        if (!t.isEmpty() && isSrc) {
+                            try {
+                                int h=Integer.parseInt(t.substring(0,2)), m=Integer.parseInt(t.substring(3,5));
+                                if (h*60+m >= nowMinBg) {
+                                    tvCell.setBackgroundColor(Color.parseColor("#FFF176"));
+                                    tvCell.setTypeface(null, android.graphics.Typeface.BOLD);
+                                    tvCell.setTextColor(Color.parseColor("#D32F2F"));
+                                } else {
+                                    tvCell.setTextColor(Color.parseColor("#AAAAAA"));
+                                }
+                            } catch(Exception ig){ tvCell.setTextColor(Color.parseColor("#333333")); }
+                        } else if (!t.isEmpty()) {
+                            try {
+                                int h=Integer.parseInt(t.substring(0,2)), m=Integer.parseInt(t.substring(3,5));
+                                tvCell.setTextColor(h*60+m < nowMinBg ? Color.parseColor("#CCCCCC") : Color.parseColor("#555555"));
+                            } catch(Exception ig){ tvCell.setTextColor(Color.parseColor("#555555")); }
+                        } else {
+                            tvCell.setTextColor(Color.TRANSPARENT);
+                        }
+                        dataRow.addView(tvCell);
+                    }
+                    gridWrap.addView(dataRow);
 
                     // 구분선
-                    android.view.View hdiv = new android.view.View(PinActivity.this);
-                    hdiv.setBackgroundColor(Color.parseColor("#F0F0F0"));
-                    hdiv.setLayoutParams(new LinearLayout.LayoutParams(
+                    android.view.View div = new android.view.View(PinActivity.this);
+                    div.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                    div.setLayoutParams(new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
-                    gridWrap.addView(hdiv);
+                    gridWrap.addView(div);
                 }
             }
         };
 
-        // 탭 버튼 생성
-        final TextView[] fTabs = dayTabs;
+        // 헬퍼: 셀 TextView 추가
+        final TextView[] fTabs = dayTabs;        final TextView[] fTabs = dayTabs;
         for (int i = 0; i < 3; i++) {
             final int di = i;
             dayTabs[i] = new TextView(this);
