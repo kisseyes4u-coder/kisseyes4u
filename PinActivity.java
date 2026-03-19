@@ -221,6 +221,34 @@ public class PinActivity extends AppCompatActivity {
     private android.graphics.Bitmap getBusIconPurple() {
         return getBusIconColor(0xFF6C3FA0);
     }
+    /** assets/bus.png를 지정된 색상으로 렌더링 */
+    private android.graphics.Bitmap getBusIconColor(int argbColor) {
+        try {
+            android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                    getAssets().open("bus.png"));
+            if (raw != null) {
+                int w = raw.getWidth(), h = raw.getHeight();
+                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                int[] pixels = new int[w * h];
+                raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                for (int i = 0; i < pixels.length; i++) {
+                    int r2 = (pixels[i] >> 16) & 0xFF;
+                    int g2 = (pixels[i] >> 8)  & 0xFF;
+                    int b2 =  pixels[i]         & 0xFF;
+                    int brightness = (r2 + g2 + b2) / 3;
+                    if (brightness > 128) {
+                        pixels[i] = argbColor;
+                    } else {
+                        pixels[i] = 0xFFFFFFFF;
+                    }
+                }
+                result.setPixels(pixels, 0, w, 0, 0, w, h);
+                raw.recycle();
+                return result;
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
 
     /** assets/stop.png(정류소 전용) 또는 pngwing_com.png(노선+정류소) 색상 렌더링 */
     /** assets/stop.png - getBusIconColor와 완전 동일, 파일명만 다름 */
@@ -17154,8 +17182,7 @@ public class PinActivity extends AppCompatActivity {
             rCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
             rCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             rCard.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
-            LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0,
-                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0, dpToPx(120), 1f);
             rCardLp.setMargins(0, 0, routeColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             rCard.setLayoutParams(rCardLp);
 
@@ -17626,8 +17653,7 @@ public class PinActivity extends AppCompatActivity {
             card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
             card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             card.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
-            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(0, dpToPx(120), 1f);
             cardLp.setMargins(0, 0, stopColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             card.setLayoutParams(cardLp);
 
