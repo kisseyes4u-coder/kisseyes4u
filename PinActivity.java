@@ -4040,7 +4040,7 @@ public class PinActivity extends AppCompatActivity {
                     byte[] xlsBytes = readBytes(conn.getInputStream());
                     conn.disconnect();
 
-                    // 2) 엑셀 파싱 → JSON 생성
+                    // 2) 엑셀 파싱 → TXT 생성 (9필드: rno|src|dst|ws|wd|ss|sd|hs|hd)
                     runOnUiThread(() -> android.widget.Toast.makeText(this,
                             "배차시간표 파싱 중...", android.widget.Toast.LENGTH_SHORT).show());
                     String json = parseBusTimesXls(xlsBytes);
@@ -15276,13 +15276,18 @@ public class PinActivity extends AppCompatActivity {
      * 엑셀 구조: 각 노선 헤더행(1열=노선번호번), 데이터행+6부터 시간 데이터
      * 짝수열(B,D,F...) = 기점출발, 홀수열(C,E,G...) = 종점출발
      */
+    /**
+     * 대전 배차시간표 xlsx → 9필드 TXT 파싱
+     * 형식: rno|src|dst|ws|wd|ss|sd|hs|hd
+     * ws=평일기점출발, wd=평일종점출발, ss=토요일기점, sd=토요일종점, hs=휴일기점, hd=휴일종점
+     * 엑셀 구조: 한 노선이 평일/토요일/휴일 3번 반복 (40행 간격)
+     */
     private String parseBusTimesXls(byte[] xlsBytes) {
         try {
-            // ZIP(xlsx) 파일에서 xl/worksheets/sheet1.xml 추출
+            // ZIP(xlsx)에서 sheet1.xml, sharedStrings.xml 추출
             java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(
                     new java.io.ByteArrayInputStream(xlsBytes));
-            byte[] sheetXml = null;
-            byte[] sharedStrXml = null;
+            byte[] sheetXml = null, sharedStrXml = null;
             java.util.zip.ZipEntry ze;
             while ((ze = zis.getNextEntry()) != null) {
                 String name = ze.getName();
@@ -15294,45 +15299,35 @@ public class PinActivity extends AppCompatActivity {
             if (sheetXml == null) return "";
 
             // sharedStrings 파싱
-            java.util.List<String> sharedStrs = new java.util.ArrayList<>();
+            java.util.List<String> ss2 = new java.util.ArrayList<>();
             if (sharedStrXml != null) {
                 String ss = new String(sharedStrXml, "UTF-8");
                 int i = 0;
                 while (true) {
-                    int ts = ss.indexOf("<t", i);
-                    if (ts < 0) break;
-                    int te = ss.indexOf("</t>", ts);
-                    if (te < 0) break;
+                    int ts = ss.indexOf("<t", i); if (ts < 0) break;
+                    int te = ss.indexOf("</t>", ts); if (te < 0) break;
                     int gt = ss.indexOf('>', ts);
-                    sharedStrs.add(gt < te ? ss.substring(gt + 1, te) : "");
+                    ss2.add(gt < te ? ss.substring(gt + 1, te) : "");
                     i = te + 4;
                 }
             }
 
-            // 시트 XML 파싱: 행/셀 읽기
+            // 시트 XML → rows[rowNum][colNum]=value
             String sheet = new String(sheetXml, "UTF-8");
-            // 행 파싱 → [rowNum][colNum] = value
             java.util.TreeMap<Integer, java.util.TreeMap<Integer, String>> rows = new java.util.TreeMap<>();
             int ri = 0;
             while (true) {
-                int rs = sheet.indexOf("<row ", ri);
-                if (rs < 0) break;
-                int re = sheet.indexOf("</row>", rs);
-                if (re < 0) break;
-                // 행 번호
+                int rs = sheet.indexOf("<row ", ri); if (rs < 0) break;
+                int re = sheet.indexOf("</row>", rs); if (re < 0) break;
                 int rAttr = sheet.indexOf("r=\"", rs);
                 int rno2 = Integer.parseInt(sheet.substring(rAttr + 3, sheet.indexOf('"', rAttr + 3)));
                 java.util.TreeMap<Integer, String> cols = new java.util.TreeMap<>();
-                // 셀 파싱
                 String rowStr = sheet.substring(rs, re);
                 int ci = 0;
                 while (true) {
-                    int cs = rowStr.indexOf("<c ", ci);
-                    if (cs < 0) break;
-                    int ce = rowStr.indexOf("</c>", cs);
-                    if (ce < 0) break;
+                    int cs = rowStr.indexOf("<c ", ci); if (cs < 0) break;
+                    int ce = rowStr.indexOf("</c>", cs); if (ce < 0) break;
                     String cell = rowStr.substring(cs, ce + 4);
-                    // 셀 주소 (A1, B2...)
                     int ca = cell.indexOf("r=\"");
                     String addr = cell.substring(ca + 3, cell.indexOf('"', ca + 3));
                     int colNum = 0;
@@ -15340,18 +15335,13 @@ public class PinActivity extends AppCompatActivity {
                         if (!Character.isLetter(ch)) break;
                         colNum = colNum * 26 + (Character.toUpperCase(ch) - 'A' + 1);
                     }
-                    // 값 추출
                     String val = "";
                     boolean isShared = cell.contains("t=\"s\"");
-                    int vs = cell.indexOf("<v>");
-                    int ve = cell.indexOf("</v>");
+                    int vs = cell.indexOf("<v>"); int ve = cell.indexOf("</v>");
                     if (vs >= 0 && ve >= 0) {
                         String raw = cell.substring(vs + 3, ve);
-                        if (isShared) {
-                            try { val = sharedStrs.get(Integer.parseInt(raw)); } catch (Exception ig) {}
-                        } else {
-                            val = raw;
-                        }
+                        if (isShared) { try { val = ss2.get(Integer.parseInt(raw)); } catch (Exception ig) {} }
+                        else val = raw;
                     }
                     cols.put(colNum, val);
                     ci = ce + 4;
@@ -15360,71 +15350,76 @@ public class PinActivity extends AppCompatActivity {
                 ri = re + 6;
             }
 
-            // 노선 헤더 행 찾기 (1열에 "N번" 포함)
-            java.util.Map<String, Integer> routeHeaderRows = new java.util.LinkedHashMap<>();
+            // 노선 헤더 행 수집 (1열에 "N번" 포함) - 한 노선당 3개 (평일/토/휴)
+            java.util.Map<String, java.util.List<Integer>> routeBlocks = new java.util.LinkedHashMap<>();
             for (java.util.Map.Entry<Integer, java.util.TreeMap<Integer, String>> entry : rows.entrySet()) {
                 String c1 = entry.getValue().getOrDefault(1, "");
                 if (c1.contains("번") && c1.length() <= 10) {
-                    routeHeaderRows.put(c1.replace("번","").trim(), entry.getKey());
+                    String rno = c1.replace("번","").trim();
+                    routeBlocks.computeIfAbsent(rno, k -> new java.util.ArrayList<>()).add(entry.getKey());
                 }
             }
 
-            // 각 노선 시간 파싱
-            java.util.Map<String, Object[]> result = new java.util.LinkedHashMap<>();
-            for (java.util.Map.Entry<String, Integer> re2 : routeHeaderRows.entrySet()) {
-                String routeNo = re2.getKey();
-                int headerRow = re2.getValue();
-                // 기점/종점 이름 (header+0행: 8열, 12열)
-                String srcNm = rows.getOrDefault(headerRow, new java.util.TreeMap<>()).getOrDefault(8, "");
-                String dstNm = rows.getOrDefault(headerRow, new java.util.TreeMap<>()).getOrDefault(12, "");
-                // 데이터 시작: headerRow + 6
-                java.util.List<String> sTimes = new java.util.ArrayList<>();
-                java.util.List<String> dTimes = new java.util.ArrayList<>();
-                for (int dr = headerRow + 6; dr < headerRow + 60; dr++) {
-                    java.util.TreeMap<Integer, String> drow = rows.get(dr);
-                    if (drow == null || drow.getOrDefault(1, "").isEmpty()) break;
-                    // 짝수열(2,4,6...) = 기점, 홀수열(3,5,7...) = 종점
-                    for (int dc = 2; dc <= 21; dc += 2) {
-                        String tv = drow.getOrDefault(dc, "");
-                        String ts = excelTimeToHHMM(tv);
-                        if (ts != null && !sTimes.contains(ts)) sTimes.add(ts);
-                    }
-                    for (int dc = 3; dc <= 21; dc += 2) {
-                        String tv = drow.getOrDefault(dc, "");
-                        String ts = excelTimeToHHMM(tv);
-                        if (ts != null && !dTimes.contains(ts)) dTimes.add(ts);
-                    }
-                }
-                java.util.Collections.sort(sTimes);
-                java.util.Collections.sort(dTimes);
-                if (!sTimes.isEmpty() || !dTimes.isEmpty()) {
-                    result.put(routeNo, new Object[]{srcNm, dstNm, sTimes, dTimes});
-                }
-            }
+            // 각 노선 평일/토/휴 파싱
+            StringBuilder sb = new StringBuilder();
+            for (java.util.Map.Entry<String, java.util.List<Integer>> entry : routeBlocks.entrySet()) {
+                String rno = entry.getKey();
+                java.util.List<Integer> blocks = entry.getValue();
+                if (blocks.isEmpty()) continue;
 
-            // JSON 조립
-            StringBuilder sb = new StringBuilder("{");
-            boolean first = true;
-            for (java.util.Map.Entry<String, Object[]> e : result.entrySet()) {
-                if (!first) sb.append(",");
-                Object[] d = e.getValue();
-                @SuppressWarnings("unchecked")
-                java.util.List<String> st = (java.util.List<String>) d[2];
-                @SuppressWarnings("unchecked")
-                java.util.List<String> dt = (java.util.List<String>) d[3];
-                sb.append("\"").append(e.getKey()).append("\":{")
-                  .append("\"src\":\"").append(d[0]).append("\",")
-                  .append("\"dst\":\"").append(d[1]).append("\",")
-                  .append("\"s\":\"").append(String.join(",", st)).append("\",")
-                  .append("\"d\":\"").append(String.join(",", dt)).append("\"}");
-                first = false;
+                // 기점/종점 (첫 블록 기준)
+                int hdr0 = blocks.get(0);
+                String srcNm = rows.getOrDefault(hdr0, new java.util.TreeMap<>()).getOrDefault(8, "");
+                String dstNm = rows.getOrDefault(hdr0, new java.util.TreeMap<>()).getOrDefault(12, "");
+
+                String ws="", wd="", ss3="", sd="", hs="", hd="";
+                String[][] dayData = parseAllDayBlocks(rows, blocks);
+                if (dayData.length > 0) { ws = dayData[0][0]; wd = dayData[0][1]; }
+                if (dayData.length > 1) { ss3 = dayData[1][0]; sd = dayData[1][1]; }
+                if (dayData.length > 2) { hs = dayData[2][0]; hd = dayData[2][1]; }
+
+                if (!ws.isEmpty() || !wd.isEmpty()) {
+                    if (sb.length() > 0) sb.append("\n");
+                    sb.append(rno).append("|").append(srcNm).append("|").append(dstNm)
+                      .append("|").append(ws).append("|").append(wd)
+                      .append("|").append(ss3).append("|").append(sd)
+                      .append("|").append(hs).append("|").append(hd);
+                }
             }
-            sb.append("}");
             return sb.toString();
         } catch (Exception e) {
             android.util.Log.e("BusTimes", "parseBusTimesXls error: " + e.getMessage());
             return "";
         }
+    }
+
+    /** 평일/토/휴 블록별 시간 파싱 → [[ws,wd],[ss,sd],[hs,hd]] */
+    private String[][] parseAllDayBlocks(
+            java.util.TreeMap<Integer, java.util.TreeMap<Integer, String>> rows,
+            java.util.List<Integer> blocks) {
+        String[][] result = new String[blocks.size()][2];
+        for (int bi = 0; bi < blocks.size(); bi++) {
+            int headerRow = blocks.get(bi);
+            java.util.List<String> sTimes = new java.util.ArrayList<>();
+            java.util.List<String> dTimes = new java.util.ArrayList<>();
+            for (int dr = headerRow + 6; dr < headerRow + 50; dr++) {
+                java.util.TreeMap<Integer, String> drow = rows.get(dr);
+                if (drow == null || drow.getOrDefault(1, "").isEmpty()) break;
+                for (int dc = 2; dc <= 21; dc += 2) {
+                    String ts = excelTimeToHHMM(drow.getOrDefault(dc, ""));
+                    if (ts != null && !sTimes.contains(ts)) sTimes.add(ts);
+                }
+                for (int dc = 3; dc <= 21; dc += 2) {
+                    String ts = excelTimeToHHMM(drow.getOrDefault(dc, ""));
+                    if (ts != null && !dTimes.contains(ts)) dTimes.add(ts);
+                }
+            }
+            java.util.Collections.sort(sTimes);
+            java.util.Collections.sort(dTimes);
+            result[bi][0] = String.join(",", sTimes);
+            result[bi][1] = String.join(",", dTimes);
+        }
+        return result;
     }
 
     /** 엑셀 시간값(소수) → "HHMM" 문자열 */
