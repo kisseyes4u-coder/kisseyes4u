@@ -12566,10 +12566,11 @@ public class PinActivity extends AppCompatActivity {
 
             TextView tvRno = new TextView(this);
             tvRno.setText(rno);
-            // routeType 기반 색상
-            String rnoTp = getSharedPreferences("bus_cache", MODE_PRIVATE).getString("route_" + fRid + "_rTp", "");
-            String rnoColor = routeTypeBadge(rnoTp.isEmpty() ? (route.length > 4 ? fRtp : "") : rnoTp)[1];
-            tvRno.setTextColor(Color.parseColor(rnoColor));
+            // routeType 기반 색상 (route[1]=routeId, route[4]=routeType)
+            String rnoRid = route.length > 1 ? route[1] : "";
+            String rnoRtp = route.length > 4 ? route[4] : "";
+            String rnoTp = getSharedPreferences("bus_cache", MODE_PRIVATE).getString("route_" + rnoRid + "_rTp", rnoRtp);
+            tvRno.setTextColor(Color.parseColor(routeTypeBadge(rnoTp)[1]));
             tvRno.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
             tvRno.setTypeface(null, android.graphics.Typeface.BOLD);
             tvRno.setSingleLine(true);
@@ -12830,7 +12831,7 @@ public class PinActivity extends AppCompatActivity {
 
         TextView tvT = new TextView(this);
         tvT.setText(title);
-        tvT.setTextColor(Color.parseColor(titleColor));
+        tvT.setTextColor(Color.parseColor(!routeType.isEmpty() ? routeTypeBadge(routeType)[1] : titleColor));
         tvT.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
         tvT.setTypeface(null, android.graphics.Typeface.BOLD);
         titleRow.addView(tvT);
@@ -15201,9 +15202,7 @@ public class PinActivity extends AppCompatActivity {
 
         TextView tvTitle = new TextView(this);
         tvTitle.setText(title);
-        // routeType 있으면 routeType 색상, 없으면 titleColor
-        String finalTitleColor = (!routeType.isEmpty()) ? routeTypeBadge(routeType)[1] : color;
-        tvTitle.setTextColor(Color.parseColor(finalTitleColor));
+        tvTitle.setTextColor(Color.parseColor(color));
         tvTitle.setTextSize(17);
         tvTitle.setTypeface(null, Typeface.BOLD);
         tvTitle.setShadowLayer(3f, 1f, 1f, Color.parseColor("#22000000"));
