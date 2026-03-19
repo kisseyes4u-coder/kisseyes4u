@@ -10602,12 +10602,14 @@ public class PinActivity extends AppCompatActivity {
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             if (busResultContainer != null) busResultContainer.removeAllViews();
+            // 즐겨찾기 목록 갱신
+            if (busFavSection != null && busResultContainer != null)
+                refreshBusFavorites(busFavSection, busResultContainer);
             return;
         }
 
         // 이전 화면 복원
         String[] prev = busBackStack.peek();
-        // 백스택에서 제거 후 재진입하면 다시 push되므로 먼저 제거
         busBackStack.pop();
 
         String type = prev[0];
@@ -10631,6 +10633,9 @@ public class PinActivity extends AppCompatActivity {
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
             if (busResultContainer != null) busResultContainer.removeAllViews();
+            // 즐겨찾기 목록 갱신
+            if (busFavSection != null && busResultContainer != null)
+                refreshBusFavorites(busFavSection, busResultContainer);
         }
     }
 
