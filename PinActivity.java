@@ -15910,7 +15910,7 @@ public class PinActivity extends AppCompatActivity {
         };
 
         // 헬퍼: 셀 TextView 추가
-        final TextView[] fTabs = dayTabs;        final TextView[] fTabs = dayTabs;
+        final TextView[] fTabs = dayTabs;
         for (int i = 0; i < 3; i++) {
             final int di = i;
             dayTabs[i] = new TextView(this);
