@@ -222,7 +222,7 @@ public class PinActivity extends AppCompatActivity {
         return getBusIconColor(0xFF6C3FA0);
     }
 
-    /** assets/stop.png를 지정된 색상으로 렌더링 (bus.png와 동일한 방식) */
+    /** assets/stop.png를 지정된 색상으로 렌더링 (getBusIconColor와 완전 동일) */
     private android.graphics.Bitmap getStopIconColor(int argbColor) {
         try {
             android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
@@ -232,27 +232,22 @@ public class PinActivity extends AppCompatActivity {
                 android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
                 int[] pixels = new int[w * h];
                 raw.getPixels(pixels, 0, w, 0, 0, w, h);
-                int tr = (argbColor >> 16) & 0xFF;
-                int tg = (argbColor >> 8)  & 0xFF;
-                int tb =  argbColor        & 0xFF;
                 for (int i = 0; i < pixels.length; i++) {
                     int r2 = (pixels[i] >> 16) & 0xFF;
                     int g2 = (pixels[i] >> 8)  & 0xFF;
                     int b2 =  pixels[i]         & 0xFF;
                     int brightness = (r2 + g2 + b2) / 3;
                     if (brightness > 128) {
-                        pixels[i] = (0xFF << 24) | (tr << 16) | (tg << 8) | tb;
+                        pixels[i] = argbColor;
                     } else {
-                        pixels[i] = 0xFFFFFFFF; // 흰색 배경
+                        pixels[i] = 0xFFFFFFFF;
                     }
                 }
                 result.setPixels(pixels, 0, w, 0, 0, w, h);
                 raw.recycle();
                 return result;
             }
-        } catch (Exception e) {
-            android.util.Log.e("StopIcon", "err:" + e.getMessage());
-        }
+        } catch (Exception ignored) {}
         return null;
     }
 
@@ -10353,7 +10348,7 @@ public class PinActivity extends AppCompatActivity {
         btnBack.setTypeface(null, android.graphics.Typeface.BOLD);
         btnBack.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
         LinearLayout.LayoutParams backLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
-        backLp.setMargins(0, 0, dpToPx(8), 0);
+        backLp.setMargins(0, 0, dpToPx(4), 0);
         btnBack.setLayoutParams(backLp);
         btnBack.setOnClickListener(v -> busNavigateBack());
         btnBar.addView(btnBack);
@@ -17515,7 +17510,7 @@ public class PinActivity extends AppCompatActivity {
             stopBusWrapper.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             stopBusWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
             // stop.png 로딩 (bus.png와 동일한 방식)
-            android.graphics.Bitmap stopBusBmp = getStopIconColor(sTypeColorInt);
+            android.graphics.Bitmap stopBusBmp = getStopIconColor(0xFF000000 | (sTypeColorInt & 0xFFFFFF));
             if (stopBusBmp != null) {
                 android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
                 ivStopBus.setImageBitmap(stopBusBmp);
