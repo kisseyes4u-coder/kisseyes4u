@@ -10354,7 +10354,7 @@ public class PinActivity extends AppCompatActivity {
         btnBack.setTypeface(null, android.graphics.Typeface.BOLD);
         btnBack.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
         LinearLayout.LayoutParams backLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
-        backLp.setMargins(0, 0, dpToPx(2), 0);
+        backLp.setMargins(0, 0, 0, 0);
         btnBack.setLayoutParams(backLp);
         btnBack.setOnClickListener(v -> busNavigateBack());
         btnBar.addView(btnBack);
@@ -17517,13 +17517,15 @@ public class PinActivity extends AppCompatActivity {
             stopBusWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
             // routeId 있으면 노선+정류소(pngwing_com.png), 없으면 정류소만(stop.png=pngwing-stio_1.png)
             int stopArgbColor = 0xFF000000 | (sTypeColorInt & 0xFFFFFF);
-            android.graphics.Bitmap stopBusBmp = (!routeId.isEmpty())
+            boolean isRouteStop = !routeId.isEmpty();
+            android.graphics.Bitmap stopBusBmp = isRouteStop
                     ? getStopRouteIconColor(stopArgbColor)
                     : getStopIconColor(stopArgbColor);
             if (stopBusBmp != null) {
                 android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
                 ivStopBus.setImageBitmap(stopBusBmp);
-                LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
+                int iconSize = isRouteStop ? dpToPx(32) : dpToPx(24);
+                LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(iconSize, iconSize);
                 stopBusLp.setMargins(0, 0, dpToPx(6), 0);
                 stopBusLp.gravity = Gravity.CENTER_VERTICAL;
                 ivStopBus.setLayoutParams(stopBusLp);
