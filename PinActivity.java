@@ -12475,8 +12475,7 @@ public class PinActivity extends AppCompatActivity {
                                     ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
                                             start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                 }
-                                ((TextView)ph).setText(ssb);
-                                // setTextSize 제거 - AbsoluteSizeSpan이 크기를 직접 지정
+                                ((TextView)ph).setText(ssb, android.widget.TextView.BufferType.SPANNABLE);
                                 ((TextView)ph).setGravity(Gravity.START);
                             }
                         }
