@@ -172,7 +172,8 @@ public class PinActivity extends AppCompatActivity {
     // 버스 화면 백스택: ["type", params...] type=timeline/arrival/search
     private final java.util.Deque<String[]> busBackStack = new java.util.ArrayDeque<>();
     private boolean busFavDirty = false;
-    private TextView busSoonTV = null; // 도착화면 X분후 버스 표시 // 즐겨찾기 변경 시 true → 검색화면 복귀 시 갱신
+    private TextView busSoonTV = null; // 도착화면 X분후 버스 표시
+    private TextView busDirectionTV = null; // 도착화면 방면 표시 // 즐겨찾기 변경 시 true → 검색화면 복귀 시 갱신
     private ScrollView busTimelineSv = null;  // 타임라인 ScrollView
     private int busTurnRowY = -1;             // 회차 정류소 Y 좌표
     private String busPendingScrollDir = null;  // 방향전환 후 자동 스크롤 ("forward"/"reverse")
@@ -12077,6 +12078,16 @@ public class PinActivity extends AppCompatActivity {
             tvNo.setGravity(Gravity.CENTER_HORIZONTAL);
             infoBox.addView(tvNo);
 
+            // 방면 표시 TextView (나중에 arrMap에서 채움)
+            TextView tvDirection = new TextView(this);
+            tvDirection.setTag("direction_ph");
+            tvDirection.setTextColor(Color.parseColor("#555555"));
+            tvDirection.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvDirection.setGravity(Gravity.CENTER_HORIZONTAL);
+            tvDirection.setTypeface(null, android.graphics.Typeface.BOLD);
+            infoBox.addView(tvDirection);
+            busDirectionTV = tvDirection;
+
             // 정류소에 정차하는 버스 종류 태그 (노선번호 → routeType → 종류별 색상)
             String routesForNode = nodeNo.isEmpty() ? "" : nodeNoToRoutes.get(nodeNo);
             if ((routesForNode == null || routesForNode.isEmpty()) && !nodeId.isEmpty()) {
@@ -12460,7 +12471,7 @@ public class PinActivity extends AppCompatActivity {
                                 ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")),
                                         0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                 // AbsoluteSizeSpan(dp, true) - 두번째 인자 true = dp단위
-                                ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(22), true),
+                                ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(30), true),
                                         0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                 // 각 버스번호 - 종류별 색상, 30dp 크게
                                 for (String rn : fSoonRnoList) {
@@ -12524,6 +12535,18 @@ public class PinActivity extends AppCompatActivity {
         if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
         // 도착화면 태그 검증
         if (busFixedHeader == null || !("arrival_" + nodeId).equals(busFixedHeader.getTag())) return;
+
+        // 방면 수집: arrMap에서 endNm 모아서 busDirectionTV에 표시
+        if (busDirectionTV != null && arrMap != null && !arrMap.isEmpty()) {
+            java.util.LinkedHashSet<String> dirSet = new java.util.LinkedHashSet<>();
+            for (String[] ai : arrMap.values()) {
+                if (ai != null && ai.length > 3 && !ai[3].isEmpty()) dirSet.add(ai[3] + "방면");
+            }
+            if (!dirSet.isEmpty()) {
+                runOnUiThread(() -> busDirectionTV.setText(android.text.TextUtils.join("  ", dirSet)));
+            }
+        }
+
         // 가장 빠른 버스 계산
         String soonRno = ""; int soonSec = Integer.MAX_VALUE;
         for (java.util.Map.Entry<String, String[]> en : arrMap.entrySet()) {
@@ -12545,7 +12568,7 @@ public class PinActivity extends AppCompatActivity {
                 ssb2.append(timeLabel2);
                 ssb2.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")),
                         0, ssb2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                ssb2.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(22), true),
+                ssb2.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(30), true),
                         0, ssb2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 // 버스번호 - routeType 색상 + 30dp
                 String rtp3 = "";
