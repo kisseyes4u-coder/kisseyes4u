@@ -10982,7 +10982,7 @@ public class PinActivity extends AppCompatActivity {
         // ★ 절대 규칙: 타임라인 진입 시 검색화면 반드시 숨김
         if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
         if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
-        if (busFixedHeader != null) busFixedHeader.setVisibility(android.view.View.VISIBLE);
+        if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.VISIBLE); busFixedHeader.setTag("timeline"); }
         // forward 방향 전환 시 맨 위로 스크롤
         if ("forward".equals(busPendingScrollDir)) {
             busPendingScrollDir = null;
@@ -11829,6 +11829,7 @@ public class PinActivity extends AppCompatActivity {
         // ③ busFixedHeader → 정류장 타이틀바
         if (busFixedHeader != null) {
             busFixedHeader.removeAllViews();
+            busFixedHeader.setTag("arrival_" + nodeId); // 화면 식별 태그
             busFixedHeader.setVisibility(android.view.View.VISIBLE);
             busFixedHeader.setBackgroundColor(Color.WHITE);
             busFixedHeader.setPadding(0, 0, 0, 0);
@@ -12249,6 +12250,8 @@ public class PinActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     // 검색화면이면 렌더링 차단
                     if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
+                    // 도착화면 태그 검증 - 다른 화면으로 이미 전환됐으면 중단
+                    if (busFixedHeader == null || !("arrival_" + nodeId).equals(busFixedHeader.getTag())) return;
                     // 헤더 곧도착 업데이트
                     if (busFixedHeader != null && busFixedHeader.getChildCount() >= 3) {
                         android.view.View infoBoxV = busFixedHeader.getChildAt(2);
@@ -12462,30 +12465,7 @@ public class PinActivity extends AppCompatActivity {
                         }
                     }
 
-                    TextView btnRefresh = new TextView(this);
-                    btnRefresh.setText("\u21bb  새로고침");
-                    btnRefresh.setTextColor(Color.parseColor("#0984E3"));
-                    btnRefresh.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                    btnRefresh.setTypeface(null, android.graphics.Typeface.BOLD);
-                    btnRefresh.setGravity(Gravity.CENTER);
-                    LinearLayout.LayoutParams rfLp = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48));
-                    rfLp.setMargins(0, dpToPx(4), 0, 0);
-                    btnRefresh.setLayoutParams(rfLp);
-                    btnRefresh.setOnClickListener(v ->
-                            busScreenLoadArrival(nodeId, nodeNm, filterRouteNo, container));
-                    container.addView(btnRefresh);
-
-                    TextView tvNote = new TextView(this);
-                    tvNote.setText("버스 도착정보는 교통 및 버스 운행 상황에 따라 다를 수 있습니다.");
-                    tvNote.setTextColor(Color.parseColor("#CCCCCC"));
-                    tvNote.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-                    tvNote.setGravity(Gravity.CENTER);
-                    LinearLayout.LayoutParams noteLp = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    noteLp.setMargins(dpToPx(16), dpToPx(8), dpToPx(16), dpToPx(12));
-                    tvNote.setLayoutParams(noteLp);
-                    container.addView(tvNote);
+                    // 새로고침/안내문구 제거됨
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
@@ -12509,6 +12489,8 @@ public class PinActivity extends AppCompatActivity {
                                    java.util.Map<String, String[]> arrMap) {
         // 검색화면이면 차단
         if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
+        // 도착화면 태그 검증
+        if (busFixedHeader == null || !("arrival_" + nodeId).equals(busFixedHeader.getTag())) return;
         // 가장 빠른 버스 계산
         String soonRno = ""; int soonSec = Integer.MAX_VALUE;
         for (java.util.Map.Entry<String, String[]> en : arrMap.entrySet()) {
