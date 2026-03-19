@@ -12426,10 +12426,10 @@ public class PinActivity extends AppCompatActivity {
             // [TEST] 블록이면 상단에 테스트 배지 표시
             if (isTestBlock) {
                 TextView tvTestBadge = new TextView(this);
-                tvTestBadge.setText("🧪 테스트 문자 (Drive 미저장)");
-                tvTestBadge.setTextColor(Color.parseColor("#888888"));
+                tvTestBadge.setText("[TEST] 테스트 문자 (Drive 미저장)");
+                tvTestBadge.setTextColor(Color.parseColor("#E74C3C"));
                 tvTestBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-                tvTestBadge.setTypeface(null, android.graphics.Typeface.ITALIC);
+                tvTestBadge.setTypeface(null, android.graphics.Typeface.BOLD);
                 LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT);
