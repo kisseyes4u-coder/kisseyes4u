@@ -4011,31 +4011,57 @@ public class PinActivity extends AppCompatActivity {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         btnBtLp.setMargins(0, 0, 0, dpToPx(8));
         btnBusTimes.setLayoutParams(btnBtLp);
-        btnBusTimes.setOnClickListener(v -> {
-            // Drive에서 최신 bustimes.json URL로 다운로드 후 업로드
+        btnBusTimes.setOnClickListener(v -> showConfirmDialog("🕐", "배차시간표 업데이트",
+                "traffic.daejeon.go.kr에서 최신 배차시간표를\n자동으로 다운로드하여 Drive에 업로드합니다.\n잠시 시간이 걸릴 수 있습니다.", () -> {
             btnBusTimes.setEnabled(false);
             btnBtBg.setColor(Color.parseColor("#AAAAAA"));
             new Thread(() -> {
                 try {
-                    // traffic.daejeon.go.kr에서 최신 엑셀 다운로드
-                    // (현재는 미리 파싱된 JSON을 Drive에 업로드)
-                    // TODO: 추후 자동화 - 지금은 수동 업로드 안내
+                    // 1) traffic.daejeon.go.kr에서 엑셀 다운로드
+                    runOnUiThread(() -> android.widget.Toast.makeText(this,
+                            "배차시간표 다운로드 중...", android.widget.Toast.LENGTH_SHORT).show());
+                    String xlsUrl = "https://traffic.daejeon.go.kr/web-notice/api/v1/notice/getNoticeFileName/bustime/1";
+                    java.net.URL url = new java.net.URL(xlsUrl);
+                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(30000);
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+                    byte[] xlsBytes = readBytes(conn.getInputStream());
+                    conn.disconnect();
+
+                    // 2) 엑셀 파싱 → JSON 생성
+                    runOnUiThread(() -> android.widget.Toast.makeText(this,
+                            "배차시간표 파싱 중...", android.widget.Toast.LENGTH_SHORT).show());
+                    String json = parseBusTimesXls(xlsBytes);
+                    if (json.isEmpty()) throw new Exception("파싱 실패");
+
+                    // 3) Drive에 업로드
+                    runOnUiThread(() -> android.widget.Toast.makeText(this,
+                            "Drive에 업로드 중...", android.widget.Toast.LENGTH_SHORT).show());
+                    new DriveUploadHelper(this).uploadFileSync(json, BUS_TIME_FILE);
+                    getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
+                            .putString("bustimes_cache", json).apply();
+                    loadBusTimesFromJson(json);
+
                     runOnUiThread(() -> {
                         btnBusTimes.setEnabled(true);
                         btnBtBg.setColor(Color.parseColor("#00B894"));
+                        tvBusTimesStatus.setText("🕐 배차시간표: " + busTimesMap.size() + "개 노선 ✓");
+                        tvBusTimesStatus.setTextColor(Color.parseColor("#27AE60"));
                         android.widget.Toast.makeText(this,
-                                "배차시간표는 Drive에 bustimes.json 파일을 직접 업로드해주세요.\n" +
-                                "파일은 traffic.daejeon.go.kr에서 다운로드 후 변환 필요합니다.",
+                                "✓ 배차시간표 " + busTimesMap.size() + "개 노선 업로드 완료!",
                                 android.widget.Toast.LENGTH_LONG).show();
                     });
                 } catch (Exception e) {
                     runOnUiThread(() -> {
                         btnBusTimes.setEnabled(true);
                         btnBtBg.setColor(Color.parseColor("#00B894"));
+                        android.widget.Toast.makeText(this,
+                                "실패: " + e.getMessage(), android.widget.Toast.LENGTH_LONG).show();
                     });
                 }
             }).start();
-        });
+        }));
         busManageCard.addView(btnBusTimes);
 
         layout.addView(busManageCard);
@@ -15210,6 +15236,184 @@ public class PinActivity extends AppCompatActivity {
             } catch (Exception ig) {}
         }
         return ""; // 오늘 막차 지남
+    }
+
+    /** HTTP 스트림 → byte[] */
+    private byte[] readBytes(java.io.InputStream is) throws Exception {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        byte[] tmp = new byte[8192];
+        int n;
+        while ((n = is.read(tmp)) != -1) buf.write(tmp, 0, n);
+        return buf.toByteArray();
+    }
+
+    /**
+     * 대전 배차시간표 엑셀(xlsx) → bustimes.json 파싱
+     * 엑셀 구조: 각 노선 헤더행(1열=노선번호번), 데이터행+6부터 시간 데이터
+     * 짝수열(B,D,F...) = 기점출발, 홀수열(C,E,G...) = 종점출발
+     */
+    private String parseBusTimesXls(byte[] xlsBytes) {
+        try {
+            // ZIP(xlsx) 파일에서 xl/worksheets/sheet1.xml 추출
+            java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(
+                    new java.io.ByteArrayInputStream(xlsBytes));
+            byte[] sheetXml = null;
+            byte[] sharedStrXml = null;
+            java.util.zip.ZipEntry ze;
+            while ((ze = zis.getNextEntry()) != null) {
+                String name = ze.getName();
+                if (name.equals("xl/worksheets/sheet1.xml")) sheetXml = readBytes(zis);
+                if (name.equals("xl/sharedStrings.xml")) sharedStrXml = readBytes(zis);
+                zis.closeEntry();
+            }
+            zis.close();
+            if (sheetXml == null) return "";
+
+            // sharedStrings 파싱
+            java.util.List<String> sharedStrs = new java.util.ArrayList<>();
+            if (sharedStrXml != null) {
+                String ss = new String(sharedStrXml, "UTF-8");
+                int i = 0;
+                while (true) {
+                    int ts = ss.indexOf("<t", i);
+                    if (ts < 0) break;
+                    int te = ss.indexOf("</t>", ts);
+                    if (te < 0) break;
+                    int gt = ss.indexOf('>', ts);
+                    sharedStrs.add(gt < te ? ss.substring(gt + 1, te) : "");
+                    i = te + 4;
+                }
+            }
+
+            // 시트 XML 파싱: 행/셀 읽기
+            String sheet = new String(sheetXml, "UTF-8");
+            // 행 파싱 → [rowNum][colNum] = value
+            java.util.TreeMap<Integer, java.util.TreeMap<Integer, String>> rows = new java.util.TreeMap<>();
+            int ri = 0;
+            while (true) {
+                int rs = sheet.indexOf("<row ", ri);
+                if (rs < 0) break;
+                int re = sheet.indexOf("</row>", rs);
+                if (re < 0) break;
+                // 행 번호
+                int rAttr = sheet.indexOf("r=\"", rs);
+                int rno2 = Integer.parseInt(sheet.substring(rAttr + 3, sheet.indexOf('"', rAttr + 3)));
+                java.util.TreeMap<Integer, String> cols = new java.util.TreeMap<>();
+                // 셀 파싱
+                String rowStr = sheet.substring(rs, re);
+                int ci = 0;
+                while (true) {
+                    int cs = rowStr.indexOf("<c ", ci);
+                    if (cs < 0) break;
+                    int ce = rowStr.indexOf("</c>", cs);
+                    if (ce < 0) break;
+                    String cell = rowStr.substring(cs, ce + 4);
+                    // 셀 주소 (A1, B2...)
+                    int ca = cell.indexOf("r=\"");
+                    String addr = cell.substring(ca + 3, cell.indexOf('"', ca + 3));
+                    int colNum = 0;
+                    for (char ch : addr.toCharArray()) {
+                        if (!Character.isLetter(ch)) break;
+                        colNum = colNum * 26 + (Character.toUpperCase(ch) - 'A' + 1);
+                    }
+                    // 값 추출
+                    String val = "";
+                    boolean isShared = cell.contains("t=\"s\"");
+                    int vs = cell.indexOf("<v>");
+                    int ve = cell.indexOf("</v>");
+                    if (vs >= 0 && ve >= 0) {
+                        String raw = cell.substring(vs + 3, ve);
+                        if (isShared) {
+                            try { val = sharedStrs.get(Integer.parseInt(raw)); } catch (Exception ig) {}
+                        } else {
+                            val = raw;
+                        }
+                    }
+                    cols.put(colNum, val);
+                    ci = ce + 4;
+                }
+                rows.put(rno2, cols);
+                ri = re + 6;
+            }
+
+            // 노선 헤더 행 찾기 (1열에 "N번" 포함)
+            java.util.Map<String, Integer> routeHeaderRows = new java.util.LinkedHashMap<>();
+            for (java.util.Map.Entry<Integer, java.util.TreeMap<Integer, String>> entry : rows.entrySet()) {
+                String c1 = entry.getValue().getOrDefault(1, "");
+                if (c1.contains("번") && c1.length() <= 10) {
+                    routeHeaderRows.put(c1.replace("번","").trim(), entry.getKey());
+                }
+            }
+
+            // 각 노선 시간 파싱
+            java.util.Map<String, Object[]> result = new java.util.LinkedHashMap<>();
+            for (java.util.Map.Entry<String, Integer> re2 : routeHeaderRows.entrySet()) {
+                String routeNo = re2.getKey();
+                int headerRow = re2.getValue();
+                // 기점/종점 이름 (header+0행: 8열, 12열)
+                String srcNm = rows.getOrDefault(headerRow, new java.util.TreeMap<>()).getOrDefault(8, "");
+                String dstNm = rows.getOrDefault(headerRow, new java.util.TreeMap<>()).getOrDefault(12, "");
+                // 데이터 시작: headerRow + 6
+                java.util.List<String> sTimes = new java.util.ArrayList<>();
+                java.util.List<String> dTimes = new java.util.ArrayList<>();
+                for (int dr = headerRow + 6; dr < headerRow + 60; dr++) {
+                    java.util.TreeMap<Integer, String> drow = rows.get(dr);
+                    if (drow == null || drow.getOrDefault(1, "").isEmpty()) break;
+                    // 짝수열(2,4,6...) = 기점, 홀수열(3,5,7...) = 종점
+                    for (int dc = 2; dc <= 21; dc += 2) {
+                        String tv = drow.getOrDefault(dc, "");
+                        String ts = excelTimeToHHMM(tv);
+                        if (ts != null && !sTimes.contains(ts)) sTimes.add(ts);
+                    }
+                    for (int dc = 3; dc <= 21; dc += 2) {
+                        String tv = drow.getOrDefault(dc, "");
+                        String ts = excelTimeToHHMM(tv);
+                        if (ts != null && !dTimes.contains(ts)) dTimes.add(ts);
+                    }
+                }
+                java.util.Collections.sort(sTimes);
+                java.util.Collections.sort(dTimes);
+                if (!sTimes.isEmpty() || !dTimes.isEmpty()) {
+                    result.put(routeNo, new Object[]{srcNm, dstNm, sTimes, dTimes});
+                }
+            }
+
+            // JSON 조립
+            StringBuilder sb = new StringBuilder("{");
+            boolean first = true;
+            for (java.util.Map.Entry<String, Object[]> e : result.entrySet()) {
+                if (!first) sb.append(",");
+                Object[] d = e.getValue();
+                @SuppressWarnings("unchecked")
+                java.util.List<String> st = (java.util.List<String>) d[2];
+                @SuppressWarnings("unchecked")
+                java.util.List<String> dt = (java.util.List<String>) d[3];
+                sb.append("\"").append(e.getKey()).append("\":{")
+                  .append("\"src\":\"").append(d[0]).append("\",")
+                  .append("\"dst\":\"").append(d[1]).append("\",")
+                  .append("\"s\":\"").append(String.join(",", st)).append("\",")
+                  .append("\"d\":\"").append(String.join(",", dt)).append("\"}");
+                first = false;
+            }
+            sb.append("}");
+            return sb.toString();
+        } catch (Exception e) {
+            android.util.Log.e("BusTimes", "parseBusTimesXls error: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /** 엑셀 시간값(소수) → "HHMM" 문자열 */
+    private String excelTimeToHHMM(String val) {
+        if (val == null || val.isEmpty()) return null;
+        try {
+            double d = Double.parseDouble(val);
+            if (d <= 0 || d >= 1) return null;
+            int totalMin = (int) Math.round(d * 24 * 60);
+            int h = totalMin / 60, m = totalMin % 60;
+            if (h > 23) return null;
+            return String.format("%02d%02d", h, m);
+        } catch (Exception ig) { return null; }
     }
 
     private String jsonVal(String obj, String key) {
