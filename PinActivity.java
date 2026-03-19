@@ -1471,9 +1471,9 @@ public class PinActivity extends AppCompatActivity {
         stateRow.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        // 온도: 고정 너비 80dp — -10° 등 음수/두자리 온도에도 레이아웃 안정, 위마진 0dp
+        // 온도: WRAP_CONTENT — 음수/소수점 온도 어떤 값도 잘리지 않음
         LinearLayout.LayoutParams tLpS = new LinearLayout.LayoutParams(
-                dpToPx(80), LinearLayout.LayoutParams.WRAP_CONTENT);
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         tLpS.setMargins(0, 0, dpToPx(4), 0);
         tLpS.gravity = Gravity.CENTER_VERTICAL;
         tvTemp.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
