@@ -3491,26 +3491,32 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout fcmTestCard = makeAdminMenuCard("📡", "FCM PUSH TEST",
                 "일반사용자 SMS 테스트", "#E74C3C", "#FDEDEC");
         fcmTestCard.setOnClickListener(v -> {
-            android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(PinActivity.this);
-            builder.setTitle("FCM TEST");
-            builder.setMessage("TEST \uBB38\uC790\uB97C \uBCF4\uB0B4\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?");
-            builder.setPositiveButton("\uBCF4\uB0B4\uAE30", (d, w) -> {
-                // 실제 농협 은행 문자 형식으로 테스트
-                String today = new java.text.SimpleDateFormat("MM/dd", java.util.Locale.KOREA).format(new java.util.Date());
-                String fakeBody = "[Web발신]\n농협 출금10,000원\n" + today + " 12:00\n351-****-5510-13\nTEST거래\n잔액999,000원";
-                new SmsReceiver().processMessage(PinActivity.this, "15882100", fakeBody);
-                // FCM 수신 기록 저장 (테스트 문자도 기록)
-                new MyFirebaseMessagingService().saveFcmReceivedLogPublic(PinActivity.this);
-                android.widget.Toast.makeText(PinActivity.this, "FCM \uD14C\uC2A4\uD2B8 \uC804\uC1A1", android.widget.Toast.LENGTH_SHORT).show();
-            });
-            builder.setNegativeButton("\uCDE8\uC18C", null);
-            android.app.AlertDialog dialog = builder.create();
-            dialog.show();
-            // 버튼 색상 강제 지정 (테마 무관하게 보이도록)
-            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
-                    .setTextColor(Color.parseColor("#6C5CE7"));
-            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
-                    .setTextColor(Color.parseColor("#888888"));
+            // 전송 대상 선택 다이얼로그
+            String[] options = {"전체 사용자에게 전송", "kisseyes4uu@gmail.com 에게만 전송"};
+            new android.app.AlertDialog.Builder(PinActivity.this,
+                    android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setTitle("FCM TEST - 전송 대상 선택")
+                .setItems(options, (d, which) -> {
+                    String today = new java.text.SimpleDateFormat("MM/dd", java.util.Locale.KOREA)
+                            .format(new java.util.Date());
+                    String fakeBody = "[Web발신]\n농협 출금10,000원\n" + today
+                            + " 12:00\n351-****-5510-13\nTEST거래\n잔액999,000원";
+                    if (which == 0) {
+                        // 전체 전송 (기존 방식)
+                        new SmsReceiver().processMessage(PinActivity.this, "15882100", fakeBody);
+                        new MyFirebaseMessagingService().saveFcmReceivedLogPublic(PinActivity.this);
+                        android.widget.Toast.makeText(PinActivity.this,
+                                "FCM 테스트 전송 (전체)", android.widget.Toast.LENGTH_SHORT).show();
+                    } else {
+                        // kisseyes4uu@gmail.com 에게만 전송
+                        sendFcmTestToSpecificUser(fakeBody, "kisseyes4uu@gmail.com");
+                        android.widget.Toast.makeText(PinActivity.this,
+                                "FCM 테스트 전송 (kisseyes4uu@gmail.com)",
+                                android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("취소", null)
+                .show();
         });
         layout.addView(fcmTestCard);
 
@@ -11773,6 +11779,72 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 잔액 카드 값 갱신 (시간 기준 가장 최신 잔액) ─────────
     /** tvBalValues 없을 때도 (백그라운드/다른화면) SharedPreferences + 위젯 갱신 */
+    /** FCM 테스트를 특정 이메일에게만 전송 */
+    private void sendFcmTestToSpecificUser(String fakeBody, String targetEmail) {
+        String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss",
+                java.util.Locale.KOREA).format(new java.util.Date());
+        // SMS 변환 처리
+        final String[] convertedArr = {fakeBody};
+        try {
+            String c = new SmsReceiver().convertToNewFormatPublic(fakeBody.trim());
+            if (c != null && !c.isEmpty()) convertedArr[0] = c;
+        } catch (Exception ignored) {}
+        final String converted = convertedArr[0];
+        final String newBlock = timestamp + "\n" + converted;
+
+        new Thread(() -> {
+            try {
+                DriveReadHelper reader = new DriveReadHelper(this);
+                reader.readFile("fcm_tokens.txt", new DriveReadHelper.ReadCallback() {
+                    @Override public void onSuccess(String tokensContent) {
+                        // 특정 이메일의 토큰만 찾기
+                        String targetToken = null;
+                        for (String line : tokensContent.split("\r?\n")) {
+                            line = line.trim();
+                            if (line.isEmpty()) continue;
+                            String[] parts = line.split("\\|");
+                            if (parts.length >= 2) {
+                                String email = parts[0].trim();
+                                String token = parts[1].trim();
+                                if (email.equalsIgnoreCase(targetEmail) && !token.isEmpty()) {
+                                    targetToken = token;
+                                    break;
+                                }
+                            }
+                        }
+                        if (targetToken == null) {
+                            runOnUiThread(() -> android.widget.Toast.makeText(PinActivity.this,
+                                    targetEmail + " 토큰 없음", android.widget.Toast.LENGTH_SHORT).show());
+                            return;
+                        }
+                        final String fToken = targetToken;
+                        // SmsReceiver의 FCM 전송 메서드 재사용
+                        java.util.List<String> tokens = new java.util.ArrayList<>();
+                        tokens.add(fToken);
+
+                        // 제목/본문 파싱
+                        String title = "잔액 변경", body2 = "통장 잔액이 변경되었습니다.";
+                        for (String line : converted.split("\n")) {
+                            String t = line.trim();
+                            if ((t.contains("출금") || t.contains("입금"))
+                                    && !title.contains("출금") && !title.contains("입금")) title = t;
+                            if (t.startsWith("잔액")) body2 = t;
+                        }
+                        final String fTitle = title, fBody = body2;
+                        SmsReceiver.sendFcmToSpecificToken(PinActivity.this, fToken, fTitle, fBody, newBlock);
+                        android.util.Log.d("FCM_TEST", "특정 사용자 전송: " + targetEmail);
+                    }
+                    @Override public void onFailure(String error) {
+                        runOnUiThread(() -> android.widget.Toast.makeText(PinActivity.this,
+                                "토큰 파일 읽기 실패", android.widget.Toast.LENGTH_SHORT).show());
+                    }
+                });
+            } catch (Exception e) {
+                android.util.Log.e("FCM_TEST", "오류: " + e.getMessage());
+            }
+        }).start();
+    }
+
     private void updateWidgetFromBlocks(List<String> blocks) {
         String[][] balLatest = {
                 {"5510-13", "", ""},
