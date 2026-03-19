@@ -10664,8 +10664,16 @@ public class PinActivity extends AppCompatActivity {
 
     private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container,
                                     String direction, String routeType) {
-        // 백스택에 타임라인 상태 저장
-        busBackStack.push(new String[]{"timeline", routeId, routeNo, direction, routeType});
+        // 백스택에 타임라인 저장 (같은 routeId timeline이 top이면 중복 push 방지)
+        boolean alreadyTimeline = !busBackStack.isEmpty()
+            && "timeline".equals(busBackStack.peek()[0])
+            && routeId.equals(busBackStack.peek()[1]);
+        if (!alreadyTimeline) {
+            busBackStack.push(new String[]{"timeline", routeId, routeNo, direction, routeType});
+        } else {
+            // 방향만 업데이트
+            busBackStack.peek()[3] = direction;
+        }
         container.removeAllViews();
         // 기존 자동 갱신 중단
         if (busRefreshRunnable != null) {
@@ -11799,8 +11807,13 @@ public class PinActivity extends AppCompatActivity {
     private void busScreenLoadArrival(String nodeId, String nodeNm, String nodeNo, String filterRouteNo, LinearLayout container) {
         // ★★★ 절대 규칙: 검색화면이 열려있으면 도착화면 렌더링 차단
         if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
-        // 백스택에 arrival 상태 저장
-        busBackStack.push(new String[]{"arrival", nodeId, nodeNm, nodeNo, filterRouteNo});
+        // 백스택에 arrival 저장 (이미 같은 nodeId arrival이 top이면 중복 push 방지)
+        boolean alreadyOnStack = !busBackStack.isEmpty()
+            && "arrival".equals(busBackStack.peek()[0])
+            && nodeId.equals(busBackStack.peek()[1]);
+        if (!alreadyOnStack) {
+            busBackStack.push(new String[]{"arrival", nodeId, nodeNm, nodeNo, filterRouteNo});
+        }
         // ① 타임라인 자동갱신 타이머 중단
         if (busRefreshRunnable != null) {
             busRefreshHandler.removeCallbacks(busRefreshRunnable);
