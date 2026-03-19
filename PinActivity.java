@@ -10385,6 +10385,18 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
         btnRefreshBar.setLayoutParams(refreshLp);
         btnRefreshBar.setOnClickListener(v -> {
+            // 검색화면(백스택 비어있음)이면 검색 리셋
+            if (busBackStack.isEmpty() || (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE)) {
+                // 검색화면 리셋
+                if (busEtSearch != null) busEtSearch.setText("");
+                if (busTabBus != null) busTabBus.performClick();
+                if (busResultContainer != null) busResultContainer.removeAllViews();
+                // 키보드 숨김
+                android.view.inputmethod.InputMethodManager imm2 =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                if (imm2 != null && busEtSearch != null) imm2.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
+                return;
+            }
             if (!busBackStack.isEmpty()) {
                 String[] cur = busBackStack.peek();
                 if ("timeline".equals(cur[0])) {
@@ -10396,7 +10408,6 @@ public class PinActivity extends AppCompatActivity {
                 } else if ("arrival".equals(cur[0])) {
                     // 도착화면 새로고침 - 시간정보(API)만 재조회
                     arrivalSessionCache.remove(cur[1]);
-                    // container만 지우고 헤더는 유지 (태그 유지)
                     if (busResultContainer != null) busResultContainer.removeAllViews();
                     final String nId = cur[1], nNm = cur[2], nNo = cur[3], fRno2 = cur[4];
                     new Thread(() -> fetchAndRenderArrival(nId, nNm, nNo, fRno2, busResultContainer, true)).start();
@@ -18017,7 +18028,12 @@ public class PinActivity extends AppCompatActivity {
                         rearrangeGrid(grid, allCards, allCardInfos);
                         return true;
                     case android.view.DragEvent.ACTION_DRAG_ENDED:
-                        for (LinearLayout c : allCards) { c.setAlpha(1f); c.setScaleX(1f); c.setScaleY(1f); }
+                        // 모든 카드 알파 복원
+                        for (LinearLayout c : allCards) {
+                            c.setAlpha(1f); c.setScaleX(1f); c.setScaleY(1f);
+                        }
+                        // 드래그한 카드 자체도 복원
+                        card2.setAlpha(1f); card2.setScaleX(1f); card2.setScaleY(1f);
                         dragFromIdx[0] = -1;
                         lastEnteredIdx[0] = -1;
                         // 순서 저장
