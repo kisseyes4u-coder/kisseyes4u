@@ -5831,6 +5831,7 @@ public class PinActivity extends AppCompatActivity {
                                                     lastKnownBlockCount = nb2.size();
                                                     android.util.Log.d("FORCE_RELOAD", "재시도 성공=" + nb2.size() + "개");
                                                     if (tvBalValues != null) updateBalanceValues(nb2);
+                                                    else updateWidgetFromBlocks(nb2);
                                                     if (isOnBalanceScreen && msgContainer != null) renderMessages(nb2, currentTabFilter);
                                                     if (menuBalTv != null && isOnMenuScreen) updateMenuBalCards(nb2);
                                                 });
@@ -5849,6 +5850,7 @@ public class PinActivity extends AppCompatActivity {
                                     + " menuBalTv=" + (menuBalTv != null)
                                     + " isOnMenuScreen=" + isOnMenuScreen);
                             if (tvBalValues != null) updateBalanceValues(newBlocks);
+                            else updateWidgetFromBlocks(newBlocks); // 화면 없어도 위젯/SP 갱신
                             if (isOnBalanceScreen) {
                                 displayedCount = Math.min(Math.max(displayedCount, PAGE_SIZE), newBlocks.size());
                                 if (msgContainer != null) renderMessages(newBlocks, currentTabFilter);
@@ -5871,6 +5873,7 @@ public class PinActivity extends AppCompatActivity {
                                             lastKnownBlockCount = nb.size();
                                             android.util.Log.d("FORCE_RELOAD", "재시도 성공=" + nb.size() + "개");
                                             if (tvBalValues != null) updateBalanceValues(nb);
+                                            else updateWidgetFromBlocks(nb);
                                             if (isOnBalanceScreen && msgContainer != null) renderMessages(nb, currentTabFilter);
                                             if (menuBalTv != null && isOnMenuScreen) updateMenuBalCards(nb);
                                         });
@@ -11696,6 +11699,49 @@ public class PinActivity extends AppCompatActivity {
     }
 
     // ── 잔액 카드 값 갱신 (시간 기준 가장 최신 잔액) ─────────
+    /** tvBalValues 없을 때도 (백그라운드/다른화면) SharedPreferences + 위젯 갱신 */
+    private void updateWidgetFromBlocks(List<String> blocks) {
+        String[][] balLatest = {
+                {"5510-13", "", ""},
+                {"5510-83", "", ""},
+                {"5510-53", "", ""},
+                {"5510-23", "", ""}
+        };
+        for (String block : blocks) {
+            String ts = "";
+            for (String line : block.split("\\r?\\n")) {
+                if (line.trim().matches("\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}")) {
+                    ts = line.trim(); break;
+                }
+            }
+            for (String[] info : balLatest) {
+                if (block.contains(info[0])) {
+                    java.util.regex.Matcher m =
+                            java.util.regex.Pattern.compile("잔액\\s*([\\d,]+)원").matcher(block);
+                    if (m.find() && ts.compareTo(info[1]) >= 0) {
+                        info[1] = ts; info[2] = m.group(1);
+                    }
+                }
+            }
+        }
+        android.content.SharedPreferences.Editor editor =
+                getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit();
+        for (String[] info : balLatest) {
+            if (!info[2].isEmpty()) {
+                editor.putString("bal_" + info[0], info[2]);
+                editor.putString("bal_time_" + info[0], info[1]);
+            }
+        }
+        editor.apply();
+        try {
+            android.appwidget.AppWidgetManager awm =
+                    android.appwidget.AppWidgetManager.getInstance(this);
+            int[] ids = awm.getAppWidgetIds(
+                    new android.content.ComponentName(this, BalanceWidget.class));
+            for (int wid : ids) BalanceWidget.updateWidget(this, awm, wid);
+        } catch (Exception ignored) {}
+    }
+
     private void updateBalanceValues(List<String> blocks) {
         if (tvBalValues == null) return;
         // 각 계좌별: [계좌키, 최신타임스탬프, 최신잔액]
@@ -11731,14 +11777,26 @@ public class PinActivity extends AppCompatActivity {
                 }
             }
         }
+        // UI 갱신 + SharedPreferences 저장 (위젯이 SharedPreferences를 읽으므로 반드시 저장)
+        android.content.SharedPreferences.Editor editor =
+                getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit();
         for (int i = 0; i < 4; i++) {
             final int idx = i;
             final String val = balLatest[i][2];
+            final String ts2 = balLatest[i][1];
+            final String acct = balLatest[i][0];
+            // SharedPreferences 저장 (위젯용)
+            if (!val.isEmpty()) {
+                editor.putString("bal_" + acct, val);
+                editor.putString("bal_time_" + acct, ts2);
+            }
+            // UI 갱신
             tvBalValues[idx].post(() ->
                     tvBalValues[idx].setText(
                             val.isEmpty() ? "데이터 없음" : val + "원"));
         }
-        // 위젯도 동시 갱신
+        editor.apply();
+        // 위젯 갱신 (SharedPreferences 저장 후 호출해야 최신값 반영)
         try {
             android.appwidget.AppWidgetManager awm =
                     android.appwidget.AppWidgetManager.getInstance(this);
