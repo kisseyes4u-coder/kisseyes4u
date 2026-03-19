@@ -10147,6 +10147,7 @@ public class PinActivity extends AppCompatActivity {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         svInner.addView(favSection);
         busFavSection2 = favSection;
+        busFavSection  = favSection; // refreshBusFavorites에서 참조할 수 있도록 즉시 설정
 
         // 결과 컨테이너 (단일)
         LinearLayout resultContainer = new LinearLayout(this);
@@ -11589,19 +11590,137 @@ public class PinActivity extends AppCompatActivity {
             final String stopName=s[1], stopNo=s[3], nodeId2=s[0];
             tvStar.setOnClickListener(v2 -> {
                 boolean wasFav3 = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(favKey, false);
-                boolean nowFav3 = !wasFav3;
-                getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
-                        .putBoolean(favKey, nowFav3).putString(favNameKey,stopName)
-                        .putString(favNoKey,stopNo).putString(favRouteKey2,routeNo)
-                        .putString(favRouteIdKey,routeId).apply();
-                android.graphics.drawable.GradientDrawable newBg = new android.graphics.drawable.GradientDrawable();
-                newBg.setCornerRadius(dpToPx(4));
-                if (nowFav3) { newBg.setColor(Color.parseColor("#F39C12")); newBg.setStroke(dpToPx(1),Color.parseColor("#F39C12")); tvStar.setTextColor(Color.WHITE); }
-                else         { newBg.setColor(Color.WHITE); newBg.setStroke(dpToPx(1),Color.parseColor("#AAAAAA")); tvStar.setTextColor(Color.parseColor("#888888")); }
-                tvStar.setBackground(newBg);
-                android.widget.Toast.makeText(this, nowFav3?stopName+" 즐겨찾기 추가":stopName+" 즐겨찾기 해제",
-                        android.widget.Toast.LENGTH_SHORT).show();
-                busFavDirty = true;
+                if (wasFav3) {
+                    // 즐겨찾기 해제
+                    getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                            .remove(favKey).remove(favNameKey).remove(favNoKey)
+                            .remove(favRouteKey2).remove(favRouteIdKey)
+                            .remove(favKey + "_memo").apply();
+                    android.graphics.drawable.GradientDrawable offBg = new android.graphics.drawable.GradientDrawable();
+                    offBg.setCornerRadius(dpToPx(4)); offBg.setColor(Color.WHITE);
+                    offBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
+                    tvStar.setTextColor(Color.parseColor("#888888")); tvStar.setBackground(offBg);
+                    android.widget.Toast.makeText(this, stopName + " 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
+                    busFavDirty = true;
+                } else {
+                    // 즐겨찾기 추가 - 노선 즐겨찾기와 동일한 다이얼로그
+                    String existMemo = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString(favKey + "_memo", "");
+                    android.app.Dialog stopFavDlg = new android.app.Dialog(this, android.R.style.Theme_Material_Light_Dialog);
+                    LinearLayout dlgLayout = new LinearLayout(this);
+                    dlgLayout.setOrientation(LinearLayout.VERTICAL);
+                    android.graphics.drawable.GradientDrawable dlgBg = new android.graphics.drawable.GradientDrawable();
+                    dlgBg.setColor(Color.WHITE); dlgBg.setCornerRadius(dpToPx(16));
+                    dlgLayout.setBackground(dlgBg);
+                    dlgLayout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+
+                    // 제목
+                    TextView tvDlgTitle = new TextView(this);
+                    tvDlgTitle.setText(stopName + " (" + routeNo + "번)");
+                    tvDlgTitle.setTextColor(Color.parseColor("#0984E3"));
+                    tvDlgTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                    tvDlgTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvDlgTitle.setGravity(Gravity.CENTER);
+                    LinearLayout.LayoutParams dtLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    dtLp.setMargins(0, 0, 0, dpToPx(14)); tvDlgTitle.setLayoutParams(dtLp);
+                    dlgLayout.addView(tvDlgTitle);
+
+                    // 구분선
+                    android.view.View favDiv = new android.view.View(this);
+                    favDiv.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                    LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                    divLp.setMargins(0, 0, 0, dpToPx(14)); favDiv.setLayoutParams(divLp);
+                    dlgLayout.addView(favDiv);
+
+                    // 메모 라벨
+                    TextView tvMemoLabel = new TextView(this);
+                    tvMemoLabel.setText("메모 (선택)");
+                    tvMemoLabel.setTextColor(Color.parseColor("#555555"));
+                    tvMemoLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    LinearLayout.LayoutParams mlLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    mlLp.setMargins(0, 0, 0, dpToPx(6)); tvMemoLabel.setLayoutParams(mlLp);
+                    dlgLayout.addView(tvMemoLabel);
+
+                    // 메모 입력
+                    android.widget.EditText etMemo = new android.widget.EditText(this);
+                    setBlackCursor(etMemo);
+                    etMemo.setHint("예) 집앞, 출근길");
+                    etMemo.setText(existMemo);
+                    etMemo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                    etMemo.setSingleLine(true);
+                    android.graphics.drawable.GradientDrawable memoBg = new android.graphics.drawable.GradientDrawable();
+                    memoBg.setColor(Color.parseColor("#F8F8F8")); memoBg.setCornerRadius(dpToPx(10));
+                    memoBg.setStroke(dpToPx(1), Color.parseColor("#DDDDDD"));
+                    etMemo.setBackground(memoBg);
+                    etMemo.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+                    LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    etLp.setMargins(0, 0, 0, dpToPx(20)); etMemo.setLayoutParams(etLp);
+                    dlgLayout.addView(etMemo);
+
+                    // 버튼 행
+                    LinearLayout btnRow = new LinearLayout(this);
+                    btnRow.setOrientation(LinearLayout.HORIZONTAL);
+                    btnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+                    // 취소
+                    TextView btnCancel = new TextView(this);
+                    btnCancel.setText("취소");
+                    btnCancel.setTextColor(Color.parseColor("#888888"));
+                    btnCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnCancel.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnCancel.setGravity(Gravity.CENTER);
+                    btnCancel.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                    android.graphics.drawable.GradientDrawable cancelBg = new android.graphics.drawable.GradientDrawable();
+                    cancelBg.setColor(Color.parseColor("#F0F0F0")); cancelBg.setCornerRadius(dpToPx(10));
+                    btnCancel.setBackground(cancelBg);
+                    LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                    cancelLp.setMargins(0, 0, dpToPx(8), 0); btnCancel.setLayoutParams(cancelLp);
+                    btnCancel.setOnClickListener(vv -> stopFavDlg.dismiss());
+                    btnRow.addView(btnCancel);
+
+                    // 확인
+                    TextView btnOk = new TextView(this);
+                    btnOk.setText("확인");
+                    btnOk.setTextColor(Color.WHITE);
+                    btnOk.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnOk.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnOk.setGravity(Gravity.CENTER);
+                    btnOk.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                    android.graphics.drawable.GradientDrawable okBg = new android.graphics.drawable.GradientDrawable();
+                    okBg.setColor(Color.parseColor("#5BA9F0")); okBg.setCornerRadius(dpToPx(10));
+                    btnOk.setBackground(okBg);
+                    btnOk.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                    btnOk.setOnClickListener(vv -> {
+                        stopFavDlg.dismiss();
+                        String memo = etMemo.getText().toString().trim();
+                        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                                .putBoolean(favKey, true)
+                                .putString(favNameKey, stopName)
+                                .putString(favNoKey, stopNo)
+                                .putString(favRouteKey2, routeNo)
+                                .putString(favRouteIdKey, routeId)
+                                .putString(favKey + "_memo", memo).apply();
+                        android.graphics.drawable.GradientDrawable onBg = new android.graphics.drawable.GradientDrawable();
+                        onBg.setCornerRadius(dpToPx(4)); onBg.setColor(Color.parseColor("#F39C12"));
+                        onBg.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
+                        tvStar.setTextColor(Color.WHITE); tvStar.setBackground(onBg);
+                        android.widget.Toast.makeText(this, stopName + " 즐겨찾기 추가",
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        busFavDirty = true;
+                    });
+                    btnRow.addView(btnOk);
+                    dlgLayout.addView(btnRow);
+
+                    stopFavDlg.setContentView(dlgLayout);
+                    stopFavDlg.setCancelable(true);
+                    if (stopFavDlg.getWindow() != null)
+                        stopFavDlg.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                    stopFavDlg.show();
+                }
             });
             row.addView(tvStar);
 
