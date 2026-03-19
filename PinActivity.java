@@ -229,15 +229,12 @@ public class PinActivity extends AppCompatActivity {
                 int[] pixels = new int[w * h];
                 raw.getPixels(pixels, 0, w, 0, 0, w, h);
                 for (int i = 0; i < pixels.length; i++) {
-                    int r2 = (pixels[i] >> 16) & 0xFF;
-                    int g2 = (pixels[i] >> 8)  & 0xFF;
-                    int b2 =  pixels[i]         & 0xFF;
-                    int brightness = (r2 + g2 + b2) / 3;
-                    if (brightness >= 128) {
-                        // 밝은 픽셀 = 아이콘(흰색) → 지정 색상
-                        pixels[i] = argbColor;
+                    int alpha = (pixels[i] >> 24) & 0xFF;
+                    if (alpha > 10) {
+                        // 불투명 픽셀(아이콘) → 지정 색상
+                        pixels[i] = (alpha << 24) | (argbColor & 0x00FFFFFF);
                     } else {
-                        // 어두운 픽셀 = 배경(검정) → 투명
+                        // 투명 픽셀(배경) → 그대로
                         pixels[i] = 0x00000000;
                     }
                 }
