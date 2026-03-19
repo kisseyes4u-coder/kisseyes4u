@@ -10781,18 +10781,47 @@ public class PinActivity extends AppCompatActivity {
                         if (result.size() >= 30) break;
                     }
                 }
-                runOnUiThread(() -> {
-                    container.removeAllViews();
-                    if (result.isEmpty()) {
+                if (!result.isEmpty()) {
+                    runOnUiThread(() -> {
+                        container.removeAllViews();
+                        renderStopCards(result, keyword, container);
+                    });
+                    return;
+                }
+                // 로컬 DB에 없으면 API로 폴백
+                try {
+                    String url = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
+                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                            + "&nodeNm=" + java.net.URLEncoder.encode(keyword, "UTF-8")
+                            + "&numOfRows=30&pageNo=1&_type=xml";
+                    String xml = httpGet(url);
+                    java.util.List<String[]> apiStops = new java.util.ArrayList<>();
+                    for (String item : xml.split("<item>")) {
+                        if (!item.contains("<nodeid>")) continue;
+                        apiStops.add(new String[]{tag(item,"nodeid"), tag(item,"nodenm"), tag(item,"nodeno")});
+                    }
+                    runOnUiThread(() -> {
+                        container.removeAllViews();
+                        if (apiStops.isEmpty()) {
+                            TextView tv = new TextView(this);
+                            tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
+                            tv.setTextColor(Color.parseColor("#AAAAAA"));
+                            tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                            container.addView(tv);
+                        } else {
+                            renderStopCards(apiStops, keyword, container);
+                        }
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> {
+                        container.removeAllViews();
                         TextView tv = new TextView(this);
                         tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
                         tv.setTextColor(Color.parseColor("#AAAAAA"));
                         tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                         container.addView(tv);
-                    } else {
-                        renderStopCards(result, keyword, container);
-                    }
-                });
+                    });
+                }
             }).start();
             return;
         }
