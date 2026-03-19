@@ -2686,9 +2686,16 @@ public class PinActivity extends AppCompatActivity {
         // 배차시간표 로드 (캐시 있으면 바로, 없으면 Drive에서)
         if (busTimesMap.isEmpty()) {
             String btCached = p.getString("bustimes_txt_cache", "");
+            // 유효성 검사: 9필드(|구분) 확인
+            boolean cacheValid = false;
             if (!btCached.isEmpty()) {
+                String firstLine = btCached.split("\n")[0];
+                cacheValid = firstLine.split("\\|", -1).length >= 9;
+            }
+            if (cacheValid) {
                 loadBusTimesFromJson(btCached);
             } else {
+                p.edit().remove("bustimes_txt_cache").apply();
                 new Thread(() -> {
                     try {
                         DriveReadHelper dr = new DriveReadHelper(this);
