@@ -223,16 +223,36 @@ public class PinActivity extends AppCompatActivity {
     }
 
     /** assets/stop.png(정류소 전용) 또는 pngwing_com.png(노선+정류소) 색상 렌더링 */
+    /** assets/stop.png - getBusIconColor와 완전 동일, 파일명만 다름 */
     private android.graphics.Bitmap getStopIconColor(int argbColor) {
-        return loadColoredIcon("stop.png", argbColor);
+        try {
+            android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                    getAssets().open("stop.png"));
+            if (raw != null) {
+                int w = raw.getWidth(), h = raw.getHeight();
+                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                int[] pixels = new int[w * h];
+                raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                for (int i = 0; i < pixels.length; i++) {
+                    int r2 = (pixels[i] >> 16) & 0xFF;
+                    int g2 = (pixels[i] >> 8)  & 0xFF;
+                    int b2 =  pixels[i]         & 0xFF;
+                    int brightness = (r2 + g2 + b2) / 3;
+                    if (brightness > 128) { pixels[i] = argbColor; }
+                    else                  { pixels[i] = 0xFFFFFFFF; }
+                }
+                result.setPixels(pixels, 0, w, 0, 0, w, h);
+                raw.recycle();
+                return result;
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
+    /** assets/pngwing_com.png - getBusIconColor와 완전 동일, 파일명만 다름 */
     private android.graphics.Bitmap getStopRouteIconColor(int argbColor) {
-        return loadColoredIcon("pngwing_com.png", argbColor);
-    }
-    private android.graphics.Bitmap loadColoredIcon(String fileName, int argbColor) {
         try {
             android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
-                    getAssets().open(fileName));
+                    getAssets().open("pngwing_com.png"));
             if (raw != null) {
                 int w = raw.getWidth(), h = raw.getHeight();
                 android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
@@ -243,11 +263,8 @@ public class PinActivity extends AppCompatActivity {
                     int g2 = (pixels[i] >> 8)  & 0xFF;
                     int b2 =  pixels[i]         & 0xFF;
                     int brightness = (r2 + g2 + b2) / 3;
-                    if (brightness > 128) {
-                        pixels[i] = argbColor;
-                    } else {
-                        pixels[i] = 0xFFFFFFFF;
-                    }
+                    if (brightness > 128) { pixels[i] = argbColor; }
+                    else                  { pixels[i] = 0xFFFFFFFF; }
                 }
                 result.setPixels(pixels, 0, w, 0, 0, w, h);
                 raw.recycle();
@@ -256,36 +273,6 @@ public class PinActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
         return null;
     }
-
-    /** assets/bus.png를 지정된 색상으로 렌더링 */
-    private android.graphics.Bitmap getBusIconColor(int argbColor) {
-        try {
-            android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
-                    getAssets().open("bus.png"));
-            if (raw != null) {
-                int w = raw.getWidth(), h = raw.getHeight();
-                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
-                int[] pixels = new int[w * h];
-                raw.getPixels(pixels, 0, w, 0, 0, w, h);
-                for (int i = 0; i < pixels.length; i++) {
-                    int r2 = (pixels[i] >> 16) & 0xFF;
-                    int g2 = (pixels[i] >> 8)  & 0xFF;
-                    int b2 =  pixels[i]         & 0xFF;
-                    int brightness = (r2 + g2 + b2) / 3;
-                    if (brightness > 128) {
-                        pixels[i] = argbColor;
-                    } else {
-                        pixels[i] = 0xFFFFFFFF;
-                    }
-                }
-                result.setPixels(pixels, 0, w, 0, 0, w, h);
-                raw.recycle();
-                return result;
-            }
-        } catch (Exception ignored) {}
-        return null;
-    }
-
     /** assets/bus.png 로드 - 검정 배경 투명화 + 흰색 픽셀 → 빨간색 (타임라인 버스 위치용) */
     private android.graphics.Bitmap getBusIcon() {
         if (busIconBitmap == null) {
@@ -12859,34 +12846,21 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout.LayoutParams bellLp2 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             bellLp2.gravity = Gravity.CENTER_VERTICAL; bellLp2.setMargins(dpToPx(4),0,0,0); tvBell2.setLayoutParams(bellLp2);
             tvBell2.setOnClickListener(vb -> android.widget.Toast.makeText(this, fRno+"번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
-            // 기존 즐겨찾기/알림 버튼을 시간 아래에 배치 (세로)
-            LinearLayout rightWrap = new LinearLayout(this);
-            rightWrap.setOrientation(LinearLayout.VERTICAL);
-            rightWrap.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-            rightWrap.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            // 시간 row
-            LinearLayout timeRow = new LinearLayout(this);
-            timeRow.setOrientation(LinearLayout.HORIZONTAL);
-            timeRow.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-            timeRow.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            // rightCol의 자식뷰(시간+이전정보)를 timeRow로 이동
-            for (int ci = rightCol.getChildCount()-1; ci >= 0; ci--) {
-                android.view.View cv = rightCol.getChildAt(ci);
-                rightCol.removeViewAt(ci);
-                timeRow.addView(cv, 0);
-            }
-            // 즐겨찾기/알림 버튼 row
+            // rightCol 하단에 즐겨찾기/알림 버튼 추가
             LinearLayout arrBtnRow = new LinearLayout(this);
             arrBtnRow.setOrientation(LinearLayout.HORIZONTAL);
             arrBtnRow.setGravity(Gravity.END);
-            LinearLayout.LayoutParams arrBtnRowLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            arrBtnRowLp.setMargins(0, dpToPx(4), 0, 0);
+            LinearLayout.LayoutParams arrBtnRowLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            arrBtnRowLp.setMargins(0, dpToPx(5), 0, 0);
             arrBtnRow.setLayoutParams(arrBtnRowLp);
             arrBtnRow.addView(tvStar2);
             arrBtnRow.addView(tvBell2);
-            rightWrap.addView(timeRow);
-            rightWrap.addView(arrBtnRow);
-            row.addView(rightWrap);
+            // rightCol을 VERTICAL로 변경해서 시간+버튼 세로 배치
+            rightCol.setOrientation(LinearLayout.VERTICAL);
+            rightCol.setGravity(Gravity.END);
+            rightCol.addView(arrBtnRow);
+            row.addView(rightCol);
             // 노선 카드 클릭
             row.setClickable(true); row.setFocusable(true);
             android.graphics.drawable.StateListDrawable sld2 = new android.graphics.drawable.StateListDrawable();
