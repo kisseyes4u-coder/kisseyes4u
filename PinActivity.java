@@ -10385,20 +10385,21 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
         btnRefreshBar.setLayoutParams(refreshLp);
         btnRefreshBar.setOnClickListener(v -> {
-            // 현재 화면 새로고침
             if (!busBackStack.isEmpty()) {
                 String[] cur = busBackStack.peek();
                 if ("timeline".equals(cur[0])) {
-                    // 타임라인 새로고침
+                    // 타임라인 새로고침 - 자동갱신 재시작
+                    if (busRefreshRunnable != null) busRefreshHandler.removeCallbacks(busRefreshRunnable);
                     busResultContainer.removeAllViews();
                     busFixedHeader.removeAllViews();
                     busScreenLoadStops(cur[1], cur[2], busResultContainer, cur[3], cur[4]);
                 } else if ("arrival".equals(cur[0])) {
-                    // 도착화면 새로고침
+                    // 도착화면 새로고침 - 시간정보(API)만 재조회
                     arrivalSessionCache.remove(cur[1]);
-                    busResultContainer.removeAllViews();
-                    busFixedHeader.removeAllViews();
-                    busScreenLoadArrival(cur[1], cur[2], cur[3], cur[4], busResultContainer);
+                    // container만 지우고 헤더는 유지 (태그 유지)
+                    if (busResultContainer != null) busResultContainer.removeAllViews();
+                    final String nId = cur[1], nNm = cur[2], nNo = cur[3], fRno2 = cur[4];
+                    new Thread(() -> fetchAndRenderArrival(nId, nNm, nNo, fRno2, busResultContainer, true)).start();
                 }
             }
         });
@@ -11961,10 +11962,11 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout titleBar = new LinearLayout(this);
             titleBar.setOrientation(LinearLayout.HORIZONTAL);
             titleBar.setGravity(Gravity.CENTER_VERTICAL);
-            titleBar.setBackgroundColor(Color.WHITE);
-            titleBar.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(10));
-            titleBar.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            titleBar.setBackgroundColor(Color.parseColor("#F2F4F8"));
+            LinearLayout.LayoutParams titleBarLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            titleBarLp.setMargins(dpToPx(12), dpToPx(4), dpToPx(12), 0);
+            titleBar.setLayoutParams(titleBarLp);
 
             TextView tvBack = new TextView(this);
             tvBack.setText("\u2039");
@@ -11989,12 +11991,12 @@ public class PinActivity extends AppCompatActivity {
             boolean stopOnlyFaved = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(stopOnlyFavKey, false);
             TextView tvStopOnlyFav = new TextView(this);
             tvStopOnlyFav.setText("즐겨찾기");
-            tvStopOnlyFav.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvStopOnlyFav.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
             tvStopOnlyFav.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStopOnlyFav.setGravity(Gravity.CENTER);
-            tvStopOnlyFav.setPadding(dpToPx(7), dpToPx(4), dpToPx(7), dpToPx(4));
+            tvStopOnlyFav.setPadding(dpToPx(9), dpToPx(5), dpToPx(9), dpToPx(5));
             android.graphics.drawable.GradientDrawable hFavBg = new android.graphics.drawable.GradientDrawable();
-            hFavBg.setCornerRadius(dpToPx(4));
+            hFavBg.setCornerRadius(dpToPx(5));
             if (stopOnlyFaved) { hFavBg.setColor(Color.parseColor("#F39C12")); hFavBg.setStroke(dpToPx(1),Color.parseColor("#F39C12")); tvStopOnlyFav.setTextColor(Color.WHITE); }
             else               { hFavBg.setColor(Color.WHITE); hFavBg.setStroke(dpToPx(1),Color.parseColor("#AAAAAA")); tvStopOnlyFav.setTextColor(Color.parseColor("#888888")); }
             tvStopOnlyFav.setBackground(hFavBg);
@@ -12630,12 +12632,12 @@ public class PinActivity extends AppCompatActivity {
             // 즐겨찾기 버튼
             TextView tvStar2 = new TextView(this);
             tvStar2.setText("즐겨찾기");
-            tvStar2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvStar2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
             tvStar2.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStar2.setGravity(Gravity.CENTER);
-            tvStar2.setPadding(dpToPx(7), dpToPx(3), dpToPx(7), dpToPx(3));
+            tvStar2.setPadding(dpToPx(9), dpToPx(5), dpToPx(9), dpToPx(5));
             android.graphics.drawable.GradientDrawable starBg2 = new android.graphics.drawable.GradientDrawable();
-            starBg2.setCornerRadius(dpToPx(4));
+            starBg2.setCornerRadius(dpToPx(5));
             if (isFavArr) { starBg2.setColor(Color.parseColor("#F39C12")); starBg2.setStroke(dpToPx(1), Color.parseColor("#F39C12")); tvStar2.setTextColor(Color.WHITE); }
             else          { starBg2.setColor(Color.WHITE); starBg2.setStroke(dpToPx(1), Color.parseColor("#AAAAAA")); tvStar2.setTextColor(Color.parseColor("#888888")); }
             tvStar2.setBackground(starBg2);
@@ -12715,14 +12717,14 @@ public class PinActivity extends AppCompatActivity {
             boolean isAlarmed2 = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(alarmKey2, false);
             TextView tvBell2 = new TextView(this);
             tvBell2.setText("알림");
-            tvBell2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvBell2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
             tvBell2.setTypeface(null, android.graphics.Typeface.BOLD);
             tvBell2.setGravity(Gravity.CENTER);
-            tvBell2.setPadding(dpToPx(7), dpToPx(3), dpToPx(7), dpToPx(3));
+            tvBell2.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
             android.graphics.drawable.GradientDrawable bellBg2 = new android.graphics.drawable.GradientDrawable();
-            bellBg2.setCornerRadius(dpToPx(4));
-            if (isAlarmed2) { bellBg2.setColor(Color.parseColor("#0984E3")); bellBg2.setStroke(dpToPx(1), Color.parseColor("#0984E3")); tvBell2.setTextColor(Color.WHITE); }
-            else            { bellBg2.setColor(Color.WHITE); bellBg2.setStroke(dpToPx(1), Color.parseColor("#AAAAAA")); tvBell2.setTextColor(Color.parseColor("#888888")); }
+            bellBg2.setCornerRadius(dpToPx(6));
+            if (isAlarmed2) { bellBg2.setColor(Color.parseColor("#5BA9F0")); bellBg2.setStroke(dpToPx(1), Color.parseColor("#5BA9F0")); tvBell2.setTextColor(Color.WHITE); }
+            else            { bellBg2.setColor(Color.parseColor("#EBF5FB")); bellBg2.setStroke(dpToPx(1), Color.parseColor("#5BA9F0")); tvBell2.setTextColor(Color.parseColor("#5BA9F0")); }
             tvBell2.setBackground(bellBg2);
             tvBell2.setClickable(true);
             tvBell2.setFocusable(true);
