@@ -12448,8 +12448,7 @@ public class PinActivity extends AppCompatActivity {
                         container.addView(tvEmpty);
                     } else {
                         renderArrivalRows(nodeId, nodeNm, nodeNo, filterRouteNo, container, fAllRoutes, fArrMap);
-
-                    // 새로고침/안내문구 제거됨
+                    }
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
