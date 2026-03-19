@@ -171,7 +171,8 @@ public class PinActivity extends AppCompatActivity {
     private java.util.List<String[]> stopDbList  = null; // 미사용 (세션 캐시로 대체)
     // 버스 화면 백스택: ["type", params...] type=timeline/arrival/search
     private final java.util.Deque<String[]> busBackStack = new java.util.ArrayDeque<>();
-    private boolean busFavDirty = false; // 즐겨찾기 변경 시 true → 검색화면 복귀 시 갱신
+    private boolean busFavDirty = false;
+    private TextView busSoonTV = null; // 도착화면 X분후 버스 표시 // 즐겨찾기 변경 시 true → 검색화면 복귀 시 갱신
     private ScrollView busTimelineSv = null;  // 타임라인 ScrollView
     private int busTurnRowY = -1;             // 회차 정류소 Y 좌표
     private String busPendingScrollDir = null;  // 방향전환 후 자동 스크롤 ("forward"/"reverse")
@@ -12133,6 +12134,7 @@ public class PinActivity extends AppCompatActivity {
             TextView tvSoonPH = new TextView(this);
             tvSoonPH.setTag("soon_ph");
             tvSoonPH.setGravity(Gravity.START);
+            busSoonTV = tvSoonPH;
             LinearLayout.LayoutParams phLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             phLp.setMargins(0, dpToPx(3), 0, 0);
@@ -12447,8 +12449,8 @@ public class PinActivity extends AppCompatActivity {
                     if (busFixedHeader != null && busFixedHeader.getChildCount() >= 3) {
                         android.view.View infoBoxV = busFixedHeader.getChildAt(2);
                         if (infoBoxV instanceof LinearLayout) {
-                            android.view.View ph = ((LinearLayout)infoBoxV).findViewWithTag("soon_ph");
-                            if (ph instanceof TextView && !fSoonRno.isEmpty() && fSoonSec < Integer.MAX_VALUE) {
+                            if (busSoonTV != null && !fSoonRno.isEmpty() && fSoonSec < Integer.MAX_VALUE) {
+                                TextView ph = busSoonTV;
                                 int fm = fSoonSec / 60;
                                 String timeLabel = fSoonSec == 0 ? "곧 도착" : fm + "분 후";
                                 // SpannableString으로 색상+크기 적용
@@ -12475,8 +12477,8 @@ public class PinActivity extends AppCompatActivity {
                                     ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
                                             start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                 }
-                                ((TextView)ph).setText(ssb, android.widget.TextView.BufferType.SPANNABLE);
-                                ((TextView)ph).setGravity(Gravity.START);
+                                ph.setText(ssb, android.widget.TextView.BufferType.SPANNABLE);
+                                ph.setGravity(Gravity.START);
                             }
                         }
                     }
@@ -12535,22 +12537,36 @@ public class PinActivity extends AppCompatActivity {
         }
         // 헤더 곧도착 업데이트
         if (busFixedHeader != null && busFixedHeader.getChildCount() >= 3) {
-            android.view.View infoBoxV = busFixedHeader.getChildAt(2);
-            if (infoBoxV instanceof LinearLayout) {
-                android.view.View ph = ((LinearLayout)infoBoxV).findViewWithTag("soon_ph");
-                if (ph instanceof TextView && !soonRno.isEmpty() && soonSec < Integer.MAX_VALUE) {
-                    int fm = soonSec / 60;
-                    String soonTxt = soonSec == 0 ? "곧 도착  " + soonRno + "번"
-                            : fm + "분 후  " + soonRno + "번";
-                    ((TextView)ph).setText(soonTxt);
-                    ((TextView)ph).setTextColor(Color.parseColor("#E74C3C"));
-                    ((TextView)ph).setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                    ((TextView)ph).setTypeface(null, android.graphics.Typeface.BOLD);
-                } else if (ph instanceof TextView && arrMap.isEmpty()) {
-                    ((TextView)ph).setText("실시간 정보 불러오는 중...");
-                    ((TextView)ph).setTextColor(Color.parseColor("#AAAAAA"));
-                    ((TextView)ph).setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            // busSoonTV 직접 업데이트
+            if (busSoonTV != null && !soonRno.isEmpty() && soonSec < Integer.MAX_VALUE) {
+                int fm2 = soonSec / 60;
+                String timeLabel2 = soonSec == 0 ? "곧 도착" : fm2 + "분 후";
+                android.text.SpannableStringBuilder ssb2 = new android.text.SpannableStringBuilder();
+                ssb2.append(timeLabel2);
+                ssb2.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")),
+                        0, ssb2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ssb2.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(22), true),
+                        0, ssb2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                // 버스번호 - routeType 색상 + 30dp
+                String rtp3 = "";
+                if (allRoutes != null) {
+                    for (String[] ar3 : allRoutes) { if (ar3[0].equals(soonRno)) { rtp3 = ar3.length>4?ar3[4]:""; break; } }
                 }
+                String[] badge3 = routeTypeBadge(rtp3);
+                String busText2 = "  " + soonRno + "번";
+                int bstart = ssb2.length();
+                ssb2.append(busText2);
+                ssb2.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor(badge3[1])),
+                        bstart, ssb2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ssb2.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(30), true),
+                        bstart, ssb2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ssb2.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
+                        bstart, ssb2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                busSoonTV.setText(ssb2, android.widget.TextView.BufferType.SPANNABLE);
+            } else if (busSoonTV != null && arrMap.isEmpty()) {
+                busSoonTV.setText("실시간 정보 불러오는 중...");
+                busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
+                busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
             }
         }
         container.removeAllViews();
