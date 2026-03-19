@@ -11728,7 +11728,7 @@ public class PinActivity extends AppCompatActivity {
                 getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit();
         for (String[] info : balLatest) {
             if (!info[2].isEmpty()) {
-                editor.putString("bal_" + info[0], info[2]);
+                editor.putString("bal_" + info[0], info[2] + "원"); // "원" 포함 형식 통일
                 editor.putString("bal_time_" + info[0], info[1]);
             }
         }
@@ -11785,9 +11785,9 @@ public class PinActivity extends AppCompatActivity {
             final String val = balLatest[i][2];
             final String ts2 = balLatest[i][1];
             final String acct = balLatest[i][0];
-            // SharedPreferences 저장 (위젯용)
+            // SharedPreferences 저장 (위젯용) - "999,000원" 형태로 통일
             if (!val.isEmpty()) {
-                editor.putString("bal_" + acct, val);
+                editor.putString("bal_" + acct, val + "원");
                 editor.putString("bal_time_" + acct, ts2);
             }
             // UI 갱신
