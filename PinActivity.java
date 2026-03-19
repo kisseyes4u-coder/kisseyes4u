@@ -11965,7 +11965,6 @@ public class PinActivity extends AppCompatActivity {
     private void sendFcmTestToSpecificUser(String fakeBody, String targetEmail) {
         String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss",
                 java.util.Locale.KOREA).format(new java.util.Date());
-        // SMS 변환 처리
         final String[] convertedArr = {fakeBody};
         try {
             String c = new SmsReceiver().convertToNewFormatPublic(fakeBody.trim());
@@ -11974,47 +11973,51 @@ public class PinActivity extends AppCompatActivity {
         final String converted = convertedArr[0];
         final String newBlock = timestamp + "\n" + converted;
 
+        // 제목/본문 파싱
+        String title = "잔액 변경", body2 = "통장 잔액이 변경되었습니다.";
+        for (String line : converted.split("\n")) {
+            String t = line.trim();
+            if ((t.contains("출금") || t.contains("입금"))
+                    && !title.contains("출금") && !title.contains("입금")) title = t;
+            if (t.startsWith("잔액")) body2 = t;
+        }
+        final String fTitle = title, fBody = body2;
+
         new Thread(() -> {
             try {
                 DriveReadHelper reader = new DriveReadHelper(this);
                 reader.readFile("fcm_tokens.txt", new DriveReadHelper.ReadCallback() {
                     @Override public void onSuccess(String tokensContent) {
-                        // 특정 이메일의 토큰만 찾기
+                        // 대상 이메일 토큰 + 관리자 토큰 수집
                         String targetToken = null;
+                        String ownerToken  = null;
                         for (String line : tokensContent.split("\r?\n")) {
                             line = line.trim();
                             if (line.isEmpty()) continue;
                             String[] parts = line.split("\\|");
-                            if (parts.length >= 2) {
-                                String email = parts[0].trim();
-                                String token = parts[1].trim();
-                                if (email.equalsIgnoreCase(targetEmail) && !token.isEmpty()) {
-                                    targetToken = token;
-                                    break;
-                                }
-                            }
+                            if (parts.length < 2) continue;
+                            String email = parts[0].trim();
+                            String token = parts[1].trim();
+                            if (token.isEmpty()) continue;
+                            if (email.equalsIgnoreCase(targetEmail)) targetToken = token;
+                            if (email.equalsIgnoreCase(OWNER_EMAIL))  ownerToken  = token;
                         }
                         if (targetToken == null) {
                             runOnUiThread(() -> android.widget.Toast.makeText(PinActivity.this,
                                     targetEmail + " 토큰 없음", android.widget.Toast.LENGTH_SHORT).show());
                             return;
                         }
-                        final String fToken = targetToken;
-                        // SmsReceiver의 FCM 전송 메서드 재사용
-                        java.util.List<String> tokens = new java.util.ArrayList<>();
-                        tokens.add(fToken);
-
-                        // 제목/본문 파싱
-                        String title = "잔액 변경", body2 = "통장 잔액이 변경되었습니다.";
-                        for (String line : converted.split("\n")) {
-                            String t = line.trim();
-                            if ((t.contains("출금") || t.contains("입금"))
-                                    && !title.contains("출금") && !title.contains("입금")) title = t;
-                            if (t.startsWith("잔액")) body2 = t;
-                        }
-                        final String fTitle = title, fBody = body2;
-                        SmsReceiver.sendFcmToSpecificToken(PinActivity.this, fToken, fTitle, fBody, newBlock);
+                        // ★ Drive 저장 없이 FCM만 직접 전송
+                        // 대상 사용자
+                        SmsReceiver.sendFcmToSpecificToken(
+                                PinActivity.this, targetToken, fTitle, fBody, newBlock);
                         android.util.Log.d("FCM_TEST", "특정 사용자 전송: " + targetEmail);
+                        // 관리자 (테스트 확인용) - 대상과 다른 토큰일 때만
+                        if (ownerToken != null && !ownerToken.equals(targetToken)) {
+                            SmsReceiver.sendFcmToSpecificToken(
+                                    PinActivity.this, ownerToken, fTitle, fBody, newBlock);
+                            android.util.Log.d("FCM_TEST", "관리자 동시 전송: " + OWNER_EMAIL);
+                        }
                     }
                     @Override public void onFailure(String error) {
                         runOnUiThread(() -> android.widget.Toast.makeText(PinActivity.this,
