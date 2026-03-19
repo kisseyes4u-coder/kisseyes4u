@@ -12117,7 +12117,7 @@ public class PinActivity extends AppCompatActivity {
 
             TextView tvSoonPH = new TextView(this);
             tvSoonPH.setTag("soon_ph");
-            tvSoonPH.setGravity(Gravity.CENTER_HORIZONTAL);
+            tvSoonPH.setGravity(Gravity.START);
             LinearLayout.LayoutParams phLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             phLp.setMargins(0, dpToPx(3), 0, 0);
@@ -12398,8 +12398,9 @@ public class PinActivity extends AppCompatActivity {
                     catch (Exception ig) { return a[0].compareTo(b[0]); }
                 });
 
-                // 가장 빠른 버스
-                String soonRno = ""; int soonSec = Integer.MAX_VALUE;
+                // 가장 빠른 버스 + 같은 시간대 여러 버스 수집
+                int soonSec = Integer.MAX_VALUE;
+                java.util.List<String> soonRnoList = new java.util.ArrayList<>();
                 for (java.util.Map.Entry<String, String[]> en : arrMap.entrySet()) {
                     String ts = en.getValue()[0];
                     int s2 = Integer.MAX_VALUE;
@@ -12407,13 +12408,15 @@ public class PinActivity extends AppCompatActivity {
                     else if (ts.contains("분")) {
                         try { s2 = Integer.parseInt(ts.replaceAll("[^0-9]","")) * 60; } catch(Exception ig){}
                     }
-                    if (s2 < soonSec) { soonSec = s2; soonRno = en.getKey(); }
+                    if (s2 < soonSec) { soonSec = s2; soonRnoList.clear(); soonRnoList.add(en.getKey()); }
+                    else if (s2 == soonSec && s2 < Integer.MAX_VALUE) { soonRnoList.add(en.getKey()); }
                 }
 
                 final java.util.List<String[]> fAllRoutes = allRoutes;
                 final java.util.Map<String, String[]> fArrMap = arrMap;
-                final String fSoonRno = soonRno;
+                final String fSoonRno = soonRnoList.isEmpty() ? "" : soonRnoList.get(0);
                 final int fSoonSec = soonSec;
+                final java.util.List<String> fSoonRnoList = soonRnoList;
 
                 // 세션 캐시 저장
                 arrivalSessionCache.put(nodeId, new Object[]{
@@ -12432,12 +12435,20 @@ public class PinActivity extends AppCompatActivity {
                             android.view.View ph = ((LinearLayout)infoBoxV).findViewWithTag("soon_ph");
                             if (ph instanceof TextView && !fSoonRno.isEmpty() && fSoonSec < Integer.MAX_VALUE) {
                                 int fm = fSoonSec / 60;
-                                String soonTxt = fSoonSec == 0 ? "곧 도착  " + fSoonRno + "번"
-                                        : fm + "분 후  " + fSoonRno + "번";
-                                ((TextView)ph).setText(soonTxt);
+                                // 여러 버스 표시
+                                StringBuilder sb = new StringBuilder();
+                                sb.append(fSoonSec == 0 ? "곧 도착" : fm + "분 후");
+                                for (String rn : fSoonRnoList) {
+                                    String rtp2 = "";
+                                    for (String[] ar : fAllRoutes) { if (ar[0].equals(rn)) { rtp2 = ar.length>4?ar[4]:""; break; } }
+                                    String[] badge2 = routeTypeBadge(rtp2);
+                                    sb.append("  [").append(badge2[0]).append("] ").append(rn).append("번");
+                                }
+                                ((TextView)ph).setText(sb.toString());
                                 ((TextView)ph).setTextColor(Color.parseColor("#E74C3C"));
-                                ((TextView)ph).setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                                ((TextView)ph).setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
                                 ((TextView)ph).setTypeface(null, android.graphics.Typeface.BOLD);
+                                ((TextView)ph).setGravity(Gravity.START);
                             }
                         }
                     }
@@ -12564,20 +12575,44 @@ public class PinActivity extends AppCompatActivity {
             leftCol.setOrientation(LinearLayout.VERTICAL);
             leftCol.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-            TextView tvRno = new TextView(this);
-            tvRno.setText(rno);
-            // routeType 기반 색상 (route[1]=routeId, route[4]=routeType)
+            // routeType 기반 색상
             String rnoRid = route.length > 1 ? route[1] : "";
             String rnoRtp = route.length > 4 ? route[4] : "";
             String rnoTp = getSharedPreferences("bus_cache", MODE_PRIVATE).getString("route_" + rnoRid + "_rTp", rnoRtp);
-            tvRno.setTextColor(Color.parseColor(routeTypeBadge(rnoTp)[1]));
+            String[] rnoBadge = routeTypeBadge(rnoTp);
+            // 배지 + 번호 가로 행
+            LinearLayout rnoRow = new LinearLayout(this);
+            rnoRow.setOrientation(LinearLayout.HORIZONTAL);
+            rnoRow.setGravity(Gravity.CENTER_VERTICAL);
+            rnoRow.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            // 종류 배지
+            TextView tvRnoBadge = new TextView(this);
+            tvRnoBadge.setText(rnoBadge[0]);
+            tvRnoBadge.setTextColor(Color.WHITE);
+            tvRnoBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvRnoBadge.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvRnoBadge.setGravity(Gravity.CENTER);
+            tvRnoBadge.setPadding(dpToPx(5), dpToPx(2), dpToPx(5), dpToPx(2));
+            android.graphics.drawable.GradientDrawable rnoBadgeBg = new android.graphics.drawable.GradientDrawable();
+            rnoBadgeBg.setColor(Color.parseColor(rnoBadge[1]));
+            rnoBadgeBg.setCornerRadius(dpToPx(4));
+            tvRnoBadge.setBackground(rnoBadgeBg);
+            LinearLayout.LayoutParams rnoBadgeLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            rnoBadgeLp.setMargins(0, 0, dpToPx(5), 0);
+            tvRnoBadge.setLayoutParams(rnoBadgeLp);
+            rnoRow.addView(tvRnoBadge);
+            // 번호
+            TextView tvRno = new TextView(this);
+            tvRno.setText(rno);
+            tvRno.setTextColor(Color.parseColor(rnoBadge[1]));
             tvRno.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
             tvRno.setTypeface(null, android.graphics.Typeface.BOLD);
             tvRno.setSingleLine(true);
             tvRno.setEllipsize(null);
-            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
-                tvRno, 8, 18, 1, android.util.TypedValue.COMPLEX_UNIT_DIP);
-            leftCol.addView(tvRno);
+            rnoRow.addView(tvRno);
+            leftCol.addView(rnoRow);
 
             // 서브텍스트 (방면+다음정류소)
             String validNextNm = (!nextNm.isEmpty() && !nextNm.equals(nodeNm)) ? nextNm : "";
@@ -17305,6 +17340,7 @@ public class PinActivity extends AppCompatActivity {
                                         .remove("fav_route_dirkey_" + fRKey)
                                         .remove("fav_route_memo_"   + fRKey).apply();
                                 busFavDirty = true;
+                                refreshBusFavorites(favSection, resultContainer);
                                 android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 삭제",
                                         android.widget.Toast.LENGTH_SHORT).show();
                                 refreshBusFavorites(favSection, resultContainer);
