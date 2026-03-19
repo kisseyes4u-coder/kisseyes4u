@@ -3491,32 +3491,131 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout fcmTestCard = makeAdminMenuCard("📡", "FCM PUSH TEST",
                 "일반사용자 SMS 테스트", "#E74C3C", "#FDEDEC");
         fcmTestCard.setOnClickListener(v -> {
-            // 전송 대상 선택 다이얼로그
-            String[] options = {"전체 사용자에게 전송", "kisseyes4uu@gmail.com 에게만 전송"};
-            new android.app.AlertDialog.Builder(PinActivity.this,
-                    android.R.style.Theme_Material_Light_Dialog_Alert)
-                .setTitle("FCM TEST - 전송 대상 선택")
-                .setItems(options, (d, which) -> {
+            // ── 커스텀 FCM 테스트 다이얼로그 ──
+            android.app.Dialog fcmDlg = new android.app.Dialog(this,
+                    android.R.style.Theme_Material_Light_Dialog);
+            LinearLayout dlg = new LinearLayout(this);
+            dlg.setOrientation(LinearLayout.VERTICAL);
+            android.graphics.drawable.GradientDrawable dlgBg =
+                    new android.graphics.drawable.GradientDrawable();
+            dlgBg.setColor(Color.WHITE);
+            dlgBg.setCornerRadius(dpToPx(20));
+            dlg.setBackground(dlgBg);
+            dlg.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+
+            // 제목
+            TextView tvTitle = new TextView(this);
+            tvTitle.setText("📡  FCM 테스트 전송");
+            tvTitle.setTextColor(Color.parseColor("#E74C3C"));
+            tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+            tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvTitle.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams ttLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            ttLp.setMargins(0, 0, 0, dpToPx(6));
+            tvTitle.setLayoutParams(ttLp);
+            dlg.addView(tvTitle);
+
+            // 부제목
+            TextView tvSub = new TextView(this);
+            tvSub.setText("전송 대상을 선택하세요");
+            tvSub.setTextColor(Color.parseColor("#888888"));
+            tvSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvSub.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            subLp.setMargins(0, 0, 0, dpToPx(18));
+            tvSub.setLayoutParams(subLp);
+            dlg.addView(tvSub);
+
+            // 버튼 생성 헬퍼
+            java.util.function.BiFunction<String, String, TextView> makeBtn = (text, color) -> {
+                TextView btn = new TextView(this);
+                btn.setText(text);
+                btn.setTextColor(Color.WHITE);
+                btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                btn.setTypeface(null, android.graphics.Typeface.BOLD);
+                btn.setGravity(Gravity.CENTER);
+                btn.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                android.graphics.drawable.GradientDrawable bg =
+                        new android.graphics.drawable.GradientDrawable();
+                bg.setColor(Color.parseColor(color));
+                bg.setCornerRadius(dpToPx(12));
+                btn.setBackground(bg);
+                btn.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                lp.setMargins(0, 0, 0, dpToPx(10));
+                btn.setLayoutParams(lp);
+                return btn;
+            };
+
+            // 전체 전송 버튼
+            TextView btnAll = makeBtn.apply("전체 사용자에게 전송", "#0984E3");
+            btnAll.setOnClickListener(vv -> {
+                fcmDlg.dismiss();
+                // 확인 다이얼로그
+                showFcmConfirmDialog("전체 사용자에게 전송하시겠습니까?", () -> {
                     String today = new java.text.SimpleDateFormat("MM/dd", java.util.Locale.KOREA)
                             .format(new java.util.Date());
                     String fakeBody = "[Web발신]\n농협 출금10,000원\n" + today
                             + " 12:00\n351-****-5510-13\nTEST거래\n잔액999,000원";
-                    if (which == 0) {
-                        // 전체 전송 (기존 방식)
-                        new SmsReceiver().processMessage(PinActivity.this, "15882100", fakeBody);
-                        new MyFirebaseMessagingService().saveFcmReceivedLogPublic(PinActivity.this);
-                        android.widget.Toast.makeText(PinActivity.this,
-                                "FCM 테스트 전송 (전체)", android.widget.Toast.LENGTH_SHORT).show();
-                    } else {
-                        // kisseyes4uu@gmail.com 에게만 전송
-                        sendFcmTestToSpecificUser(fakeBody, "kisseyes4uu@gmail.com");
-                        android.widget.Toast.makeText(PinActivity.this,
-                                "FCM 테스트 전송 (kisseyes4uu@gmail.com)",
-                                android.widget.Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNegativeButton("취소", null)
-                .show();
+                    new SmsReceiver().processMessage(PinActivity.this, "15882100", fakeBody);
+                    new MyFirebaseMessagingService().saveFcmReceivedLogPublic(PinActivity.this);
+                    android.widget.Toast.makeText(PinActivity.this,
+                            "FCM 전체 전송 완료", android.widget.Toast.LENGTH_SHORT).show();
+                });
+            });
+            dlg.addView(btnAll);
+
+            // 특정 사용자 버튼
+            TextView btnSpec = makeBtn.apply("kisseyes4uu@gmail.com 에게만 전송", "#6C5CE7");
+            btnSpec.setOnClickListener(vv -> {
+                fcmDlg.dismiss();
+                showFcmConfirmDialog("kisseyes4uu@gmail.com 에게\n전송하시겠습니까?", () -> {
+                    String today = new java.text.SimpleDateFormat("MM/dd", java.util.Locale.KOREA)
+                            .format(new java.util.Date());
+                    String fakeBody = "[Web발신]\n농협 출금10,000원\n" + today
+                            + " 12:00\n351-****-5510-13\nTEST거래\n잔액999,000원";
+                    sendFcmTestToSpecificUser(fakeBody, "kisseyes4uu@gmail.com");
+                    android.widget.Toast.makeText(PinActivity.this,
+                            "FCM 전송 완료 → kisseyes4uu",
+                            android.widget.Toast.LENGTH_SHORT).show();
+                });
+            });
+            dlg.addView(btnSpec);
+
+            // 취소 버튼
+            TextView btnCancel = new TextView(this);
+            btnCancel.setText("취소");
+            btnCancel.setTextColor(Color.parseColor("#888888"));
+            btnCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+            btnCancel.setTypeface(null, android.graphics.Typeface.BOLD);
+            btnCancel.setGravity(Gravity.CENTER);
+            btnCancel.setPadding(0, dpToPx(14), 0, dpToPx(14));
+            android.graphics.drawable.GradientDrawable cancelBg =
+                    new android.graphics.drawable.GradientDrawable();
+            cancelBg.setColor(Color.parseColor("#F0F0F0"));
+            cancelBg.setCornerRadius(dpToPx(12));
+            cancelBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+            btnCancel.setBackground(cancelBg);
+            btnCancel.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            btnCancel.setOnClickListener(vv -> fcmDlg.dismiss());
+            dlg.addView(btnCancel);
+
+            fcmDlg.setContentView(dlg);
+            fcmDlg.setCancelable(true);
+            if (fcmDlg.getWindow() != null) {
+                fcmDlg.getWindow().setLayout(
+                        (int)(getResources().getDisplayMetrics().widthPixels * 0.82),
+                        android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+                fcmDlg.getWindow().setBackgroundDrawable(
+                        new android.graphics.drawable.ColorDrawable(
+                                android.graphics.Color.TRANSPARENT));
+            }
+            fcmDlg.show();
         });
         layout.addView(fcmTestCard);
 
@@ -11779,6 +11878,89 @@ public class PinActivity extends AppCompatActivity {
 
     // ── 잔액 카드 값 갱신 (시간 기준 가장 최신 잔액) ─────────
     /** tvBalValues 없을 때도 (백그라운드/다른화면) SharedPreferences + 위젯 갱신 */
+    /** FCM 전송 확인 다이얼로그 (예쁜 카드 스타일) */
+    private void showFcmConfirmDialog(String message, Runnable onConfirm) {
+        android.app.Dialog d = new android.app.Dialog(this,
+                android.R.style.Theme_Material_Light_Dialog);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable bg =
+                new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.WHITE); bg.setCornerRadius(dpToPx(20));
+        layout.setBackground(bg);
+        layout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+
+        // 메시지
+        TextView tvMsg = new TextView(this);
+        tvMsg.setText(message);
+        tvMsg.setTextColor(Color.parseColor("#1A1A2E"));
+        tvMsg.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvMsg.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvMsg.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams msgLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        msgLp.setMargins(0, 0, 0, dpToPx(20));
+        tvMsg.setLayoutParams(msgLp);
+        layout.addView(tvMsg);
+
+        // 버튼 행
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // 취소
+        TextView btnNo = new TextView(this);
+        btnNo.setText("취소");
+        btnNo.setTextColor(Color.parseColor("#888888"));
+        btnNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        btnNo.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnNo.setGravity(Gravity.CENTER);
+        btnNo.setPadding(0, dpToPx(13), 0, dpToPx(13));
+        android.graphics.drawable.GradientDrawable noBg =
+                new android.graphics.drawable.GradientDrawable();
+        noBg.setColor(Color.parseColor("#F0F0F0"));
+        noBg.setCornerRadius(dpToPx(10));
+        btnNo.setBackground(noBg);
+        LinearLayout.LayoutParams noLp = new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        noLp.setMargins(0, 0, dpToPx(8), 0);
+        btnNo.setLayoutParams(noLp);
+        btnNo.setOnClickListener(vv -> d.dismiss());
+        btnRow.addView(btnNo);
+
+        // 확인
+        TextView btnYes = new TextView(this);
+        btnYes.setText("전송");
+        btnYes.setTextColor(Color.WHITE);
+        btnYes.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        btnYes.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnYes.setGravity(Gravity.CENTER);
+        btnYes.setPadding(0, dpToPx(13), 0, dpToPx(13));
+        android.graphics.drawable.GradientDrawable yesBg =
+                new android.graphics.drawable.GradientDrawable();
+        yesBg.setColor(Color.parseColor("#E74C3C"));
+        yesBg.setCornerRadius(dpToPx(10));
+        btnYes.setBackground(yesBg);
+        btnYes.setLayoutParams(new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        btnYes.setOnClickListener(vv -> { d.dismiss(); onConfirm.run(); });
+        btnRow.addView(btnYes);
+
+        layout.addView(btnRow);
+        d.setContentView(layout);
+        d.setCancelable(true);
+        if (d.getWindow() != null) {
+            d.getWindow().setLayout(
+                    (int)(getResources().getDisplayMetrics().widthPixels * 0.78),
+                    android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+            d.getWindow().setBackgroundDrawable(
+                    new android.graphics.drawable.ColorDrawable(
+                            android.graphics.Color.TRANSPARENT));
+        }
+        d.show();
+    }
+
     /** FCM 테스트를 특정 이메일에게만 전송 */
     private void sendFcmTestToSpecificUser(String fakeBody, String targetEmail) {
         String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss",
