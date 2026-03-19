@@ -11273,17 +11273,7 @@ public class PinActivity extends AppCompatActivity {
         android.graphics.drawable.GradientDrawable intBg = new android.graphics.drawable.GradientDrawable();
         intBg.setColor(Color.parseColor("#EBF5FB")); intBg.setCornerRadius(dpToPx(8));
         intBg.setStroke(dpToPx(1), Color.parseColor("#AED6F1")); tvIntervalBtn.setBackground(intBg);
-        tvIntervalBtn.setOnClickListener(v2 -> {
-            // busTimesMap에 데이터 있으면 배차시간표 다이얼로그, 없으면 기본 정보
-            if (busTimesMap.containsKey(routeNo)) {
-                showBusTimeTableDialog(routeNo, true);
-            } else {
-                String msg = "평일 배차간격: " + (fInterval.isEmpty()?"-":fInterval+"분")
-                        + "\n\n첫차: " + fStF + "\n막차: " + fEtF;
-                new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                        .setTitle("\u23f1 배차 시간").setMessage(msg).setPositiveButton("확인",null).show();
-            }
-        });
+        tvIntervalBtn.setOnClickListener(v2 -> showBusTimeTableDialog(routeNo, true));
         runBanner.addView(tvIntervalBtn);
         container.addView(runBanner);
 
@@ -15218,6 +15208,8 @@ public class PinActivity extends AppCompatActivity {
             }
             busTimesMap = map;
             android.util.Log.d("BusTimes", "loaded: " + map.size() + " routes");
+            runOnUiThread(() -> android.widget.Toast.makeText(this,
+                    "배차시간표 " + map.size() + "개 노선 로드", android.widget.Toast.LENGTH_SHORT).show());
         } catch (Exception e) {
             android.util.Log.e("BusTimes", "parse error: " + e.getMessage());
         }
@@ -15462,10 +15454,11 @@ public class PinActivity extends AppCompatActivity {
                 loadBusTimesFromJson(cached);
             }
         }
-        // busTimesMap에서 데이터 찾기
+        // busTimesMap에서 데이터 찾기 (캐시 로드 후 재시도)
         String[] data = busTimesMap.get(routeNo);
         if (data == null || data.length < 4) {
             // Drive에서 로드 시도 후 재표시
+            android.widget.Toast.makeText(this, "배차시간표 로딩 중...", android.widget.Toast.LENGTH_SHORT).show();
             new Thread(() -> {
                 try {
                     android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
