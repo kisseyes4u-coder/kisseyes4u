@@ -17358,8 +17358,10 @@ public class PinActivity extends AppCompatActivity {
             tvRNo.setTextColor(Color.parseColor(rTypeColor));
             tvRNo.setSingleLine(true);
             tvRNo.setEllipsize(null);
-            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
-                tvRNo, 8, 22, 1, android.util.TypedValue.COMPLEX_UNIT_DIP);
+            // 글자수 6자 초과 시 15dp로 축소
+            if ((rNo + "번").length() > 6) {
+                tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+            }
             tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
             tvRNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
             tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -17819,24 +17821,10 @@ public class PinActivity extends AppCompatActivity {
             tvStopRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStopRouteNo.setSingleLine(true);
             tvStopRouteNo.setEllipsize(null);
-            // ViewTreeObserver로 실제 너비 측정 후 글자 크기 직접 조정
-            tvStopRouteNo.getViewTreeObserver().addOnGlobalLayoutListener(
-                new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
-                    @Override public void onGlobalLayout() {
-                        tvStopRouteNo.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-                        int availW = tvStopRouteNo.getWidth();
-                        if (availW <= 0) return;
-                        float sp = fs(20);
-                        while (sp > 8) {
-                            tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, sp);
-                            tvStopRouteNo.measure(
-                                android.view.View.MeasureSpec.makeMeasureSpec(availW, android.view.View.MeasureSpec.AT_MOST),
-                                android.view.View.MeasureSpec.UNSPECIFIED);
-                            if (tvStopRouteNo.getMeasuredWidth() <= availW) break;
-                            sp -= 1;
-                        }
-                    }
-                });
+            // 글자수 6자 초과 시 15dp로 축소
+            if (tvStopRouteNo.getText().toString().length() > 6) {
+                tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+            }
             LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             rNoLp2.setMargins(0, dpToPx(4), 0, 0);
