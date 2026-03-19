@@ -12053,6 +12053,52 @@ public class PinActivity extends AppCompatActivity {
                                 rightCol.addView(tvPrev);
                             }
                             row.addView(rightCol);
+
+                            // 노선 카드 클릭 → 해당 노선 타임라인으로 이동
+                            final String fRno = rno;
+                            final String fRid = route[1]; // routeId
+                            final String fRtp = route.length > 4 ? route[4] : "";
+                            row.setOnClickListener(vr -> {
+                                // routeDbList에서 routeId 찾기
+                                String foundRid = fRid;
+                                String foundRtp = fRtp;
+                                if ((foundRid == null || foundRid.isEmpty()) && routeDbList != null) {
+                                    for (String[] rd : routeDbList) {
+                                        if (rd[1].equals(fRno)) {
+                                            foundRid = rd[0];
+                                            foundRtp = rd.length > 4 ? rd[4] : "";
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (foundRid != null && !foundRid.isEmpty()) {
+                                    // 버스 화면 초기화 후 타임라인 로드
+                                    busSearchArea.setVisibility(android.view.View.VISIBLE);
+                                    busFavSection2.setVisibility(android.view.View.VISIBLE);
+                                    busFixedHeader.removeAllViews();
+                                    container.removeAllViews();
+                                    final String finalRid = foundRid;
+                                    final String finalRtp = foundRtp;
+                                    busScreenLoadStops(finalRid, fRno, container, "normal", finalRtp);
+                                } else {
+                                    android.widget.Toast.makeText(this,
+                                            fRno + "번 노선 정보를 찾을 수 없습니다",
+                                            android.widget.Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                            row.setBackground(android.util.TypedValue.applyDimension(
+                                    android.util.TypedValue.COMPLEX_UNIT_DIP, 0,
+                                    getResources().getDisplayMetrics()) >= 0
+                                    ? new android.graphics.drawable.ColorDrawable(Color.WHITE) : null);
+                            row.setClickable(true);
+                            row.setFocusable(true);
+                            android.graphics.drawable.StateListDrawable sld = new android.graphics.drawable.StateListDrawable();
+                            android.graphics.drawable.ColorDrawable pressed = new android.graphics.drawable.ColorDrawable(Color.parseColor("#E3F2FD"));
+                            android.graphics.drawable.ColorDrawable normal2 = new android.graphics.drawable.ColorDrawable(Color.WHITE);
+                            sld.addState(new int[]{android.R.attr.state_pressed}, pressed);
+                            sld.addState(new int[]{}, normal2);
+                            row.setBackground(sld);
+
                             container.addView(row);
 
                             View div = new View(this);
