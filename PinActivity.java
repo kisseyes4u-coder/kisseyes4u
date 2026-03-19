@@ -13451,27 +13451,30 @@ public class PinActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
-        // ★ FCM으로 받은 pending_new_block 즉시 처리 (일반사용자 앱 오픈 시 화면 즉시 갱신)
+        // ★ SMS 수신 후 저장된 pending_new_block 즉시 처리
+        // (관리자: SmsReceiver에서 저장 / 일반사용자: MyFirebaseMessagingService에서 저장)
+        // 앱 종료/백그라운드 상태에서 SMS를 받은 후 앱을 열 때 화면 즉시 갱신
         android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         String pendingBlock = prefs.getString("pending_new_block", "");
+        boolean hadPending = false;
         if (!pendingBlock.isEmpty()) {
             prefs.edit().remove("pending_new_block").apply();
+            hadPending = true;
             android.util.Log.d("RESUME", "pending_new_block 처리: " + pendingBlock.length() + "자");
             if (cachedBlocks == null) cachedBlocks = new java.util.ArrayList<>();
             // 중복 방지: 이미 있는 블록이면 추가 안 함
-            final String pb = pendingBlock;
             boolean alreadyExists = false;
             for (String b : cachedBlocks) {
-                if (b.trim().equals(pb.trim())) { alreadyExists = true; break; }
+                if (b.trim().equals(pendingBlock.trim())) { alreadyExists = true; break; }
             }
             if (!alreadyExists) {
-                cachedBlocks.add(pb);
+                cachedBlocks.add(pendingBlock);
                 lastKnownBlockCount = cachedBlocks.size();
                 android.util.Log.d("RESUME", "캐시 추가 완료 총 " + cachedBlocks.size() + "개");
-                // 잔액 갱신
+                // 잔액 갱신 (위젯 + SharedPreferences + UI)
                 if (tvBalValues != null) updateBalanceValues(cachedBlocks);
                 else updateWidgetFromBlocks(cachedBlocks);
-                // 화면 갱신
+                // 통장잔액 화면 갱신
                 if (isOnBalanceScreen && msgContainer != null) {
                     displayedCount = Math.min(Math.max(displayedCount, PAGE_SIZE), cachedBlocks.size());
                     renderMessages(cachedBlocks, currentTabFilter);
@@ -13492,7 +13495,8 @@ public class PinActivity extends AppCompatActivity {
             return;
         }
         // 백그라운드에서 포그라운드로 올라올 때 갱신
-        if (!currentUserEmail.isEmpty() && (isOnBalanceScreen || isOnMenuScreen)) {
+        // pending_new_block을 이미 처리한 경우 Drive 읽기 생략 (구버전 덮어씌움 방지)
+        if (!hadPending && !currentUserEmail.isEmpty() && (isOnBalanceScreen || isOnMenuScreen)) {
             forceReloadMessages();
         }
         // 일반사용자 백그라운드 복귀 시 마지막 접속 시간 갱신
