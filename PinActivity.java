@@ -5679,17 +5679,41 @@ public class PinActivity extends AppCompatActivity {
     // cachedBalValues → tvBalValues에 적용 + 위젯용 SharedPreferences 저장
     private void applyBalanceCache() {
         if (cachedBalValues == null) return;
-        android.content.SharedPreferences.Editor editor =
-                getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit();
+        android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        android.content.SharedPreferences.Editor editor = prefs.edit();
+        boolean anyUpdated = false;
         for (String line : cachedBalValues) {
             String[] parts = line.split("\\|");
             if (parts.length < 3) continue;
             String acct   = parts[0].trim();
             String amount = parts[2].trim();
             String time   = parts.length > 3 ? parts[3].trim() : "";
-            // 위젯용 저장
+
+            // ★ 타임스탬프 비교: balance.txt의 시간이 현재 저장된 시간보다 최신일 때만 덮어씌움
+            // Drive 업로드 지연으로 인해 구버전 balance.txt가 최신 SharedPreferences를 덮어쓰는 버그 방지
+            String savedTime = prefs.getString("bal_time_" + acct, "");
+            if (!savedTime.isEmpty() && !time.isEmpty() && time.compareTo(savedTime) < 0) {
+                // balance.txt 값이 더 오래됨 → 위젯/SP는 건드리지 않고 UI만 갱신
+                android.util.Log.d("BAL_CACHE", "balance.txt 구버전 스킵: " + acct
+                        + " bal.txt=" + time + " saved=" + savedTime);
+                // UI는 amount로 표시 (화면 표시는 허용)
+                if (tvBalValues != null && balInfo != null) {
+                    for (int i = 0; i < balInfo.length; i++) {
+                        if (balInfo[i][0].equals(acct) && tvBalValues[i] != null) {
+                            // SharedPreferences의 최신값을 UI에 표시
+                            String latestAmount = prefs.getString("bal_" + acct, amount);
+                            tvBalValues[i].setText(latestAmount);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // 위젯용 저장 (최신 값이거나 비교 불가 시 저장)
             editor.putString("bal_" + acct, amount);
             editor.putString("bal_time_" + acct, time);
+            anyUpdated = true;
+
             // UI 업데이트
             if (tvBalValues != null && balInfo != null) {
                 for (int i = 0; i < balInfo.length; i++) {
@@ -5700,13 +5724,25 @@ public class PinActivity extends AppCompatActivity {
             }
         }
         editor.apply();
-        // 위젯 직접 갱신
-        android.appwidget.AppWidgetManager awm = android.appwidget.AppWidgetManager.getInstance(this);
-        int[] ids = awm.getAppWidgetIds(
-                new android.content.ComponentName(this, BalanceWidget.class));
-        if (ids != null && ids.length > 0) {
-            for (int wid : ids) {
-                BalanceWidget.updateWidget(this, awm, wid);
+        // 위젯 갱신 (최신값이 저장된 경우만)
+        if (anyUpdated) {
+            android.appwidget.AppWidgetManager awm = android.appwidget.AppWidgetManager.getInstance(this);
+            int[] ids = awm.getAppWidgetIds(
+                    new android.content.ComponentName(this, BalanceWidget.class));
+            if (ids != null && ids.length > 0) {
+                for (int wid : ids) {
+                    BalanceWidget.updateWidget(this, awm, wid);
+                }
+            }
+        } else {
+            // balance.txt가 구버전이면 현재 SharedPreferences 값으로 위젯만 갱신 (UI는 이미 최신)
+            android.appwidget.AppWidgetManager awm = android.appwidget.AppWidgetManager.getInstance(this);
+            int[] ids = awm.getAppWidgetIds(
+                    new android.content.ComponentName(this, BalanceWidget.class));
+            if (ids != null && ids.length > 0) {
+                for (int wid : ids) {
+                    BalanceWidget.updateWidget(this, awm, wid);
+                }
             }
         }
     }
