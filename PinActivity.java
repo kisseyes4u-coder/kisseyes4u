@@ -2682,6 +2682,13 @@ public class PinActivity extends AppCompatActivity {
     /** Drive에서 dj_stops.json 다운로드 (없으면 패스) */
     private void loadStopDbFromDriveIfNeeded(Runnable onDone) {
         android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
+        // 내부 파일 우선 확인
+        String internalStop = loadStopDb();
+        if (!internalStop.isEmpty() && internalStop.contains("\"routes\":")) {
+            if (stopDbList == null || nodeNoToRoutes.isEmpty()) loadStopJsonToMemory(internalStop);
+            if (onDone != null) onDone.run();
+            return;
+        }
 
         // 배차시간표 로드 - 내부 파일 우선, 없으면 SharedPreferences, 없으면 Drive
         if (busTimesMap.isEmpty()) {
@@ -2733,6 +2740,7 @@ public class PinActivity extends AppCompatActivity {
                 @Override public void onSuccess(String content) {
                     if (!content.isEmpty()) {
                         p.edit().putString("stop_json_cache", content).apply();
+                        saveStopDb(content); // 내부 파일에도 저장
                         loadStopJsonToMemory(content);
                     }
                     if (onDone != null) runOnUiThread(onDone);
@@ -11657,8 +11665,11 @@ public class PinActivity extends AppCompatActivity {
                 String foundRoutes = "";
                 String fNodeNo = nodeNo;
 
-                String stopCache = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
-                        .getString("stop_json_cache", "");
+                // 내부 파일 우선 읽기, 없으면 SharedPreferences
+                String stopCache = loadStopDb();
+                if (stopCache.isEmpty())
+                    stopCache = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
+                            .getString("stop_json_cache", "");
 
                 // 구버전 캐시(routes 없음)면 Drive에서 새로 받기
                 if (!stopCache.contains("\"routes\":")) {
@@ -11678,6 +11689,7 @@ public class PinActivity extends AppCompatActivity {
                         if (!newJson[0].isEmpty()) {
                             getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
                                     .putString("stop_json_cache", newJson[0]).apply();
+                            saveStopDb(newJson[0]); // 내부 파일에도 저장
                             stopCache = newJson[0];
                         }
                     } catch (Exception ignored) {}
@@ -15184,6 +15196,30 @@ public class PinActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
     }
 
+    /** 정류장 DB를 내부 저장소 파일에 저장 */
+    private void saveStopDb(String content) {
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), "stop_db.json");
+            if (content.isEmpty()) { f.delete(); return; }
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+            fos.write(content.getBytes("UTF-8"));
+            fos.close();
+        } catch (Exception ignored) {}
+    }
+
+    /** 내부 저장소에서 정류장 DB 읽기 */
+    private String loadStopDb() {
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), "stop_db.json");
+            if (!f.exists()) return "";
+            java.io.FileInputStream fis = new java.io.FileInputStream(f);
+            byte[] buf = new byte[(int) f.length()];
+            fis.read(buf);
+            fis.close();
+            return new String(buf, "UTF-8");
+        } catch (Exception ignored) { return ""; }
+    }
+
     /** 배차시간표를 내부 저장소 파일에 저장 */
     private void saveBusTimes(String content) {
         try {
@@ -15857,6 +15893,7 @@ public class PinActivity extends AppCompatActivity {
                 new DriveUploadHelper(this).uploadFileSync(json, STOP_DB_FILE);
                 getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
                         .putString("stop_json_cache", json).apply();
+                saveStopDb(json); // 내부 파일에도 저장
                 loadStopJsonToMemory(json);
 
                 if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(100));
