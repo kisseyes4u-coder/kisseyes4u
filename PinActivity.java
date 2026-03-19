@@ -218,33 +218,17 @@ public class PinActivity extends AppCompatActivity {
         return getBusIconColor(0xFF6C3FA0);
     }
 
-    /** assets/bus.png를 지정된 색상으로 렌더링 */
+    /** 지정된 색상의 동그라미 Bitmap 생성 (즐겨찾기 버스 아이콘용) */
     private android.graphics.Bitmap getBusIconColor(int argbColor) {
-        try {
-            android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
-                    getAssets().open("bus.png"));
-            if (raw != null) {
-                int w = raw.getWidth(), h = raw.getHeight();
-                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
-                int[] pixels = new int[w * h];
-                raw.getPixels(pixels, 0, w, 0, 0, w, h);
-                for (int i = 0; i < pixels.length; i++) {
-                    int r2 = (pixels[i] >> 16) & 0xFF;
-                    int g2 = (pixels[i] >> 8)  & 0xFF;
-                    int b2 =  pixels[i]         & 0xFF;
-                    int brightness = (r2 + g2 + b2) / 3;
-                    if (brightness > 128) {
-                        pixels[i] = argbColor;
-                    } else {
-                        pixels[i] = 0xFFFFFFFF;
-                    }
-                }
-                result.setPixels(pixels, 0, w, 0, 0, w, h);
-                raw.recycle();
-                return result;
-            }
-        } catch (Exception ignored) {}
-        return null;
+        int size = dpToPx(24);
+        android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(bmp);
+        android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(argbColor);
+        paint.setStyle(android.graphics.Paint.Style.FILL);
+        float r = size / 2f;
+        canvas.drawCircle(r, r, r, paint);
+        return bmp;
     }
 
     /** assets/bus.png 로드 - 검정 배경 투명화 + 흰색 픽셀 → 빨간색 (타임라인 버스 위치용) */
@@ -11893,6 +11877,60 @@ public class PinActivity extends AppCompatActivity {
             tvNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
             tvNo.setGravity(Gravity.CENTER_HORIZONTAL);
             infoBox.addView(tvNo);
+
+            // 정류소에 정차하는 버스 종류 태그 (노선번호 → routeType → 종류별 색상)
+            String routesForNode = nodeNo.isEmpty() ? "" : nodeNoToRoutes.get(nodeNo);
+            if ((routesForNode == null || routesForNode.isEmpty()) && !nodeId.isEmpty()) {
+                if (stopDbList != null) {
+                    for (String[] s : stopDbList) {
+                        if (s[0].equals(nodeId) && s.length > 4) { routesForNode = s[4]; break; }
+                    }
+                }
+            }
+            if (routesForNode != null && !routesForNode.isEmpty() && routeDbList != null) {
+                // 종류 중복 없이 수집
+                java.util.LinkedHashMap<String, String> typeColorMap = new java.util.LinkedHashMap<>();
+                for (String rno : routesForNode.split(",")) {
+                    rno = rno.trim(); if (rno.isEmpty()) continue;
+                    // routeDbList에서 routeId 찾아 bus_cache에서 rTp 가져오기
+                    for (String[] rd : routeDbList) {
+                        if (rd[1].equals(rno)) {
+                            String rTpVal = getSharedPreferences("bus_cache", MODE_PRIVATE)
+                                    .getString("route_" + rd[0] + "_rTp", "");
+                            String[] badge = routeTypeBadge(rTpVal);
+                            if (!badge[0].isEmpty()) typeColorMap.put(badge[0], badge[1]);
+                            break;
+                        }
+                    }
+                }
+                if (!typeColorMap.isEmpty()) {
+                    LinearLayout typeRow = new LinearLayout(this);
+                    typeRow.setOrientation(LinearLayout.HORIZONTAL);
+                    typeRow.setGravity(Gravity.CENTER_HORIZONTAL);
+                    LinearLayout.LayoutParams trLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    trLp.setMargins(0, dpToPx(4), 0, 0);
+                    typeRow.setLayoutParams(trLp);
+                    for (java.util.Map.Entry<String, String> tc : typeColorMap.entrySet()) {
+                        TextView tvType = new TextView(this);
+                        tvType.setText(tc.getKey());
+                        tvType.setTextColor(Color.WHITE);
+                        tvType.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+                        tvType.setTypeface(null, android.graphics.Typeface.BOLD);
+                        tvType.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+                        android.graphics.drawable.GradientDrawable typeBg = new android.graphics.drawable.GradientDrawable();
+                        typeBg.setColor(Color.parseColor(tc.getValue()));
+                        typeBg.setCornerRadius(dpToPx(4));
+                        tvType.setBackground(typeBg);
+                        LinearLayout.LayoutParams tvTypeLp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        tvTypeLp.setMargins(dpToPx(2), 0, dpToPx(2), 0);
+                        tvType.setLayoutParams(tvTypeLp);
+                        typeRow.addView(tvType);
+                    }
+                    infoBox.addView(typeRow);
+                }
+            }
 
             TextView tvSoonPH = new TextView(this);
             tvSoonPH.setTag("soon_ph");
