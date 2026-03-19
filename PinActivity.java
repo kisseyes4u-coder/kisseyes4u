@@ -12380,7 +12380,7 @@ public class PinActivity extends AppCompatActivity {
                         } else {
                             timeStr = "약 " + (sec/60) + "분"; timeColor = "#333333";
                         }
-                        String prevStr = prev == 0 ? "[출발지 대기중]" : prev == 1 ? "[바로 앞 정거장]" : prev > 0 ? "[" + prev + " 정거장 앞]" : "";
+                        String prevStr = prev == 0 ? "[기점](출발지 대기중)" : prev == 1 ? "(바로 앞 정거장)" : prev > 0 ? "(" + prev + " 정거장 앞)" : "";
                         arrMap.put(rno, new String[]{timeStr, prevStr, timeColor, endnm, nextnm});
 
                         // 로컬 캐시 없으면 API 노선도 목록에 추가
@@ -12544,7 +12544,7 @@ public class PinActivity extends AppCompatActivity {
             } else {
                 String nextDep = getNextDeparture(rno, true);
                 timeStr = nextDep.isEmpty() ? (fEmpty ? "조회중..." : "도착정보 없음") : nextDep;
-                prevStr = nextDep.isEmpty() ? "" : "[기점]";
+                prevStr = nextDep.isEmpty() ? "" : "[기점](출발지 대기중)";
                 timeColor = "#555555"; endNm = etnm; nextNm = "";
             }
             LinearLayout row = new LinearLayout(this);
