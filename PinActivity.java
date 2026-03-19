@@ -12724,7 +12724,7 @@ public class PinActivity extends AppCompatActivity {
             android.graphics.drawable.GradientDrawable bellBg2 = new android.graphics.drawable.GradientDrawable();
             bellBg2.setCornerRadius(dpToPx(6));
             if (isAlarmed2) { bellBg2.setColor(Color.parseColor("#5BA9F0")); bellBg2.setStroke(dpToPx(1), Color.parseColor("#5BA9F0")); tvBell2.setTextColor(Color.WHITE); }
-            else            { bellBg2.setColor(Color.parseColor("#EBF5FB")); bellBg2.setStroke(dpToPx(1), Color.parseColor("#5BA9F0")); tvBell2.setTextColor(Color.parseColor("#5BA9F0")); }
+            else            { bellBg2.setColor(Color.WHITE); bellBg2.setStroke(dpToPx(1), Color.parseColor("#AAAAAA")); tvBell2.setTextColor(Color.parseColor("#888888")); }
             tvBell2.setBackground(bellBg2);
             tvBell2.setClickable(true);
             tvBell2.setFocusable(true);
@@ -17285,7 +17285,7 @@ public class PinActivity extends AppCompatActivity {
                 btnDel.setLayoutParams(delLp);
                 btnDel.setOnClickListener(vv -> {
                     settingDlg.dismiss();
-                    showConfirmDialog("🗑", rNo + "번 즐겨찾기 삭제",
+                    showConfirmDialog("삭제", rNo + "번 즐겨찾기 삭제",
                             "즐겨찾기에서 삭제하시겠습니까?", () -> {
                                 prefs.edit().remove("fav_route_" + fRKey)
                                         .remove("fav_route_no_"     + fRKey)
@@ -17736,7 +17736,7 @@ public class PinActivity extends AppCompatActivity {
                 btnSgDel.setLayoutParams(sgDelLp);
                 btnSgDel.setOnClickListener(vv -> {
                     stopSettingDlg.dismiss();
-                    showConfirmDialog("🗑", stopName + " 즐겨찾기 삭제", "즐겨찾기에서 삭제하시겠습니까?", () -> {
+                    showConfirmDialog("삭제", stopName + " 즐겨찾기 삭제", "즐겨찾기에서 삭제하시겠습니까?", () -> {
                         busFavDirty = true;
                         prefs.edit().remove(favKey2)
                                 .remove("fav_stop_name_" + fCompositeKey)
@@ -17819,9 +17819,14 @@ public class PinActivity extends AppCompatActivity {
             tvStopRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
             tvStopRouteNo.setSingleLine(true);
             tvStopRouteNo.setEllipsize(null);
-            // 글자 길면 자동 축소 (말줄임 없이 한줄)
-            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
-                tvStopRouteNo, 8, 20, 1, android.util.TypedValue.COMPLEX_UNIT_DIP);
+            // API 26+ 자동 글자 축소
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                tvStopRouteNo.setAutoSizeTextTypeUniformWithConfiguration(
+                    8, 20, 1, android.util.TypedValue.COMPLEX_UNIT_DIP);
+            } else {
+                androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                    tvStopRouteNo, 8, 20, 1, android.util.TypedValue.COMPLEX_UNIT_DIP);
+            }
             LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             rNoLp2.setMargins(0, dpToPx(4), 0, 0);
