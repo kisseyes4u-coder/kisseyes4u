@@ -10069,7 +10069,7 @@ public class PinActivity extends AppCompatActivity {
                 tabStop.setBackground(b2); tabStop.setTextColor(Color.WHITE);
             }
         };
-        updateTabStyle.run();
+        if (busUpdateTabStyle != null) busUpdateTabStyle.run();
 
         LinearLayout.LayoutParams tabLp1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         tabLp1.setMargins(0, 0, dpToPx(6), 0);
@@ -10654,6 +10654,20 @@ public class PinActivity extends AppCompatActivity {
                 busEtSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
             }
             // 탭 버스번호 검색으로 리셋
+            busIsBusTab[0] = true;
+            if (busUpdateTabStyle != null) busUpdateTabStyle.run();
+            // 키보드 숨김
+            android.view.inputmethod.InputMethodManager immBack =
+                (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+            if (immBack != null && busEtSearch != null)
+                immBack.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
+            // 결과 컨테이너 초기화
+            // 검색화면 완전 리셋 (즐겨찾기 제외)
+            if (busEtSearch != null) {
+                busEtSearch.setText("");
+                busEtSearch.setHint("버스 번호 입력");
+                busEtSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            }
             busIsBusTab[0] = true;
             if (busUpdateTabStyle != null) busUpdateTabStyle.run();
             // 키보드 숨김
