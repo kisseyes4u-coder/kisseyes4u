@@ -17055,10 +17055,16 @@ public class PinActivity extends AppCompatActivity {
         if (favKeys.isEmpty() && favRouteKeys.isEmpty()) return;
 
         // fav_order 순서대로 통합 렌더링 리스트 구성
-        // allOrdered: "R:key" 또는 "S:key" 형태로 렌더링 순서 결정
         java.util.List<String> allOrdered = new java.util.ArrayList<>();
         String savedOrder = prefs.getString("fav_order", "");
-        if (!savedOrder.isEmpty()) {
+
+        // fav_order가 비어있으면 현재 즐겨찾기로 초기화 후 저장
+        if (savedOrder.isEmpty()) {
+            StringBuilder initSb = new StringBuilder();
+            for (String k : favRouteKeys) { if (initSb.length()>0) initSb.append(","); initSb.append("R:").append(k); allOrdered.add("R:"+k); }
+            for (String k : favKeys)      { if (initSb.length()>0) initSb.append(","); initSb.append("S:").append(k); allOrdered.add("S:"+k); }
+            if (initSb.length() > 0) prefs.edit().putString("fav_order", initSb.toString()).apply();
+        } else {
             for (String tok : savedOrder.split(",")) {
                 tok = tok.trim();
                 if (tok.startsWith("R:") && favRouteKeys.contains(tok.substring(2)))
@@ -17067,9 +17073,19 @@ public class PinActivity extends AppCompatActivity {
                     allOrdered.add(tok);
             }
         }
-        // fav_order에 없는 항목은 맨 뒤에 추가
-        for (String k : favRouteKeys) { if (!allOrdered.contains("R:"+k)) allOrdered.add("R:"+k); }
-        for (String k : favKeys)      { if (!allOrdered.contains("S:"+k)) allOrdered.add("S:"+k); }
+        // fav_order에 없는 항목은 타임스탬프 기준 정렬 후 추가
+        java.util.List<String> unsorted = new java.util.ArrayList<>();
+        for (String k : favRouteKeys) { if (!allOrdered.contains("R:"+k)) unsorted.add("R:"+k); }
+        for (String k : favKeys)      { if (!allOrdered.contains("S:"+k)) unsorted.add("S:"+k); }
+        if (unsorted.size() > 1) {
+            final android.content.SharedPreferences pRef = prefs;
+            unsorted.sort((a, b) -> {
+                long ta = pRef.getLong("fav_ts_" + a, 0);
+                long tb = pRef.getLong("fav_ts_" + b, 0);
+                return Long.compare(ta, tb);
+            });
+        }
+        allOrdered.addAll(unsorted);
 
         // 즐겨찾기 타이틀 (숨김)
 
@@ -17968,14 +17984,17 @@ public class PinActivity extends AppCompatActivity {
         if (colIdx > 0) favSection.addView(grid);
     }
 
-    /** fav_order에 항목 추가 (중복 방지) */
+    /** fav_order에 항목 추가 (중복 방지) + 타임스탬프 저장 */
     private void favOrderAdd(String typeKey) {
         android.content.SharedPreferences p = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         String cur = p.getString("fav_order", "");
         java.util.List<String> list = new java.util.ArrayList<>();
         if (!cur.isEmpty()) for (String t : cur.split(",")) { t=t.trim(); if (!t.isEmpty()) list.add(t); }
         if (!list.contains(typeKey)) list.add(typeKey);
-        p.edit().putString("fav_order", android.text.TextUtils.join(",", list)).apply();
+        p.edit()
+            .putString("fav_order", android.text.TextUtils.join(",", list))
+            .putLong("fav_ts_" + typeKey, System.currentTimeMillis())
+            .apply();
     }
 
     /** fav_order에서 항목 제거 */
