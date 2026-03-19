@@ -10957,6 +10957,10 @@ public class PinActivity extends AppCompatActivity {
             int fRunning, java.util.Map<String,String> fBusVehicle,
             java.util.Set<String> busOrdSet, java.util.List<String[]> stops, String turnOrd) {
         container.removeAllViews();
+        // ★ 절대 규칙: 타임라인 진입 시 검색화면 반드시 숨김
+        if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+        if (busFixedHeader != null) busFixedHeader.setVisibility(android.view.View.VISIBLE);
         // forward 방향 전환 시 맨 위로 스크롤
         if ("forward".equals(busPendingScrollDir)) {
             busPendingScrollDir = null;
@@ -16964,7 +16968,7 @@ public class PinActivity extends AppCompatActivity {
             final String fRId = rId, fRNo = rNo, fRDirKey = rDirKey;
             rCard.setOnClickListener(v2 -> {
                 if (fRId.isEmpty()) return;
-                resultContainer.removeAllViews();
+                busResultContainer.removeAllViews();
                 if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
                 if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
@@ -17333,7 +17337,7 @@ public class PinActivity extends AppCompatActivity {
             // 카드 탭 → 해당 노선 타임라인으로 이동
             card.setOnClickListener(v2 -> {
                 if (fRouteId.isEmpty()) return;
-                busScreenLoadStops(fRouteId, fRouteNo, resultContainer, "forward", "");
+                busScreenLoadStops(fRouteId, fRouteNo, busResultContainer, "forward", "");
             });
 
             stopRow.addView(card);
