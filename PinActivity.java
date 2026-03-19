@@ -12076,7 +12076,7 @@ public class PinActivity extends AppCompatActivity {
                                     busResultContainer.removeAllViews();
                                     final String finalRid = foundRid;
                                     final String finalRtp = foundRtp;
-                                    busScreenLoadStops(finalRid, fRno, busResultContainer, "normal", finalRtp);
+                                    busScreenLoadStops(finalRid, fRno, busResultContainer, "forward", finalRtp);
                                 } else {
                                     android.widget.Toast.makeText(this,
                                             fRno + "번 노선 정보를 찾을 수 없습니다",
