@@ -16857,6 +16857,7 @@ public class PinActivity extends AppCompatActivity {
             if (routeColIdx % 2 == 0) {
                 routeRow = new LinearLayout(this);
                 routeRow.setOrientation(LinearLayout.HORIZONTAL);
+                routeRow.setWeightSum(2f);
                 LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 rowLp.setMargins(0, 0, 0, dpToPx(8));
@@ -17294,7 +17295,7 @@ public class PinActivity extends AppCompatActivity {
                     busScreenLoadStops(fRId, fRNo, resultContainer, fRDirKey, "");
                 }
             });
-            routeRow.addView(rCard);
+            if (routeRow != null) routeRow.addView(rCard);
             routeColIdx++;
         }
         // 홀수개면 빈 카드로 채우기
@@ -17327,6 +17328,7 @@ public class PinActivity extends AppCompatActivity {
             if (stopColIdx % 2 == 0) {
                 stopRow = new LinearLayout(this);
                 stopRow.setOrientation(LinearLayout.HORIZONTAL);
+                stopRow.setWeightSum(2f);
                 LinearLayout.LayoutParams stopRowLp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 stopRowLp.setMargins(0, 0, 0, dpToPx(8));
@@ -17670,7 +17672,7 @@ public class PinActivity extends AppCompatActivity {
                 busScreenLoadStops(fRouteId, fRouteNo, busResultContainer, "forward", "");
             });
 
-            stopRow.addView(card);
+            if (stopRow != null) stopRow.addView(card);
             stopColIdx++;
         }
 
