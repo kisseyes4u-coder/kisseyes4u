@@ -10586,6 +10586,8 @@ public class PinActivity extends AppCompatActivity {
                         final java.util.Map<String,String> fVeh=vehMap;
                         runOnUiThread(() -> {
                             if (!isOnSubScreen) return;
+                            // 검색화면이면 타임라인 갱신 차단
+                            if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
                             renderBusTimeline(fRId, fRNo, fDir, container,
                                     fSNm, fENm, fStF, fEtF, fInterval, fRTp,
                                     fCnt, fVeh, fOrd, fStops, fTurnOrd);
@@ -10612,7 +10614,11 @@ public class PinActivity extends AppCompatActivity {
             if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-            if (busResultContainer != null) { busResultContainer.removeAllViews(); busResultContainer.setVisibility(android.view.View.VISIBLE); }
+            // post로 지연 비우기 - 현재 진행중인 runOnUiThread 완료 후 비움
+            if (busResultContainer != null) {
+                busResultContainer.removeAllViews();
+                busResultContainer.post(() -> busResultContainer.removeAllViews());
+            }
             // 즐겨찾기 변경됐을 때만 갱신
             if (busFavDirty && busFavSection != null && busResultContainer != null) {
                 refreshBusFavorites(busFavSection, busResultContainer);
@@ -10956,6 +10962,9 @@ public class PinActivity extends AppCompatActivity {
             String fStartNm, String fEndNm, String fStF, String fEtF, String fInterval, String fRTp,
             int fRunning, java.util.Map<String,String> fBusVehicle,
             java.util.Set<String> busOrdSet, java.util.List<String[]> stops, String turnOrd) {
+        // ★★★ 절대 규칙: 검색화면이 열려있으면 타임라인 렌더링 완전 차단
+        if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
+
         container.removeAllViews();
         // ★ 절대 규칙: 타임라인 진입 시 검색화면 반드시 숨김
         if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
@@ -11786,6 +11795,8 @@ public class PinActivity extends AppCompatActivity {
     }
 
     private void busScreenLoadArrival(String nodeId, String nodeNm, String nodeNo, String filterRouteNo, LinearLayout container) {
+        // ★★★ 절대 규칙: 검색화면이 열려있으면 도착화면 렌더링 차단
+        if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
         // 백스택에 arrival 상태 저장
         busBackStack.push(new String[]{"arrival", nodeId, nodeNm, nodeNo, filterRouteNo});
         // ① 타임라인 자동갱신 타이머 중단
