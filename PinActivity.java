@@ -11971,14 +11971,15 @@ public class PinActivity extends AppCompatActivity {
             if (c != null && !c.isEmpty()) convertedArr[0] = c;
         } catch (Exception ignored) {}
         final String converted = convertedArr[0];
-        final String newBlock = timestamp + "\n" + converted;
+        // ★ [TEST] 태그 추가 - Drive 저장 안 함, 관리자 화면에서 구분 표시, 삭제 시 FCM 신호 생략
+        final String newBlock = timestamp + "\n[TEST]\n" + converted;
 
         // 제목/본문 파싱
-        String title = "잔액 변경", body2 = "통장 잔액이 변경되었습니다.";
+        String title = "[TEST] 잔액 변경", body2 = "[테스트] 통장 잔액이 변경되었습니다.";
         for (String line : converted.split("\n")) {
             String t = line.trim();
             if ((t.contains("출금") || t.contains("입금"))
-                    && !title.contains("출금") && !title.contains("입금")) title = t;
+                    && !title.contains("출금") && !title.contains("입금")) title = "[TEST] " + t;
             if (t.startsWith("잔액")) body2 = t;
         }
         final String fTitle = title, fBody = body2;
@@ -12328,6 +12329,7 @@ public class PinActivity extends AppCompatActivity {
             wrapper.setLayoutParams(wp);
 
             // ── 메시지 카드 ──────────────────────────────────
+            boolean isTestBlock = block.contains("[TEST]"); // 테스트 블록 여부
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             android.graphics.drawable.GradientDrawable cardBg =
@@ -12335,6 +12337,10 @@ public class PinActivity extends AppCompatActivity {
             if (isSelected) {
                 cardBg.setColor(Color.parseColor("#D8CCFF"));
                 cardBg.setStroke(2, Color.parseColor("#5B4A8A"));
+            } else if (isTestBlock) {
+                // [TEST] 블록: 회색 점선 테두리로 구분
+                cardBg.setColor(Color.parseColor("#F5F5F5"));
+                cardBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
             } else {
                 cardBg.setColor(Color.WHITE);
                 cardBg.setStroke(1, Color.parseColor("#DDD8F0"));
@@ -12348,6 +12354,21 @@ public class PinActivity extends AppCompatActivity {
                             android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
                             android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
             card.setLayoutParams(cardFp);
+
+            // [TEST] 블록이면 상단에 테스트 배지 표시
+            if (isTestBlock) {
+                TextView tvTestBadge = new TextView(this);
+                tvTestBadge.setText("🧪 테스트 문자 (Drive 미저장)");
+                tvTestBadge.setTextColor(Color.parseColor("#888888"));
+                tvTestBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvTestBadge.setTypeface(null, android.graphics.Typeface.ITALIC);
+                LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                badgeLp.setMargins(0, 0, 0, dpToPx(4));
+                tvTestBadge.setLayoutParams(badgeLp);
+                card.addView(tvTestBadge);
+            }
 
             // ── 텍스트 내용: 구형/신형 문자 정규화 후 표시 ──
             String[] rawLines = block.split("\\r?\\n");
@@ -12388,6 +12409,7 @@ public class PinActivity extends AppCompatActivity {
                     String t = rl.trim();
                     if (t.isEmpty()) continue;
                     if (t.matches("\\d{4}-\\d{2}-\\d{2}.*")) continue; // 저장 타임스탬프 제거
+                    if (t.equals("[TEST]")) continue; // 테스트 태그 제거
 
                     // ── 줄1: 출금/입금 줄 ──────────────────────
                     if ((t.contains("출금") || t.contains("입금")) && !t.contains("잔액")) {
@@ -12469,6 +12491,7 @@ public class PinActivity extends AppCompatActivity {
                     String t = rl.trim();
                     if (t.isEmpty()) continue;
                     if (t.matches("\\d{4}-\\d{2}-\\d{2}.*")) continue;
+                    if (t.equals("[TEST]")) continue; // 테스트 태그 제거
                     t = t.replaceAll("(출금|입금|선입금)(\\d)", "$1 $2");
                     t = t.replaceAll("잔액(\\d)", "잔액 $1");
                     if (!t.trim().isEmpty()) lines.add(t);
@@ -13640,8 +13663,20 @@ public class PinActivity extends AppCompatActivity {
                 }
                 // 삭제 후 balance.txt 갱신 (남은 블록에서 최신 잔액 재파싱)
                 updateBalanceTxtFromBlocks(remaining);
-                // 삭제 후 일반사용자에게 FCM 전송 (삭제 갱신 알림)
-                SmsReceiver.sendFcmDeleteSignal(PinActivity.this);
+                // 삭제된 블록 중 [TEST] 블록만 있으면 FCM 신호 생략
+                // (Drive에 저장 안 된 테스트 블록 삭제 시 불필요한 FCM 전송 방지)
+                boolean hasRealDelete = false;
+                for (int si = 0; si < cachedBlocks.size(); si++) {
+                    if (selectedIdx.contains(si)) {
+                        String delBlock = cachedBlocks.get(si);
+                        if (!delBlock.contains("[TEST]")) { hasRealDelete = true; break; }
+                    }
+                }
+                if (hasRealDelete) {
+                    SmsReceiver.sendFcmDeleteSignal(PinActivity.this);
+                } else {
+                    android.util.Log.d("DELETE_DEBUG", "[TEST] 블록 삭제 → FCM 신호 생략");
+                }
                 runOnUiThread(() -> {
                     // 캐시를 삭제 결과로 즉시 교체 (Drive 재읽기 불필요)
                     cachedBlocks = remaining;
