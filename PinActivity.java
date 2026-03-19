@@ -17041,12 +17041,13 @@ public class PinActivity extends AppCompatActivity {
         // 즐겨찾기 타이틀 (숨김)
 
         // ── 노선 즐겨찾기 카드 (2열 그리드) ──────────────────
-        LinearLayout routeGrid = new LinearLayout(this);
-        routeGrid.setOrientation(LinearLayout.VERTICAL);
-        routeGrid.setLayoutParams(new LinearLayout.LayoutParams(
+        // ── 통합 2열 그리드 (노선+정류소 함께) ──────────────────
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        grid.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        LinearLayout routeRow = null;
-        int routeColIdx = 0;
+        LinearLayout gridRow = null;
+        int colIdx = 0;
 
         for (String rKey : favRouteKeys) {
             String rNo     = prefs.getString("fav_route_no_"     + rKey, rKey);
@@ -17056,15 +17057,15 @@ public class PinActivity extends AppCompatActivity {
             String rMemo   = prefs.getString("fav_route_memo_"   + rKey, "");
 
             // 새 행 시작
-            if (routeColIdx % 2 == 0) {
-                routeRow = new LinearLayout(this);
-                routeRow.setOrientation(LinearLayout.HORIZONTAL);
-                routeRow.setWeightSum(2f);
+            if (colIdx % 2 == 0) {
+                gridRow = new LinearLayout(this);
+                gridRow.setOrientation(LinearLayout.HORIZONTAL);
+                gridRow.setWeightSum(2f);
                 LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 rowLp.setMargins(0, 0, 0, dpToPx(8));
-                routeRow.setLayoutParams(rowLp);
-                routeGrid.addView(routeRow);
+                gridRow.setLayoutParams(rowLp);
+                grid.addView(gridRow);
             }
 
             LinearLayout rCard = new LinearLayout(this);
@@ -17073,7 +17074,7 @@ public class PinActivity extends AppCompatActivity {
             rCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             rCard.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
             LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0, dpToPx(110), 1f);
-            rCardLp.setMargins(0, 0, routeColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
+            rCardLp.setMargins(0, 0, colIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             rCard.setLayoutParams(rCardLp);
 
             // 오른쪽 위: 버스이미지 + 설정 + 알림 버튼 행
@@ -17510,26 +17511,13 @@ public class PinActivity extends AppCompatActivity {
                     busScreenLoadStops(fRId, fRNo, resultContainer, fRDirKey, "");
                 }
             });
-            if (routeRow != null) routeRow.addView(rCard);
-            routeColIdx++;
+            if (gridRow != null) gridRow.addView(rCard);
+            colIdx++;
         }
         // 홀수개면 빈 카드로 채우기
-        if (routeColIdx % 2 == 1 && routeRow != null) {
-            View empty = new View(this);
-            LinearLayout.LayoutParams emLp = new LinearLayout.LayoutParams(0, 1, 1f);
-            emLp.setMargins(0, 0, 0, 0);
-            empty.setLayoutParams(emLp);
-            routeRow.addView(empty);
-        }
-        if (!favRouteKeys.isEmpty()) favSection.addView(routeGrid);
+        // 노선 끝 - 그리드 계속 유지 (정류소 카드가 이어서 채움)
 
-        // ── 정류소 즐겨찾기 2열 그리드 ─────────────────────
-        LinearLayout stopGrid = new LinearLayout(this);
-        stopGrid.setOrientation(LinearLayout.VERTICAL);
-        stopGrid.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        LinearLayout stopRow = null;
-        int stopColIdx = 0;
+        // ── 정류소 즐겨찾기 (노선과 동일 그리드 계속 사용) ─────
 
         for (String compositeKey : favKeys) {
             // compositeKey = "routeId_nodeId"
@@ -17540,15 +17528,15 @@ public class PinActivity extends AppCompatActivity {
 
             // 카드: 버스이모지 + 노선번호 + 정류소명
             // 새 행 시작
-            if (stopColIdx % 2 == 0) {
-                stopRow = new LinearLayout(this);
-                stopRow.setOrientation(LinearLayout.HORIZONTAL);
-                stopRow.setWeightSum(2f);
-                LinearLayout.LayoutParams stopRowLp = new LinearLayout.LayoutParams(
+            if (colIdx % 2 == 0) {
+                gridRow = new LinearLayout(this);
+                gridRow.setOrientation(LinearLayout.HORIZONTAL);
+                gridRow.setWeightSum(2f);
+                LinearLayout.LayoutParams gridRowLp2 = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                stopRowLp.setMargins(0, 0, 0, dpToPx(8));
-                stopRow.setLayoutParams(stopRowLp);
-                stopGrid.addView(stopRow);
+                gridRowLp2.setMargins(0, 0, 0, dpToPx(8));
+                gridRow.setLayoutParams(gridRowLp2);
+                grid.addView(gridRow);
             }
 
             // ── 정류소 즐겨찾기 카드 (노선 즐겨찾기와 동일한 디자인) ──
@@ -17558,7 +17546,7 @@ public class PinActivity extends AppCompatActivity {
             card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
             card.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
             LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(0, dpToPx(110), 1f);
-            cardLp.setMargins(0, 0, stopColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
+            cardLp.setMargins(0, 0, colIdx % 2 == 0 ? dpToPx(6) : 0, 0);
             card.setLayoutParams(cardLp);
 
             // 오른쪽 위: 버스이미지 + 설정 + 알림 버튼 행
@@ -17928,18 +17916,19 @@ public class PinActivity extends AppCompatActivity {
                 }
             });
 
-            if (stopRow != null) stopRow.addView(card);
-            stopColIdx++;
+            if (gridRow != null) gridRow.addView(card);
+            colIdx++;
         }
 
         // 홀수개면 빈 공간 채우기
-        if (stopColIdx % 2 == 1 && stopRow != null) {
-            View emptyStop = new View(this);
-            LinearLayout.LayoutParams emStopLp = new LinearLayout.LayoutParams(0, 1, 1f);
-            emptyStop.setLayoutParams(emStopLp);
-            stopRow.addView(emptyStop);
+        // 홀수개면 빈 공간 채우기
+        if (colIdx % 2 == 1 && gridRow != null) {
+            View emptyFav = new View(this);
+            LinearLayout.LayoutParams emFavLp = new LinearLayout.LayoutParams(0, dpToPx(110), 1f);
+            emptyFav.setLayoutParams(emFavLp);
+            gridRow.addView(emptyFav);
         }
-        if (!favKeys.isEmpty()) favSection.addView(stopGrid);
+        if (colIdx > 0) favSection.addView(grid);
         // 구분선
         View div = new View(this);
         div.setBackgroundColor(Color.parseColor("#EEEEEE"));
