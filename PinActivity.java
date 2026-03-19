@@ -15176,35 +15176,41 @@ public class PinActivity extends AppCompatActivity {
     private void loadBusTimesFromJson(String json) {
         try {
             java.util.Map<String, String[]> map = new java.util.HashMap<>();
-            int pos = 0;
+            // 최상위 노선 키 파싱: "708":{"src":"...","dst":"...","s":[...],"d":[...]}
+            // 각 항목은 "}," 또는 "}}" 로 구분됨
+            int pos = 1; // 첫 { 건너뜀
             while (pos < json.length()) {
-                // "211":{ 패턴 찾기
-                int qs = json.indexOf('"', pos);
-                if (qs < 0) break;
-                int qe = json.indexOf('"', qs + 1);
-                if (qe < 0) break;
-                String rno = json.substring(qs + 1, qe);
-                // ":{ 확인
-                int colonBrace = json.indexOf(":{", qe);
-                if (colonBrace != qe + 1) { pos = qe + 1; continue; }
-                int objOpen = colonBrace + 1; // { 위치
-                // 객체 끝 찾기: ] 다음 }
-                int sArr = json.indexOf("\"s\":", objOpen);
-                int dArr = json.indexOf("\"d\":", objOpen);
-                int sEnd = sArr >= 0 ? json.indexOf(']', json.indexOf('[', sArr)) : -1;
-                int dEnd = dArr >= 0 ? json.indexOf(']', json.indexOf('[', dArr)) : -1;
-                int objClose = Math.max(sEnd, dEnd);
-                if (objClose < 0) { pos = objOpen + 1; continue; }
-                // src, dst 추출
-                String src = extractJsonStr(json, objOpen, "src");
-                String dst = extractJsonStr(json, objOpen, "dst");
-                // s, d 배열 추출
-                String sTimes = extractJsonArr(json, objOpen, "s");
-                String dTimes = extractJsonArr(json, objOpen, "d");
-                if (!rno.isEmpty() && rno.length() <= 10) {
-                    map.put(rno, new String[]{src, dst, sTimes, dTimes});
+                // 노선번호 키 찾기: "키":
+                if (json.charAt(pos) == '"') {
+                    int keyEnd = json.indexOf('"', pos + 1);
+                    if (keyEnd < 0) break;
+                    String rno = json.substring(pos + 1, keyEnd);
+                    pos = keyEnd + 1;
+                    // ":{ 확인
+                    if (pos + 1 < json.length() && json.charAt(pos) == ':' && json.charAt(pos+1) == '{') {
+                        int objStart = pos + 2; // { 다음
+                        // src 추출: "src":"값"
+                        String src = extractVal(json, objStart, "src");
+                        String dst = extractVal(json, objStart, "dst");
+                        // s 배열 추출
+                        String sTimes = extractArr(json, objStart, "s");
+                        String dTimes = extractArr(json, objStart, "d");
+                        // 이 객체의 끝 (d 배열의 ] 이후 })
+                        int dBracket = json.indexOf("\"d\":", objStart);
+                        int dClose = dBracket >= 0 ? json.indexOf(']', json.indexOf('[', dBracket)) : -1;
+                        int sBracket = json.indexOf("\"s\":", objStart);
+                        int sClose = sBracket >= 0 ? json.indexOf(']', json.indexOf('[', sBracket)) : -1;
+                        int objEnd = Math.max(sClose, dClose);
+                        if (!rno.isEmpty()) {
+                            map.put(rno, new String[]{src, dst, sTimes, dTimes});
+                        }
+                        pos = objEnd > 0 ? objEnd + 2 : objStart + 1;
+                    } else {
+                        pos++;
+                    }
+                } else {
+                    pos++;
                 }
-                pos = objClose + 2;
             }
             busTimesMap = map;
             android.util.Log.d("BusTimes", "loaded: " + map.size() + " routes");
@@ -15215,8 +15221,7 @@ public class PinActivity extends AppCompatActivity {
         }
     }
 
-    /** JSON 객체에서 문자열 값 추출: "key":"value" */
-    private String extractJsonStr(String json, int from, String key) {
+    private String extractVal(String json, int from, String key) {
         String k = "\"" + key + "\":\"";
         int s = json.indexOf(k, from);
         if (s < 0) return "";
@@ -15225,8 +15230,7 @@ public class PinActivity extends AppCompatActivity {
         return e < 0 ? "" : json.substring(s, e);
     }
 
-    /** JSON 객체에서 배열 추출: "key":["0540","0605",...] → "0540,0605,..." */
-    private String extractJsonArr(String json, int from, String key) {
+    private String extractArr(String json, int from, String key) {
         String k = "\"" + key + "\":";
         int idx = json.indexOf(k, from);
         if (idx < 0) return "";
@@ -15235,6 +15239,7 @@ public class PinActivity extends AppCompatActivity {
         if (start < 0 || end < 0) return "";
         return json.substring(start + 1, end).replace("\"", "").replace(" ", "");
     }
+
 
     private String parseJsonArray(String json, String key) {
         int idx = json.indexOf(key);
