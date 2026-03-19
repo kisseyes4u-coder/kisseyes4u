@@ -15173,8 +15173,8 @@ public class PinActivity extends AppCompatActivity {
     }
 
     /** bustimes.txt → busTimesMap 파싱
-     * 형식: 노선번호|src|dst|출발시간들(쉼표)|종점출발시간들(쉼표)
-     * 예: 708|구암역|보훈병원|0540,0605,...|0540,0606,...
+     * 형식: rno|src|dst|ws|wd|ss|sd|hs|hd
+     * ws=평일기점출발, wd=평일종점출발, ss=토요일기점, sd=토요일종점, hs=휴일기점, hd=휴일종점
      */
     private void loadBusTimesFromJson(String txt) {
         try {
@@ -15182,10 +15182,10 @@ public class PinActivity extends AppCompatActivity {
             for (String line : txt.split("\n")) {
                 line = line.trim();
                 if (line.isEmpty()) continue;
-                String[] p = line.split("\\|", 5);
-                if (p.length < 5) continue;
-                String rno = p[0], src = p[1], dst = p[2], sTimes = p[3], dTimes = p[4];
-                if (!rno.isEmpty()) map.put(rno, new String[]{src, dst, sTimes, dTimes});
+                String[] p = line.split("\\|", 9);
+                if (p.length < 9) continue;
+                // [0]=rno [1]=src [2]=dst [3]=ws [4]=wd [5]=ss [6]=sd [7]=hs [8]=hd
+                if (!p[0].isEmpty()) map.put(p[0], new String[]{p[1],p[2],p[3],p[4],p[5],p[6],p[7],p[8]});
             }
             busTimesMap = map;
             android.util.Log.d("BusTimes", "loaded: " + map.size() + " routes");
@@ -15196,13 +15196,24 @@ public class PinActivity extends AppCompatActivity {
         }
     }
 
-    /** 현재 시간 이후 다음 출발시간 찾기 (배차시간표 기반) */
+    private String[] splitTimes(String s) {
+        if (s == null || s.isEmpty()) return new String[0];
+        return s.split(",");
+    }
+
     private String getNextDeparture(String routeNo, boolean fromSrc) {
         String[] data = busTimesMap.get(routeNo);
-        if (data == null || data.length < 4) return "";
-        String timesStr = fromSrc ? data[2] : data[3];
-        if (timesStr.isEmpty()) return "";
+        if (data == null || data.length < 8) return "";
+        // 오늘 요일에 맞는 데이터 선택
         java.util.Calendar now = java.util.Calendar.getInstance();
+        int dow = now.get(java.util.Calendar.DAY_OF_WEEK);
+        int srcIdx, dstIdx;
+        if (dow == java.util.Calendar.SATURDAY) { srcIdx=4; dstIdx=5; }
+        else if (dow == java.util.Calendar.SUNDAY) { srcIdx=6; dstIdx=7; }
+        else { srcIdx=2; dstIdx=3; }
+        String timesStr = fromSrc ? data[srcIdx] : data[dstIdx];
+        if (timesStr.isEmpty()) { timesStr = fromSrc ? data[2] : data[3]; } // fallback 평일
+        if (timesStr.isEmpty()) return "";
         int nowMin = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE);
         for (String t : timesStr.split(",")) {
             if (t.length() != 4) continue;
@@ -15214,7 +15225,7 @@ public class PinActivity extends AppCompatActivity {
                 }
             } catch (Exception ig) {}
         }
-        return ""; // 오늘 막차 지남
+        return "";
     }
 
     /** HTTP 스트림 → byte[] */
@@ -15434,8 +15445,11 @@ public class PinActivity extends AppCompatActivity {
             return;
         }
 
-        // 현재 방향의 시간 데이터만 사용 (fromSrc=true: 기점출발, false: 종점출발)
-        String[] weekdayTimes = (fromSrc ? data[2] : data[3]).split(",");
+        // 요일별 시간 데이터 (fromSrc: 기점출발, !fromSrc: 종점출발)
+        // data: [src,dst, ws,wd, ss,sd, hs,hd]
+        String[] weekdayTimes = splitTimes(fromSrc ? data[2] : data[3]);
+        String[] satTimes     = splitTimes(fromSrc ? data[4] : data[5]);
+        String[] holTimes     = splitTimes(fromSrc ? data[6] : data[7]);
 
         // 다이얼로그 구성
         android.app.Dialog dlg = new android.app.Dialog(this);
@@ -15492,7 +15506,8 @@ public class PinActivity extends AppCompatActivity {
         Runnable buildGrid = new Runnable() {
             @Override public void run() {
                 gridWrap.removeAllViews();
-                String[] ts = (curDay[0] == 0) ? weekdayTimes : new String[0]; // 평일만 데이터 있음
+                String[] ts = (curDay[0] == 0) ? weekdayTimes
+                           : (curDay[0] == 1) ? satTimes : holTimes;
 
                 if (ts.length == 0) {
                     TextView tvEmpty = new TextView(PinActivity.this);
@@ -15608,6 +15623,7 @@ public class PinActivity extends AppCompatActivity {
         };
 
         // 탭 버튼 생성
+        final TextView[] fTabs = dayTabs;
         for (int i = 0; i < 3; i++) {
             final int di = i;
             dayTabs[i] = new TextView(this);
@@ -15615,17 +15631,11 @@ public class PinActivity extends AppCompatActivity {
             dayTabs[i].setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
             dayTabs[i].setGravity(Gravity.CENTER);
             dayTabs[i].setPadding(dpToPx(6), dpToPx(7), dpToPx(6), dpToPx(7));
-            if (i > 0) {
-                // 토요일, 공휴일은 비활성
-                dayTabs[i].setAlpha(0.4f);
-            }
             LinearLayout.LayoutParams tbLp = new LinearLayout.LayoutParams(0,
                     LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
             tbLp.setMargins(i == 0 ? 0 : dpToPx(4), 0, 0, 0);
             dayTabs[i].setLayoutParams(tbLp);
-            final TextView[] fTabs = dayTabs;
             dayTabs[i].setOnClickListener(vt -> {
-                if (di > 0) return; // 토/공휴일은 클릭 무시
                 curDay[0] = di;
                 for (int j = 0; j < 3; j++) {
                     boolean sel = j == di;
