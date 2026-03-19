@@ -169,6 +169,8 @@ public class PinActivity extends AppCompatActivity {
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     private java.util.List<String[]> routeDbList = null;
     private java.util.List<String[]> stopDbList  = null; // 미사용 (세션 캐시로 대체)
+    // 버스 화면 백스택: ["type", params...] type=timeline/arrival/search
+    private final java.util.Deque<String[]> busBackStack = new java.util.ArrayDeque<>();
     // nodeno(표시번호) → 노선번호 목록 (예: "46820" → "211,212,601,708")
     private java.util.Map<String, String> nodeNoToRoutes = new java.util.HashMap<>();
     // 배차시간표: 노선번호 → {src, dst, s:[출발시간들], d:[종점출발시간들]}
@@ -9875,6 +9877,7 @@ public class PinActivity extends AppCompatActivity {
         isOnSubScreen     = true;
         isOnMenuScreen    = false;
         isOnBalanceScreen = false;
+        busBackStack.clear(); // 백스택 초기화
 
         // ── 루트: LinearLayout VERTICAL (월별 통계와 동일) ─
         LinearLayout root = new LinearLayout(this);
@@ -10303,20 +10306,7 @@ public class PinActivity extends AppCompatActivity {
         btnBack.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
         btnBack.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50)));
-        btnBack.setOnClickListener(v -> {
-            // 타임라인 화면(검색창 숨겨진 상태)이면 검색 화면으로 복귀
-            if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.GONE) {
-                if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                if (busResultContainer != null) busResultContainer.removeAllViews();
-            } else {
-                isOnSubScreen = false;
-                if (isOwner) ownerMenuBuilder.build();
-                else userMenuBuilder.build(false);
-            }
-        });
+        btnBack.setOnClickListener(v -> busNavigateBack());
         btnBar.addView(btnBack);
         root.addView(btnBar);
 
@@ -10601,8 +10591,57 @@ public class PinActivity extends AppCompatActivity {
         busRefreshHandler.postDelayed(busRefreshRunnable, 30000);
     }
 
+    /** 버스 화면 뒤로가기 - 백스택 기반 */
+    private void busNavigateBack() {
+        // 현재 화면을 스택에서 제거
+        if (!busBackStack.isEmpty()) busBackStack.pop();
+
+        if (busBackStack.isEmpty()) {
+            // 스택 비면 버스 검색 화면으로
+            if (busRefreshRunnable != null) {
+                busRefreshHandler.removeCallbacks(busRefreshRunnable);
+                busRefreshRunnable = null;
+            }
+            if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
+            if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+            if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+            if (busResultContainer != null) busResultContainer.removeAllViews();
+            return;
+        }
+
+        // 이전 화면 복원
+        String[] prev = busBackStack.peek();
+        // 백스택에서 제거 후 재진입하면 다시 push되므로 먼저 제거
+        busBackStack.pop();
+
+        String type = prev[0];
+        if ("timeline".equals(type)) {
+            String routeId = prev[1], routeNo = prev[2], dir = prev[3], rtp = prev[4];
+            if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
+            if (busResultContainer != null) busResultContainer.removeAllViews();
+            busScreenLoadStops(routeId, routeNo, busResultContainer, dir, rtp);
+        } else if ("arrival".equals(type)) {
+            String nodeId = prev[1], nodeNm = prev[2], nodeNo = prev[3], filter = prev[4];
+            if (busFixedHeader != null) { busFixedHeader.removeAllViews(); }
+            if (busResultContainer != null) busResultContainer.removeAllViews();
+            busScreenLoadArrival(nodeId, nodeNm, nodeNo, filter, busResultContainer);
+        } else {
+            // search
+            if (busRefreshRunnable != null) {
+                busRefreshHandler.removeCallbacks(busRefreshRunnable);
+                busRefreshRunnable = null;
+            }
+            if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
+            if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+            if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+            if (busResultContainer != null) busResultContainer.removeAllViews();
+        }
+    }
+
     private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container,
                                     String direction, String routeType) {
+        // 백스택에 타임라인 상태 저장
+        busBackStack.push(new String[]{"timeline", routeId, routeNo, direction, routeType});
         container.removeAllViews();
         // 기존 자동 갱신 중단
         if (busRefreshRunnable != null) {
@@ -11134,10 +11173,7 @@ public class PinActivity extends AppCompatActivity {
                     tvRouteStar.setTextColor(Color.WHITE); tvRouteStar.setBackground(onBg);
                     android.widget.Toast.makeText(this, routeNo + "번 " + shortDir + " 즐겨찾기 추가",
                             android.widget.Toast.LENGTH_SHORT).show();
-                    // 즐겨찾기 추가 후 검색화면으로 복귀하며 즐겨찾기 새로고침
-                    if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-                    if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                    if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
+                    // 즐겨찾기 추가 후 타임라인 유지 (화면 전환 없음)
                     if (busFavSection2 != null && busResultContainer != null)
                         refreshBusFavorites(busFavSection2, busResultContainer);
                 });
@@ -11571,6 +11607,8 @@ public class PinActivity extends AppCompatActivity {
     }
 
     private void busScreenLoadArrival(String nodeId, String nodeNm, String nodeNo, String filterRouteNo, LinearLayout container) {
+        // 백스택에 arrival 상태 저장
+        busBackStack.push(new String[]{"arrival", nodeId, nodeNm, nodeNo, filterRouteNo});
         // ① 타임라인 자동갱신 타이머 중단
         if (busRefreshRunnable != null) {
             busRefreshHandler.removeCallbacks(busRefreshRunnable);
