@@ -2694,12 +2694,8 @@ public class PinActivity extends AppCompatActivity {
         if (busTimesMap.isEmpty()) {
             String btCached = loadBusTimes(); // 내부 파일에서 읽기
             if (btCached.isEmpty()) btCached = p.getString("bustimes_txt_cache", "");
-            // 유효성 검사: 9필드(|구분) 확인
-            boolean cacheValid = false;
-            if (!btCached.isEmpty()) {
-                String firstLine = btCached.split("\n")[0];
-                cacheValid = firstLine.split("\\|", -1).length >= 9;
-            }
+            // 유효성 검사: v4 형식 확인 (|| 구분자 포함 여부)
+            boolean cacheValid = !btCached.isEmpty() && btCached.contains("||");
             if (cacheValid) {
                 loadBusTimesFromJson(btCached);
             } else {
@@ -15589,7 +15585,7 @@ public class PinActivity extends AppCompatActivity {
             if (!cached.isEmpty()) loadBusTimesFromJson(cached);
         }
         String[] data = busTimesMap.get(routeNo);
-        if (data == null || data.length < 4) {
+        if (data == null || data.length < 16) {
             android.widget.Toast.makeText(this, "배차시간표 로딩 중...", android.widget.Toast.LENGTH_SHORT).show();
             new Thread(() -> {
                 try {
