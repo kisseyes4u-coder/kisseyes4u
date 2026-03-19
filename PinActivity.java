@@ -2685,7 +2685,7 @@ public class PinActivity extends AppCompatActivity {
 
         // 배차시간표 로드 (캐시 있으면 바로, 없으면 Drive에서)
         if (busTimesMap.isEmpty()) {
-            String btCached = p.getString("bustimes_cache", "");
+            String btCached = p.getString("bustimes_txt_cache", "");
             if (!btCached.isEmpty()) {
                 loadBusTimesFromJson(btCached);
             } else {
@@ -2695,7 +2695,7 @@ public class PinActivity extends AppCompatActivity {
                         dr.readFile(BUS_TIME_FILE, new DriveReadHelper.ReadCallback() {
                             @Override public void onSuccess(String content) {
                                 if (!content.isEmpty()) {
-                                    p.edit().putString("bustimes_cache", content).apply();
+                                    p.edit().putString("bustimes_txt_cache", content).apply();
                                     loadBusTimesFromJson(content);
                                 }
                             }
@@ -4040,7 +4040,7 @@ public class PinActivity extends AppCompatActivity {
                             "Drive에 업로드 중...", android.widget.Toast.LENGTH_SHORT).show());
                     new DriveUploadHelper(this).uploadFileSync(json, BUS_TIME_FILE);
                     getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
-                            .putString("bustimes_cache", json).apply();
+                            .putString("bustimes_txt_cache", json).apply();
                     loadBusTimesFromJson(json);
 
                     runOnUiThread(() -> {
@@ -15112,7 +15112,7 @@ public class PinActivity extends AppCompatActivity {
     private static final String BUS_DB_SCHEMA = "db_schema";
     private static final int    BUS_DB_SCHEMA_VER = 3;
     private static final String STOP_DB_FILE  = "dj_stops.json"; // Drive 정류장 파일
-    private static final String BUS_TIME_FILE = "bustimes.json"; // Drive 배차시간표 파일
+    private static final String BUS_TIME_FILE = "bustimes.txt"; // Drive 배차시간표 파일
 
     /** SharedPreferences DB를 메모리에 로드 (앱 시작 시 1회) */
     private void loadBusDbToMemory() {
@@ -15172,45 +15172,20 @@ public class PinActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
     }
 
-    /** bustimes.json → busTimesMap 파싱 */
-    private void loadBusTimesFromJson(String json) {
+    /** bustimes.txt → busTimesMap 파싱
+     * 형식: 노선번호|src|dst|출발시간들(쉼표)|종점출발시간들(쉼표)
+     * 예: 708|구암역|보훈병원|0540,0605,...|0540,0606,...
+     */
+    private void loadBusTimesFromJson(String txt) {
         try {
             java.util.Map<String, String[]> map = new java.util.HashMap<>();
-            // 최상위 노선 키 파싱: "708":{"src":"...","dst":"...","s":[...],"d":[...]}
-            // 각 항목은 "}," 또는 "}}" 로 구분됨
-            int pos = 1; // 첫 { 건너뜀
-            while (pos < json.length()) {
-                // 노선번호 키 찾기: "키":
-                if (json.charAt(pos) == '"') {
-                    int keyEnd = json.indexOf('"', pos + 1);
-                    if (keyEnd < 0) break;
-                    String rno = json.substring(pos + 1, keyEnd);
-                    pos = keyEnd + 1;
-                    // ":{ 확인
-                    if (pos + 1 < json.length() && json.charAt(pos) == ':' && json.charAt(pos+1) == '{') {
-                        int objStart = pos + 2; // { 다음
-                        // src 추출: "src":"값"
-                        String src = extractVal(json, objStart, "src");
-                        String dst = extractVal(json, objStart, "dst");
-                        // s 배열 추출
-                        String sTimes = extractArr(json, objStart, "s");
-                        String dTimes = extractArr(json, objStart, "d");
-                        // 이 객체의 끝 (d 배열의 ] 이후 })
-                        int dBracket = json.indexOf("\"d\":", objStart);
-                        int dClose = dBracket >= 0 ? json.indexOf(']', json.indexOf('[', dBracket)) : -1;
-                        int sBracket = json.indexOf("\"s\":", objStart);
-                        int sClose = sBracket >= 0 ? json.indexOf(']', json.indexOf('[', sBracket)) : -1;
-                        int objEnd = Math.max(sClose, dClose);
-                        if (!rno.isEmpty()) {
-                            map.put(rno, new String[]{src, dst, sTimes, dTimes});
-                        }
-                        pos = objEnd > 0 ? objEnd + 2 : objStart + 1;
-                    } else {
-                        pos++;
-                    }
-                } else {
-                    pos++;
-                }
+            for (String line : txt.split("\n")) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                String[] p = line.split("\\|", 5);
+                if (p.length < 5) continue;
+                String rno = p[0], src = p[1], dst = p[2], sTimes = p[3], dTimes = p[4];
+                if (!rno.isEmpty()) map.put(rno, new String[]{src, dst, sTimes, dTimes});
             }
             busTimesMap = map;
             android.util.Log.d("BusTimes", "loaded: " + map.size() + " routes");
@@ -15219,35 +15194,6 @@ public class PinActivity extends AppCompatActivity {
         } catch (Exception e) {
             android.util.Log.e("BusTimes", "parse error: " + e.getMessage());
         }
-    }
-
-    private String extractVal(String json, int from, String key) {
-        String k = "\"" + key + "\":\"";
-        int s = json.indexOf(k, from);
-        if (s < 0) return "";
-        s += k.length();
-        int e = json.indexOf('"', s);
-        return e < 0 ? "" : json.substring(s, e);
-    }
-
-    private String extractArr(String json, int from, String key) {
-        String k = "\"" + key + "\":";
-        int idx = json.indexOf(k, from);
-        if (idx < 0) return "";
-        int start = json.indexOf('[', idx + k.length());
-        int end = json.indexOf(']', start);
-        if (start < 0 || end < 0) return "";
-        return json.substring(start + 1, end).replace("\"", "").replace(" ", "");
-    }
-
-
-    private String parseJsonArray(String json, String key) {
-        int idx = json.indexOf(key);
-        if (idx < 0) return "";
-        int start = json.indexOf('[', idx);
-        int end = json.indexOf(']', start);
-        if (start < 0 || end < 0) return "";
-        return json.substring(start + 1, end).replace("\"", "").replace(" ", "");
     }
 
     /** 현재 시간 이후 다음 출발시간 찾기 (배차시간표 기반) */
@@ -15454,7 +15400,7 @@ public class PinActivity extends AppCompatActivity {
         // busTimesMap 비어있으면 캐시에서 즉시 로드
         if (busTimesMap.isEmpty()) {
             String cached = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
-                    .getString("bustimes_cache", "");
+                    .getString("bustimes_txt_cache", "");
             if (!cached.isEmpty()) {
                 loadBusTimesFromJson(cached);
             }
@@ -15472,7 +15418,7 @@ public class PinActivity extends AppCompatActivity {
                     dr.readFile(BUS_TIME_FILE, new DriveReadHelper.ReadCallback() {
                         @Override public void onSuccess(String content) {
                             if (!content.isEmpty()) {
-                                p.edit().putString("bustimes_cache", content).apply();
+                                p.edit().putString("bustimes_txt_cache", content).apply();
                                 loadBusTimesFromJson(content);
                             }
                             synchronized(lock) { lock.notifyAll(); }
