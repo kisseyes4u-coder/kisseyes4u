@@ -172,6 +172,9 @@ public class PinActivity extends AppCompatActivity {
     // 버스 화면 백스택: ["type", params...] type=timeline/arrival/search
     private final java.util.Deque<String[]> busBackStack = new java.util.ArrayDeque<>();
     private boolean busFavDirty = false; // 즐겨찾기 변경 시 true → 검색화면 복귀 시 갱신
+    private ScrollView busTimelineSv = null;  // 타임라인 ScrollView
+    private int busTurnRowY = -1;             // 회차 정류소 Y 좌표
+    private String busPendingScrollDir = null;  // 방향전환 후 자동 스크롤 ("forward"/"reverse")
     // nodeno(표시번호) → 노선번호 목록 (예: "46820" → "211,212,601,708")
     private java.util.Map<String, String> nodeNoToRoutes = new java.util.HashMap<>();
     // 배차시간표: 노선번호 → {src, dst, s:[출발시간들], d:[종점출발시간들]}
@@ -10122,6 +10125,7 @@ public class PinActivity extends AppCompatActivity {
 
         // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
         ScrollView sv = new ScrollView(this);
+        busTimelineSv = sv; // 타임라인 스크롤 제어용
         sv.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         sv.setOnTouchListener((v, event) -> {
@@ -10947,6 +10951,11 @@ public class PinActivity extends AppCompatActivity {
             int fRunning, java.util.Map<String,String> fBusVehicle,
             java.util.Set<String> busOrdSet, java.util.List<String[]> stops, String turnOrd) {
         container.removeAllViews();
+        // forward 방향 전환 시 맨 위로 스크롤
+        if ("forward".equals(busPendingScrollDir)) {
+            busPendingScrollDir = null;
+            if (busTimelineSv != null) busTimelineSv.post(() -> busTimelineSv.smoothScrollTo(0, 0));
+        }
 
         // ── 헤더: ‹ [배지] 번호 + 즐겨찾기 ─────────────────
         LinearLayout topHeader = new LinearLayout(this);
@@ -11299,7 +11308,23 @@ public class PinActivity extends AppCompatActivity {
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             tLp2.setMargins(0,dpToPx(3),0,0); tvTime.setLayoutParams(tLp2); dc.addView(tvTime);
             final String dKey = dirKeys[d];
-            dc.setOnClickListener(v2 -> busScreenLoadStops(routeId, routeNo, container, dKey, fRTp));
+            dc.setOnClickListener(v2 -> {
+                if (direction.equals(dKey)) {
+                    // 이미 선택된 방향 - 스크롤만
+                    if (busTimelineSv != null) {
+                        if ("forward".equals(dKey)) {
+                            busTimelineSv.smoothScrollTo(0, 0);
+                        } else {
+                            if (busTurnRowY >= 0) busTimelineSv.smoothScrollTo(0, busTurnRowY);
+                        }
+                    }
+                } else {
+                    // 다른 방향 - 재로드 후 자동 스크롤 플래그 설정
+                    busTurnRowY = -1;
+                    busPendingScrollDir = dKey;
+                    busScreenLoadStops(routeId, routeNo, container, dKey, fRTp);
+                }
+            });
             dirRow.addView(dc);
         }
         LinearLayout.LayoutParams drLp2 = new LinearLayout.LayoutParams(
@@ -11576,6 +11601,24 @@ public class PinActivity extends AppCompatActivity {
             // 회차 지점(nodeno 없음)은 실제 정류소가 아니므로 클릭 비활성화
             if (!s[3].isEmpty()) {
                 row.setOnClickListener(v -> busScreenLoadArrival(nodeId, nodeNm, nodeNo2, "", container));
+            }
+            // 회차 행 Y좌표 저장 (reverse 방향 클릭 시 스크롤용)
+            if (isTurn) {
+                final LinearLayout fRow = row;
+                row.post(() -> {
+                    int[] loc = new int[2];
+                    fRow.getLocationOnScreen(loc);
+                    if (busTimelineSv != null) {
+                        int[] svLoc = new int[2];
+                        busTimelineSv.getLocationOnScreen(svLoc);
+                        busTurnRowY = busTimelineSv.getScrollY() + (loc[1] - svLoc[1]);
+                        // 대기 중인 스크롤 처리
+                        if ("reverse".equals(busPendingScrollDir)) {
+                            busPendingScrollDir = null;
+                            busTimelineSv.post(() -> busTimelineSv.smoothScrollTo(0, busTurnRowY));
+                        }
+                    }
+                });
             }
             container.addView(row);
 
