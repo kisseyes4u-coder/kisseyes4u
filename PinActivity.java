@@ -11167,15 +11167,11 @@ public class PinActivity extends AppCompatActivity {
             qCard.addView(tvQLabel);
             if (qi == 1) {
                 qCard.setOnClickListener(v2 -> {
-                    if (busTimesMap.containsKey(routeNo)) {
-                        showBusTimeTableDialog(routeNo, true);
-                    } else {
-                        String msg = "노선번호: " + routeNo + "번\n기점: " + fStartNm + "\n종점: " + fEndNm
-                                + "\n첫차: " + fStF + "\n막차: " + fEtF
-                                + "\n배차간격: " + (fInterval.isEmpty() ? "-" : fInterval + "분");
-                        new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                                .setTitle("\u23f1 운행 정보").setMessage(msg).setPositiveButton("확인", null).show();
-                    }
+                    String msg = "노선번호: " + routeNo + "번\n기점: " + fStartNm + "\n종점: " + fEndNm
+                            + "\n첫차: " + fStF + "\n막차: " + fEtF
+                            + "\n배차간격: " + (fInterval.isEmpty() ? "-" : fInterval + "분");
+                    new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                            .setTitle("\u23f1 운행 정보").setMessage(msg).setPositiveButton("확인", null).show();
                 });
             }
             quickMenu.addView(qCard);
@@ -11218,9 +11214,6 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout.LayoutParams tLp2 = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             tLp2.setMargins(0,dpToPx(3),0,0); tvTime.setLayoutParams(tLp2); dc.addView(tvTime);
-            // 첫차~막차 클릭 → 배차시간표 팝업
-            final boolean fFromSrc = (d == 0); // d==0: 기점→종점, d==1: 종점→기점
-            tvTime.setOnClickListener(v2 -> showBusTimeTableDialog(routeNo, fFromSrc));
             final String dKey = dirKeys[d];
             dc.setOnClickListener(v2 -> busScreenLoadStops(routeId, routeNo, container, dKey, fRTp));
             dirRow.addView(dc);
