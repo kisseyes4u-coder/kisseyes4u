@@ -12430,7 +12430,6 @@ public class PinActivity extends AppCompatActivity {
                 });
             }
         }
-    }
 
 
     /** 도착정보 행 즉시 렌더링 (캐시 히트 or 골격 UI용) */
