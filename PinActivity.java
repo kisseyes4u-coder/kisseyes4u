@@ -17961,28 +17961,45 @@ public class PinActivity extends AppCompatActivity {
         if (colIdx > 0) favSection.addView(grid);
 
         // ── 꾹 눌러서 드래그 순서 변경 ──────────────────────────
-        // dragFromIdx: 드래그 중인 카드 인덱스 (-1이면 비활성)
         final int[] dragFromIdx = {-1};
-        final LinearLayout[] dragCardRef = {null};
-        // 드래그 중 진입한 인덱스 추적 (중복 처리 방지)
         final int[] lastEnteredIdx = {-1};
+        final android.os.Handler longPressHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        final Runnable[] longPressRunnable = {null};
 
         for (int di = 0; di < allCards.size(); di++) {
             final int cardIdx = di;
             LinearLayout card2 = allCards.get(di);
 
-            // 꾹 누르면 드래그 시작
-            card2.setOnLongClickListener(vl -> {
-                dragFromIdx[0] = cardIdx;
-                dragCardRef[0] = card2;
-                lastEnteredIdx[0] = cardIdx;
-                card2.setAlpha(0.55f);
-                card2.setScaleX(1.04f);
-                card2.setScaleY(1.04f);
-                android.content.ClipData cd = android.content.ClipData.newPlainText("fav", String.valueOf(cardIdx));
-                android.view.View.DragShadowBuilder shadow = new android.view.View.DragShadowBuilder(card2);
-                card2.startDragAndDrop(cd, shadow, null, 0);
-                return true;
+            // OnTouchListener로 500ms 롱프레스 감지
+            card2.setOnTouchListener((tv, me) -> {
+                switch (me.getAction()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        longPressRunnable[0] = () -> {
+                            // 드래그 시작
+                            dragFromIdx[0] = cardIdx;
+                            lastEnteredIdx[0] = cardIdx;
+                            card2.setAlpha(0.6f);
+                            card2.setScaleX(1.05f);
+                            card2.setScaleY(1.05f);
+                            android.content.ClipData cd = android.content.ClipData.newPlainText("fav", String.valueOf(cardIdx));
+                            android.view.View.DragShadowBuilder shadow = new android.view.View.DragShadowBuilder(card2);
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                                card2.startDragAndDrop(cd, shadow, null, 0);
+                            } else {
+                                card2.startDrag(cd, shadow, null, 0);
+                            }
+                        };
+                        longPressHandler.postDelayed(longPressRunnable[0], 500);
+                        return false; // 클릭 이벤트도 유지
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        if (longPressRunnable[0] != null) {
+                            longPressHandler.removeCallbacks(longPressRunnable[0]);
+                            longPressRunnable[0] = null;
+                        }
+                        return false;
+                }
+                return false;
             });
 
             // 드래그 이벤트 수신
@@ -17991,41 +18008,25 @@ public class PinActivity extends AppCompatActivity {
                     case android.view.DragEvent.ACTION_DRAG_ENTERED:
                         int from = dragFromIdx[0];
                         int to   = cardIdx;
-                        // 같은 위치 중복 진입 무시
                         if (from < 0 || from == to || to == lastEnteredIdx[0]) return true;
                         if (from >= allCardInfos.size() || to >= allCardInfos.size()) return true;
                         lastEnteredIdx[0] = to;
-                        // 순서 변경
                         String[] moved = allCardInfos.remove(from);
                         allCardInfos.add(to, moved);
                         dragFromIdx[0] = to;
-                        // 카드 뷰 이동 - 그리드 재배치
                         rearrangeGrid(grid, allCards, allCardInfos);
                         return true;
-
-                    case android.view.DragEvent.ACTION_DROP:
-                        // 최종 순서 저장
-                        StringBuilder sb2 = new StringBuilder();
-                        for (String[] ci : allCardInfos) {
-                            if (sb2.length() > 0) sb2.append(",");
-                            sb2.append(ci[0]).append(":").append(ci[1]);
-                        }
-                        prefs.edit().putString("fav_order", sb2.toString()).apply();
-                        return true;
-
                     case android.view.DragEvent.ACTION_DRAG_ENDED:
-                        // 원래 모습 복원
                         for (LinearLayout c : allCards) { c.setAlpha(1f); c.setScaleX(1f); c.setScaleY(1f); }
                         dragFromIdx[0] = -1;
-                        dragCardRef[0] = null;
                         lastEnteredIdx[0] = -1;
-                        // 최종 순서 저장 (DROP 안 됐을 경우 대비)
-                        StringBuilder sb3 = new StringBuilder();
+                        // 순서 저장
+                        StringBuilder sbEnd = new StringBuilder();
                         for (String[] ci : allCardInfos) {
-                            if (sb3.length() > 0) sb3.append(",");
-                            sb3.append(ci[0]).append(":").append(ci[1]);
+                            if (sbEnd.length() > 0) sbEnd.append(",");
+                            sbEnd.append(ci[0]).append(":").append(ci[1]);
                         }
-                        prefs.edit().putString("fav_order", sb3.toString()).apply();
+                        prefs.edit().putString("fav_order", sbEnd.toString()).apply();
                         return true;
                 }
                 return true;
