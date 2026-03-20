@@ -10294,15 +10294,10 @@ public class PinActivity extends AppCompatActivity {
         root.addView(fixedHeader);
 
         // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
-        // FrameLayout으로 감싸서 버스 오버레이를 절대 위치로 표시
-        android.widget.FrameLayout svFrame = new android.widget.FrameLayout(this);
-        svFrame.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         ScrollView sv = new ScrollView(this);
         busTimelineSv = sv; // 타임라인 스크롤 제어용
-        sv.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        sv.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         sv.setOnTouchListener((v, event) -> {
             if (event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
                 if (immBus != null) immBus.hideSoftInputFromWindow(sv.getWindowToken(), 0);
@@ -10310,36 +10305,12 @@ public class PinActivity extends AppCompatActivity {
             }
             return false;
         });
-        sv.getViewTreeObserver().addOnScrollChangedListener(() -> {
-            // 스크롤 시 버스 오버레이 Y 위치를 스크롤 오프셋만큼 보정
-            if (busTimelineOverlayFrame == null) return;
-            float scrollY = sv.getScrollY();
-            for (android.widget.ImageView iv : busAnimMarkers.values()) {
-                if (iv.getAlpha() > 0) {
-                    // 원래 svInner 기준 Y에서 현재 스크롤 반영
-                    Object tag = iv.getTag();
-                    if (tag instanceof Float) {
-                        iv.setTranslationY((float)tag - scrollY);
-                    }
-                }
-            }
-        });
+
         LinearLayout svInner = new LinearLayout(this);
         busTimelineSvInner = svInner;
         svInner.setOrientation(LinearLayout.VERTICAL);
         svInner.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(12));
         sv.addView(svInner);
-        svFrame.addView(sv);
-
-        // 버스 애니메이션 오버레이 레이어 (스크롤 위에 겹침)
-        android.widget.FrameLayout busOverlayLayer = new android.widget.FrameLayout(this);
-        busOverlayLayer.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
-        busOverlayLayer.setClickable(false);
-        busOverlayLayer.setFocusable(false);
-        busTimelineOverlayFrame = busOverlayLayer;
-        svFrame.addView(busOverlayLayer);
 
         // 즐겨찾기 섹션
         LinearLayout favSection = new LinearLayout(this);
@@ -10362,7 +10333,7 @@ public class PinActivity extends AppCompatActivity {
         refreshBusFavorites(favSection, resultContainer);
         startFavAutoRefresh(); // 즐겨찾기 자동갱신 시작
 
-        root.addView(svFrame);
+        root.addView(sv);
 
         // ── 오너 전용: 정류장 DB 업데이트 버튼 ────────────
         if (isOwner) {
@@ -11402,8 +11373,7 @@ public class PinActivity extends AppCompatActivity {
                             renderBusTimeline(fRId, fRNo, fDir, container,
                                     fSNm, fENm, fStF, fEtF, fInterval, fRTp,
                                     fCnt, fVeh, fOrd, fStops, fTurnOrd);
-                            // GPS 수신 중이면 버스 오버레이 애니메이션 구동
-                            if (hasGps) animateBusOverlays(fNewGpsMap, fStops, fVeh, 3000);
+                            // GPS 오버레이 애니메이션 임시 비활성화
                         });
                         // GPS 수신 중이면 3초, 아니면 20초 간격
                         int delay = hasGps ? 3000 : 20000;
