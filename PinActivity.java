@@ -12903,26 +12903,40 @@ public class PinActivity extends AppCompatActivity {
 
         // 캐시 없음 → routes 먼저 메모리에서 즉시 추출 후 UI 그리기
         java.util.List<String[]> quickRoutes = new java.util.ArrayList<>();
-        String memRoutes = nodeNo.isEmpty() ? "" : nodeNoToRoutes.get(nodeNo);
-        if (memRoutes == null && !nodeId.isEmpty()) {
-            // nodeNoToRoutes에 없으면 stopDbList에서 찾기
-            if (stopDbList != null) {
-                for (String[] s : stopDbList) {
-                    if (s[0].equals(nodeId)) { memRoutes = s.length > 4 ? s[4] : ""; break; }
-                }
+
+        // ① 정류장 노선 영구캐시 먼저 확인 (가장 빠름)
+        android.content.SharedPreferences arrCache = getSharedPreferences("arrival_cache", MODE_PRIVATE);
+        String cachedRoutesStr = arrCache.getString("routes_" + nodeId, "");
+        if (!cachedRoutesStr.isEmpty()) {
+            for (String line : cachedRoutesStr.split(";")) {
+                String[] p = line.split("\\|", -1);
+                if (p.length >= 2) quickRoutes.add(new String[]{
+                    p[0], p.length>1?p[1]:"", p.length>2?p[2]:"", p.length>3?p[3]:"", p.length>4?p[4]:""});
             }
         }
-        if (memRoutes != null && !memRoutes.isEmpty()) {
-            for (String rno : memRoutes.split(",")) {
-                rno = rno.trim(); if (rno.isEmpty()) continue;
-                if (routeDbList != null) {
-                    for (String[] rd : routeDbList) {
-                        if (rd[1].equals(rno)) {
-                            quickRoutes.add(new String[]{rd[1], rd[0], rd[2], rd[3], rd.length>4?rd[4]:""});
-                            break;
-                        }
+
+        // ② 캐시 없으면 메모리에서 추출
+        if (quickRoutes.isEmpty()) {
+            String memRoutes = nodeNo.isEmpty() ? "" : nodeNoToRoutes.get(nodeNo);
+            if (memRoutes == null && !nodeId.isEmpty()) {
+                if (stopDbList != null) {
+                    for (String[] s : stopDbList) {
+                        if (s[0].equals(nodeId)) { memRoutes = s.length > 4 ? s[4] : ""; break; }
                     }
-                } else { quickRoutes.add(new String[]{rno, "", "", "", ""}); }
+                }
+            }
+            if (memRoutes != null && !memRoutes.isEmpty()) {
+                for (String rno : memRoutes.split(",")) {
+                    rno = rno.trim(); if (rno.isEmpty()) continue;
+                    if (routeDbList != null) {
+                        for (String[] rd : routeDbList) {
+                            if (rd[1].equals(rno)) {
+                                quickRoutes.add(new String[]{rd[1], rd[0], rd[2], rd[3], rd.length>4?rd[4]:""});
+                                break;
+                            }
+                        }
+                    } else { quickRoutes.add(new String[]{rno, "", "", "", ""}); }
+                }
             }
         }
         // 메모리에서 routes 알고 있으면 → 즉시 골격 UI 그리기 (실시간 없이)
@@ -13091,6 +13105,22 @@ public class PinActivity extends AppCompatActivity {
 
             // 로컬 캐시 없으면 실시간 API 결과만 사용 (fallback)
             boolean localDataFound = !allRoutes.isEmpty();
+
+            // allRoutes 확정 시 정류장 노선 영구캐시 저장 (노선 변경 감지 포함)
+            if (!allRoutes.isEmpty()) {
+                StringBuilder routesSb = new StringBuilder();
+                for (String[] r : allRoutes) {
+                    if (routesSb.length() > 0) routesSb.append(";");
+                    routesSb.append(r[0]).append("|").append(r[1]).append("|")
+                            .append(r[2]).append("|").append(r[3]).append("|").append(r.length>4?r[4]:"");
+                }
+                android.content.SharedPreferences ac = getSharedPreferences("arrival_cache", MODE_PRIVATE);
+                String existing = ac.getString("routes_" + nodeId, "");
+                // 노선 목록이 바뀌었을 때만 저장 (불필요한 write 방지)
+                if (!existing.equals(routesSb.toString())) {
+                    ac.edit().putString("routes_" + nodeId, routesSb.toString()).apply();
+                }
+            }
 
             // ── 방면 계산: getDirectionForNode 사용 ──
             if (busDirectionTV != null) {
@@ -13503,7 +13533,7 @@ public class PinActivity extends AppCompatActivity {
                     busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
                     busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                 } else {
-                    busSoonTV.setText("실시간 정보 없음");
+                    busSoonTV.setText("곧 도착 없음");
                     busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
                     busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                 }
