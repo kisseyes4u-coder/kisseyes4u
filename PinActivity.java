@@ -11762,6 +11762,24 @@ public class PinActivity extends AppCompatActivity {
         tvRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
         topHeader.addView(tvRouteNo);
 
+        // GPS 수신 이미지 (노선번호 오른쪽)
+        android.widget.ImageView ivGpsHeader = new android.widget.ImageView(this);
+        int gpsRcv = 0;
+        for (String ord : busOrdSet) { if (busGpsMap.containsKey(ord)) gpsRcv++; }
+        int gpsSt = (fRunning > 0 && gpsRcv > 0) ? (int)((double)gpsRcv / fRunning * 100) : 0;
+        String gpsF = gpsSt >= 80 ? "gps4.png" : gpsSt >= 40 ? "gps3.png" : gpsSt > 0 ? "gps2.png" : "gps1.png";
+        try {
+            android.graphics.Bitmap gpsBm2 = android.graphics.BitmapFactory
+                    .decodeStream(getAssets().open(gpsF));
+            ivGpsHeader.setImageBitmap(gpsBm2);
+        } catch (Exception ignored) {}
+        ivGpsHeader.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams gpsHLp = new LinearLayout.LayoutParams(dpToPx(56), dpToPx(28));
+        gpsHLp.setMargins(dpToPx(10), 0, 0, 0);
+        gpsHLp.gravity = Gravity.CENTER_VERTICAL;
+        ivGpsHeader.setLayoutParams(gpsHLp);
+        topHeader.addView(ivGpsHeader);
+
         View hSpace = new View(this);
         hSpace.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
         topHeader.addView(hSpace);
@@ -12104,28 +12122,6 @@ public class PinActivity extends AppCompatActivity {
         rbLp.setMargins(0,0,0,dpToPx(4)); runBanner.setLayoutParams(rbLp);
         View rbSpace = new View(this);
         rbSpace.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); runBanner.addView(rbSpace);
-
-        // GPS 수신 이미지 (버스 이미지 왼쪽)
-        android.widget.ImageView ivGpsTimeline = new android.widget.ImageView(this);
-        // GPS 수신률 계산: busOrdSet 중 busGpsMap에 있는 비율
-        int gpsReceived = 0;
-        for (String ord : busOrdSet) { if (busGpsMap.containsKey(ord)) gpsReceived++; }
-        int gpsStrength = (fRunning > 0 && gpsReceived > 0)
-                ? (int)((double)gpsReceived / fRunning * 100) : 0;
-        String gpsFile = gpsStrength >= 80 ? "gps4.png"
-                       : gpsStrength >= 40 ? "gps3.png"
-                       : gpsStrength > 0   ? "gps2.png" : "gps1.png";
-        try {
-            android.graphics.Bitmap gpsBm = android.graphics.BitmapFactory
-                    .decodeStream(getAssets().open(gpsFile));
-            ivGpsTimeline.setImageBitmap(gpsBm);
-        } catch (Exception ignored) {}
-        ivGpsTimeline.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-        LinearLayout.LayoutParams gpsTimelineLp = new LinearLayout.LayoutParams(dpToPx(44), dpToPx(22));
-        gpsTimelineLp.setMargins(0, 0, dpToPx(6), 0);
-        gpsTimelineLp.gravity = Gravity.CENTER_VERTICAL;
-        ivGpsTimeline.setLayoutParams(gpsTimelineLp);
-        runBanner.addView(ivGpsTimeline);
 
         // 버스 이미지
         android.widget.ImageView ivRunBus = new android.widget.ImageView(this);
