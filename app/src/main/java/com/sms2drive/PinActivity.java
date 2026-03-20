@@ -12161,7 +12161,7 @@ public class PinActivity extends AppCompatActivity {
                         final java.util.Set<String> fOrd=ordSet;
                         final java.util.Map<String,String> fVeh=vehMap;
                         runOnUiThread(() -> {
-                            if (cnt > 0) updateGpsStrength(cnt, fGpsRcv);
+                            if (fCnt > 0) updateGpsStrength(fCnt, fGpsRcv);
                             if (!isOnSubScreen) return;
                             if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
                             renderBusTimeline(fRId, fRNo, fDir, container,
