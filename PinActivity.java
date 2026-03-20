@@ -12080,11 +12080,16 @@ public class PinActivity extends AppCompatActivity {
             tvNo.setGravity(Gravity.CENTER_HORIZONTAL);
             infoBox.addView(tvNo);
 
-            // 방면 표시 TextView (나중에 arrMap에서 채움)
+            // 여백
+            android.view.View sp1 = new android.view.View(this);
+            sp1.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4)));
+            infoBox.addView(sp1);
+
+            // 방면 표시 TextView
             TextView tvDirection = new TextView(this);
             tvDirection.setTag("direction_ph");
-            tvDirection.setTextColor(Color.parseColor("#555555"));
-            tvDirection.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvDirection.setTextColor(Color.parseColor("#444444"));
+            tvDirection.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
             tvDirection.setGravity(Gravity.CENTER_HORIZONTAL);
             tvDirection.setTypeface(null, android.graphics.Typeface.BOLD);
             infoBox.addView(tvDirection);
@@ -12144,15 +12149,30 @@ public class PinActivity extends AppCompatActivity {
                 }
             }
 
+            // 여백
+            android.view.View sp2 = new android.view.View(this);
+            sp2.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(6)));
+            infoBox.addView(sp2);
+            // 구분선 위
+            android.view.View divUp = new android.view.View(this);
+            divUp.setBackgroundColor(Color.parseColor("#DDDDDD"));
+            divUp.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+            infoBox.addView(divUp);
+            // X분 후 버스번호
             TextView tvSoonPH = new TextView(this);
             tvSoonPH.setTag("soon_ph");
             tvSoonPH.setGravity(Gravity.START);
             busSoonTV = tvSoonPH;
             LinearLayout.LayoutParams phLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            phLp.setMargins(0, dpToPx(3), 0, 0);
+            phLp.setMargins(0, dpToPx(6), 0, dpToPx(6));
             tvSoonPH.setLayoutParams(phLp);
             infoBox.addView(tvSoonPH);
+            // 구분선 아래
+            android.view.View divDown = new android.view.View(this);
+            divDown.setBackgroundColor(Color.parseColor("#DDDDDD"));
+            divDown.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+            infoBox.addView(divDown);
             busFixedHeader.addView(infoBox);
 
             View divI = new View(this);
@@ -12440,9 +12460,10 @@ public class PinActivity extends AppCompatActivity {
                     catch (Exception ig) { return a[0].compareTo(b[0]); }
                 });
 
-                // 가장 빠른 버스 + 같은 시간대 여러 버스 수집
+                // 모든 버스를 시간순 정렬해서 표시
                 int soonSec = Integer.MAX_VALUE;
-                java.util.List<String> soonRnoList = new java.util.ArrayList<>();
+                // 시간→노선 리스트 맵
+                java.util.TreeMap<Integer, java.util.List<String>> secToRnoMap = new java.util.TreeMap<>();
                 for (java.util.Map.Entry<String, String[]> en : arrMap.entrySet()) {
                     String ts = en.getValue()[0];
                     int s2 = Integer.MAX_VALUE;
@@ -12450,15 +12471,22 @@ public class PinActivity extends AppCompatActivity {
                     else if (ts.contains("분")) {
                         try { s2 = Integer.parseInt(ts.replaceAll("[^0-9]","")) * 60; } catch(Exception ig){}
                     }
-                    if (s2 < soonSec) { soonSec = s2; soonRnoList.clear(); soonRnoList.add(en.getKey()); }
-                    else if (s2 == soonSec && s2 < Integer.MAX_VALUE) { soonRnoList.add(en.getKey()); }
+                    if (s2 < Integer.MAX_VALUE) {
+                        if (s2 < soonSec) soonSec = s2;
+                        if (!secToRnoMap.containsKey(s2)) secToRnoMap.put(s2, new java.util.ArrayList<>());
+                        secToRnoMap.get(s2).add(en.getKey());
+                    }
                 }
+                // 전체 버스 시간순 리스트
+                java.util.List<String> soonRnoList = new java.util.ArrayList<>();
+                for (java.util.List<String> rnos : secToRnoMap.values()) soonRnoList.addAll(rnos);
 
                 final java.util.List<String[]> fAllRoutes = allRoutes;
                 final java.util.Map<String, String[]> fArrMap = arrMap;
                 final String fSoonRno = soonRnoList.isEmpty() ? "" : soonRnoList.get(0);
                 final int fSoonSec = soonSec;
                 final java.util.List<String> fSoonRnoList = soonRnoList;
+                final java.util.TreeMap<Integer, java.util.List<String>> fSecToRnoMap = secToRnoMap;
 
                 // 세션 캐시 저장
                 arrivalSessionCache.put(nodeId, new Object[]{
@@ -12474,36 +12502,34 @@ public class PinActivity extends AppCompatActivity {
                     if (busFixedHeader != null && busFixedHeader.getChildCount() >= 3) {
                         android.view.View infoBoxV = busFixedHeader.getChildAt(2);
                         if (infoBoxV instanceof LinearLayout) {
-                            if (busSoonTV != null && !fSoonRno.isEmpty() && fSoonSec < Integer.MAX_VALUE) {
-                                TextView ph = busSoonTV;
-                                int fm = fSoonSec / 60;
-                                String timeLabel = fSoonSec == 0 ? "곧 도착" : fm + "분 후";
-                                // SpannableString으로 색상+크기 적용
+                            if (busSoonTV != null && !fSoonRnoList.isEmpty() && fSoonSec < Integer.MAX_VALUE) {
                                 android.text.SpannableStringBuilder ssb = new android.text.SpannableStringBuilder();
-                                // "X분 후" - 빨강, 크게
-                                ssb.append(timeLabel);
-                                ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")),
-                                        0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                // AbsoluteSizeSpan(dp, true) - 두번째 인자 true = dp단위
-                                ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(30), true),
-                                        0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                // 각 버스번호 - 종류별 색상, 30dp 크게
-                                for (String rn : fSoonRnoList) {
-                                    String rtp2 = "";
-                                    for (String[] ar : fAllRoutes) { if (ar[0].equals(rn)) { rtp2 = ar.length>4?ar[4]:""; break; } }
-                                    String[] badge2 = routeTypeBadge(rtp2);
-                                    String busText = "  " + rn + "번";
-                                    int start = ssb.length();
-                                    ssb.append(busText);
-                                    ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor(badge2[1])),
-                                            start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                    ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(30), true),
-                                            start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                    ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
-                                            start, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                boolean firstGrp = true;
+                                for (java.util.Map.Entry<Integer, java.util.List<String>> secEnt : fSecToRnoMap.entrySet()) {
+                                    int sec2 = secEnt.getKey();
+                                    String tLbl = sec2 == 0 ? "곧 도착" : (sec2/60) + "분 후 ";
+                                    if (!firstGrp) {
+                                        int ds = ssb.length(); ssb.append("  |  ");
+                                        ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#BBBBBB")), ds, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                        ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(12), true), ds, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                    }
+                                    firstGrp = false;
+                                    int ts = ssb.length(); ssb.append(tLbl);
+                                    ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                    ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(16), true), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                    ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                    for (String rn : secEnt.getValue()) {
+                                        String rtp2 = "";
+                                        for (String[] ar : fAllRoutes) { if (ar[0].equals(rn)) { rtp2 = ar.length>4?ar[4]:""; break; } }
+                                        String[] bdg = routeTypeBadge(rtp2);
+                                        int bs = ssb.length(); ssb.append(rn + "번 ");
+                                        ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor(bdg[1])), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                        ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(20), true), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                        ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                    }
                                 }
-                                ph.setText(ssb, android.widget.TextView.BufferType.SPANNABLE);
-                                ph.setGravity(Gravity.START);
+                                busSoonTV.setText(ssb, android.widget.TextView.BufferType.SPANNABLE);
+                                busSoonTV.setGravity(Gravity.START);
                             }
                         }
                     }
