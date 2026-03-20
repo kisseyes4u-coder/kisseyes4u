@@ -18069,9 +18069,9 @@ public class PinActivity extends AppCompatActivity {
             if (stopsStr == null || stopsStr.isEmpty()) continue;
             String[] items = stopsStr.split(";");
             for (int i = 0; i < items.length - 1; i++) {
-                String[] sp = items[i].split("\|");
+                String[] sp = items[i].split("\\|");
                 if (sp.length > 0 && sp[0].equals(nodeId)) {
-                    String[] spN = items[i + 1].split("\|");
+                    String[] spN = items[i + 1].split("\\|");
                     if (spN.length > 1 && !spN[1].isEmpty()) {
                         String nm = spN[1];
                         countMap.put(nm, countMap.containsKey(nm) ? countMap.get(nm) + 1 : 1);
