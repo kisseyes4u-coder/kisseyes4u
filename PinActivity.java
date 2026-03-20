@@ -11115,6 +11115,28 @@ public class PinActivity extends AppCompatActivity {
     }
 
 
+    /**
+     * GPS 좌표 기반으로 stops 중 가장 가까운 정류장의 nodeord 반환
+     * stops[4]=lat, stops[5]=lon
+     */
+    private String gpsToNearestOrd(double gpsLat, double gpsLon, java.util.List<String[]> stops) {
+        String bestOrd = "";
+        double bestDist = Double.MAX_VALUE;
+        for (String[] s : stops) {
+            if (s.length < 6 || s[4].isEmpty() || s[5].isEmpty()) continue;
+            try {
+                double sLat = Double.parseDouble(s[4]), sLon = Double.parseDouble(s[5]);
+                double dlat = Math.toRadians(sLat - gpsLat), dlon = Math.toRadians(sLon - gpsLon);
+                double a = Math.sin(dlat/2)*Math.sin(dlat/2)
+                        + Math.cos(Math.toRadians(gpsLat))*Math.cos(Math.toRadians(sLat))
+                        * Math.sin(dlon/2)*Math.sin(dlon/2);
+                double dist = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                if (dist < bestDist) { bestDist = dist; bestOrd = s[2]; }
+            } catch (Exception ignored) {}
+        }
+        return bestOrd;
+    }
+
     private void startFavAutoRefresh() {
         stopFavAutoRefresh();
         busFavRefreshRunnable = new Runnable() {
@@ -11165,7 +11187,19 @@ public class PinActivity extends AppCompatActivity {
                         java.util.Map<String,String> vehMap = new java.util.HashMap<>();
                         for (String item : lcXml.split("<item>")) {
                             String ord=tag(item,"nodeord"), vno=tag(item,"vehicleno");
-                            if (!ord.isEmpty()) { ordSet.add(ord); if (!vno.isEmpty()) vehMap.put(ord,vno); }
+                            String gla=tag(item,"gpslati"), glo=tag(item,"gpslong");
+                            if (ord.isEmpty()) continue;
+                            // GPS 좌표로 가장 가까운 정류장 ord 계산
+                            String useOrd = ord;
+                            if (!gla.isEmpty() && !glo.isEmpty() && !fStops.isEmpty()) {
+                                try {
+                                    double gla2=Double.parseDouble(gla), glo2=Double.parseDouble(glo);
+                                    String nearOrd = gpsToNearestOrd(gla2, glo2, fStops);
+                                    if (!nearOrd.isEmpty()) useOrd = nearOrd;
+                                } catch(Exception ig){}
+                            }
+                            ordSet.add(useOrd);
+                            if (!vno.isEmpty()) vehMap.put(useOrd, vno);
                         }
                         final int fCnt=cnt;
                         final java.util.Set<String> fOrd=ordSet;
@@ -11362,7 +11396,18 @@ public class PinActivity extends AppCompatActivity {
                     java.util.Map<String,String> vehMap = new java.util.HashMap<>();
                     for (String item : lcXml.split("<item>")) {
                         String ord = tag(item,"nodeord"), vno = tag(item,"vehicleno");
-                        if (!ord.isEmpty()) { ordSet.add(ord); if (!vno.isEmpty()) vehMap.put(ord,vno); }
+                        String gla=tag(item,"gpslati"), glo=tag(item,"gpslong");
+                        if (ord.isEmpty()) continue;
+                        String useOrd = ord;
+                        if (!gla.isEmpty() && !glo.isEmpty() && !fStops.isEmpty()) {
+                            try {
+                                double gl=Double.parseDouble(gla), go=Double.parseDouble(glo);
+                                String nearOrd = gpsToNearestOrd(gl, go, fStops);
+                                if (!nearOrd.isEmpty()) useOrd = nearOrd;
+                            } catch(Exception ig){}
+                        }
+                        ordSet.add(useOrd);
+                        if (!vno.isEmpty()) vehMap.put(useOrd, vno);
                     }
                     final int fCnt = cnt;
                     final java.util.Set<String> fOrd = ordSet;
@@ -11417,7 +11462,18 @@ public class PinActivity extends AppCompatActivity {
                     java.util.Map<String,String> vehMap = new java.util.HashMap<>();
                     for (String item : lcXml.split("<item>")) {
                         String ord = tag(item,"nodeord"), vno = tag(item,"vehicleno");
-                        if (!ord.isEmpty()) { ordSet.add(ord); if (!vno.isEmpty()) vehMap.put(ord,vno); }
+                        String gla=tag(item,"gpslati"), glo=tag(item,"gpslong");
+                        if (ord.isEmpty()) continue;
+                        String useOrd = ord;
+                        if (!gla.isEmpty() && !glo.isEmpty() && !fStops.isEmpty()) {
+                            try {
+                                double gl=Double.parseDouble(gla), go=Double.parseDouble(glo);
+                                String nearOrd = gpsToNearestOrd(gl, go, fStops);
+                                if (!nearOrd.isEmpty()) useOrd = nearOrd;
+                            } catch(Exception ig){}
+                        }
+                        ordSet.add(useOrd);
+                        if (!vno.isEmpty()) vehMap.put(useOrd, vno);
                     }
 
                     // ③ 정류소 목록
