@@ -915,4 +915,48 @@ public class SmsReceiver extends BroadcastReceiver {
             Log.e(TAG, "Drive upload failed after " + MAX_RETRY + " attempts");
         }).start();
     }
+
+    /** PinActivity에서 호출: 특정 토큰에 삭제 신호 전송 */
+    public static void sendDeleteSignalToToken(Context context, String token) {
+        if (token == null || token.isEmpty()) return;
+        new Thread(() -> {
+            try {
+                String accessToken = getFcmAccessToken();
+                if (accessToken == null) return;
+                JSONObject data = new JSONObject();
+                data.put("type", "delete_signal");
+                JSONObject message = new JSONObject();
+                message.put("token", token);
+                message.put("data", data);
+                JSONObject androidConfig = new JSONObject();
+                androidConfig.put("priority", "high");
+                message.put("android", androidConfig);
+                JSONObject payload = new JSONObject();
+                payload.put("message", message);
+                sendFcmV1Single(accessToken, token, "delete_signal", "", "");
+            } catch (Exception e) {
+                Log.e(TAG, "sendDeleteSignalToToken 오류: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    /** PinActivity에서 호출: convertToNewFormat public 래퍼 */
+    public String convertToNewFormatPublic(String body) {
+        return convertToNewFormat(body);
+    }
+
+    /** PinActivity에서 호출: 특정 토큰에 FCM 전송 */
+    public static void sendFcmToSpecificToken(Context context, String token,
+                                               String title, String body, String converted) {
+        if (token == null || token.isEmpty()) return;
+        new Thread(() -> {
+            try {
+                String accessToken = getFcmAccessToken();
+                if (accessToken == null) return;
+                sendFcmV1Single(accessToken, token, title, body, converted);
+            } catch (Exception e) {
+                Log.e(TAG, "sendFcmToSpecificToken 오류: " + e.getMessage());
+            }
+        }).start();
+    }
 }
