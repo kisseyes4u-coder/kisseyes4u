@@ -11805,15 +11805,41 @@ public class PinActivity extends AppCompatActivity {
         android.widget.ImageView ivBusP = new android.widget.ImageView(this);
         android.graphics.Bitmap busBmpP = getBusIconColor(busColor3);
         if (busBmpP != null) ivBusP.setImageBitmap(busBmpP);
-        ivBusP.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24)));
+        LinearLayout.LayoutParams busIconLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
+        busIconLp.gravity = Gravity.CENTER_VERTICAL;
+        ivBusP.setLayoutParams(busIconLp);
         routeCard.addView(ivBusP);
 
+        // 노선번호 (WRAP_CONTENT 고정)
         TextView tvRnoP = new TextView(this);
         tvRnoP.setText("  " + routeNo);
         tvRnoP.setTextColor(Color.parseColor(colorHex));
         tvRnoP.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
         tvRnoP.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvRnoP.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         routeCard.addView(tvRnoP);
+
+        // 구분 텍스트
+        TextView tvSep = new TextView(this);
+        tvSep.setText("  →  ");
+        tvSep.setTextColor(Color.parseColor("#AAAAAA"));
+        tvSep.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tvSep.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        routeCard.addView(tvSep);
+
+        // 하차 정류장 이름 (말줄임)
+        TextView tvAlightHere = new TextView(this);
+        tvAlightHere.setText(alightNodeNm);
+        tvAlightHere.setTextColor(Color.parseColor(colorHex));
+        tvAlightHere.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvAlightHere.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvAlightHere.setMaxLines(1);
+        tvAlightHere.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tvAlightHere.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        routeCard.addView(tvAlightHere);
 
         dlgRoot.addView(routeCard);
 
