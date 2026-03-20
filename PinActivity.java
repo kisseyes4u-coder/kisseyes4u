@@ -10977,7 +10977,7 @@ public class PinActivity extends AppCompatActivity {
             "}" +
             "</script></body></html>";
 
-        final java.util.List<String[]> fCoordStops = coordStops;
+        final java.util.List<String[]> fCoordStops = stops;
         openMapDialog(routeNo + "번 실시간 버스 위치  " + busOrdSet.size() + "대 운행중", html, routeId, fCoordStops);
     }
 
