@@ -11598,6 +11598,7 @@ public class PinActivity extends AppCompatActivity {
             row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.TOP);
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            row.setTag("stop_" + s[0]); // nodeId tag (스크롤 위치 찾기용)
             final boolean fFirst2=isFirst, fLast2=isLast, fIsReturn=isReturn;
 
             // ── 타임라인 FrameLayout (세로줄 + 원 + 버스오버레이) ──
@@ -18141,7 +18142,29 @@ public class PinActivity extends AppCompatActivity {
                 // 카드 탭 → 노선 있으면 타임라인, 없으면 정류소 도착화면
                 card.setOnClickListener(v2 -> {
                     if (!fRouteId.isEmpty()) {
+                        // nodeId 추출 (compositeKey = routeId_nodeId)
+                        String fNodeId = fCompositeKey.contains("_")
+                                ? fCompositeKey.substring(fCompositeKey.indexOf("_") + 1)
+                                : fCompositeKey;
                         busScreenLoadStops(fRouteId, fRouteNo, busResultContainer, "forward", "");
+                        // 렌더링 완료 후 해당 정류장을 화면 중앙으로 스크롤 + 충남대처럼 클릭 효과
+                        busResultContainer.postDelayed(() -> {
+                            if (busTimelineSv == null) return;
+                            // "stop_" + nodeId tag로 row 찾기
+                            String targetTag = "stop_" + fNodeId;
+                            android.view.View targetRow = findViewWithTag(busResultContainer, targetTag);
+                            if (targetRow != null) {
+                                int[] loc = new int[2];
+                                targetRow.getLocationOnScreen(loc);
+                                int[] svLoc = new int[2];
+                                busTimelineSv.getLocationOnScreen(svLoc);
+                                int rowY = busTimelineSv.getScrollY() + (loc[1] - svLoc[1]);
+                                int offset = busTimelineSv.getHeight() / 2 - targetRow.getHeight() / 2;
+                                busTimelineSv.smoothScrollTo(0, Math.max(0, rowY - offset));
+                                // 클릭 효과: 해당 정류장을 누른 것과 동일하게 도착화면 열기 (routeNo 전달)
+                                targetRow.performClick();
+                            }
+                        }, 600);
                     } else {
                         // 정류소만 즐겨찾기 → 도착화면으로 이동
                         String nId = fCompositeKey; // compositeKey = nodeId
@@ -18176,10 +18199,17 @@ public class PinActivity extends AppCompatActivity {
         int minSec = busSoonCache.firstKey();
         // 5분(300초) 이상이면 "곧 도착 없음" 표시
         if (minSec >= 300) {
-            busSoonTV.setText("곧 도착 없음");
-            busSoonTV.setTextColor(android.graphics.Color.parseColor("#222222"));
+            android.text.SpannableStringBuilder ssbNone = new android.text.SpannableStringBuilder();
+            // "곧 도착" 부분 - X분 후와 같은 빨간색
+            int s1 = ssbNone.length(); ssbNone.append("곧 도착");
+            ssbNone.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#E74C3C")), s1, ssbNone.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            ssbNone.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), s1, ssbNone.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            // " 없음" 부분 - 검정색
+            int s2 = ssbNone.length(); ssbNone.append(" 없음");
+            ssbNone.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#222222")), s2, ssbNone.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            ssbNone.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), s2, ssbNone.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            busSoonTV.setText(ssbNone, android.widget.TextView.BufferType.SPANNABLE);
             busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
-            busSoonTV.setTypeface(null, android.graphics.Typeface.BOLD);
             return;
         }
         String timeLabel = minSec == 0 ? "곧 도착 " : (minSec / 60) + "분 후 ";
@@ -18230,6 +18260,19 @@ public class PinActivity extends AppCompatActivity {
         ssb.setSpan(new android.text.style.LeadingMarginSpan.Standard(0, indent), 0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         busSoonTV.setText(ssb, android.widget.TextView.BufferType.SPANNABLE);
         busSoonTV.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
+    }
+
+    /** ViewGroup 내에서 tag가 일치하는 첫 번째 View를 재귀 탐색 */
+    private android.view.View findViewWithTag(android.view.ViewGroup parent, String tag) {
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            android.view.View child = parent.getChildAt(i);
+            if (tag.equals(child.getTag())) return child;
+            if (child instanceof android.view.ViewGroup) {
+                android.view.View found = findViewWithTag((android.view.ViewGroup) child, tag);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private int getSecFromTimeStr(String ts) {
