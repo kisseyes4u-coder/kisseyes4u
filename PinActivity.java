@@ -12562,7 +12562,6 @@ public class PinActivity extends AppCompatActivity {
                     new Thread(() -> {
                         try {
                             boolean hasGps = false;
-                            // 즐겨찾기 노선 중 이 정류장을 지나는 노선들의 GPS 조회
                             android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
                             java.util.Map<String, ?> allPrefs = prefs.getAll();
                             for (java.util.Map.Entry<String, ?> entry : allPrefs.entrySet()) {
@@ -12583,11 +12582,14 @@ public class PinActivity extends AppCompatActivity {
                                 if (hasGps) break;
                             }
                             final boolean fHasGps = hasGps;
-                            // GPS 있으면 도착시간 GPS 우선으로 갱신, 없으면 기존 방식
+                            // 갱신 전 다시 도착화면인지 확인
+                            if (!isOnSubScreen) return;
+                            if (busBackStack.isEmpty() || !"arrival".equals(busBackStack.peek()[0])) return;
+                            if (!arrivalRefreshNodeId.equals(busBackStack.peek()[1])) return;
                             arrivalSessionCache.remove(arrivalRefreshNodeId);
+                            // fArrContainer 대신 busResultContainer 사용
                             fetchAndRenderArrival(arrivalRefreshNodeId, arrivalRefreshNodeNm,
-                                    arrivalRefreshNodeNo, arrivalRefreshRouteNo, fArrContainer, true);
-                            // GPS 수신 중이면 5초, 없으면 20초 (하지만 계속 재시도)
+                                    arrivalRefreshNodeNo, arrivalRefreshRouteNo, busResultContainer, true);
                             int delay = fHasGps ? 10000 : 20000;
                             arrivalRefreshHandler.postDelayed(this, delay);
                         } catch (Exception ignored) {
@@ -13264,6 +13266,39 @@ public class PinActivity extends AppCompatActivity {
                     }
                 }
             } catch (Exception ignored) {}
+
+            // 운행종료 등으로 arrMap 비어도 bus_cache에서 이 정류장 지나는 노선 추가
+            if (allRoutes.isEmpty()) {
+                android.content.SharedPreferences bc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                java.util.Map<String, ?> bcAll = bc.getAll();
+                for (java.util.Map.Entry<String, ?> entry : bcAll.entrySet()) {
+                    if (!entry.getKey().endsWith("_stops")) continue;
+                    String stopsRaw = entry.getValue() instanceof String ? (String)entry.getValue() : "";
+                    if (stopsRaw.isEmpty()) continue;
+                    String rId2 = entry.getKey().replace("route_","").replace("_stops","");
+                    for (String line : stopsRaw.split(";")) {
+                        String[] p = line.split("\\|", -1);
+                        if (p.length < 2) continue;
+                        boolean match = p[0].equals(nodeId) || p[1].equals(nodeNm)
+                                || (!nodeNo.isEmpty() && p.length > 3 && p[3].equals(nodeNo));
+                        if (match) {
+                            // routeDbList에서 노선번호 찾기
+                            String rNo2 = "", rEnd2 = "";
+                            if (routeDbList != null) {
+                                for (String[] rd : routeDbList) {
+                                    if (rd[0].equals(rId2)) { rNo2 = rd[1]; rEnd2 = rd.length>3?rd[3]:""; break; }
+                                }
+                            }
+                            if (!rNo2.isEmpty()) {
+                                boolean already2 = false;
+                                for (String[] r : allRoutes) if (r[0].equals(rNo2)) { already2 = true; break; }
+                                if (!already2) allRoutes.add(new String[]{rNo2, rId2, "", rEnd2, ""});
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
 
             // 노선번호 오름차순 정렬
             allRoutes.sort((a, b) -> {
