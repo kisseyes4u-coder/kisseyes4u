@@ -10753,10 +10753,12 @@ public class PinActivity extends AppCompatActivity {
     /** 즐겨찾기 화면 자동갱신 시작 (30초마다) */
     /** 공통 지도 다이얼로그 표시 */
     private void openMapDialog(String title, String html) {
-        openMapDialog(title, html, null, null);
+        openMapDialog(title, html, null, null, null);
     }
 
-    private void openMapDialog(String title, String html, String routeId, java.util.List<String[]> coordStops) {
+    private void openMapDialog(String title, String html, String routeId,
+                                java.util.List<String[]> coordStops,
+                                java.util.Map<String, Integer> ordToIdx) {
         android.app.Dialog mapDlg = new android.app.Dialog(this,
                 android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
@@ -10817,6 +10819,7 @@ public class PinActivity extends AppCompatActivity {
                 }
             }
             final String fRouteId = routeId;
+            final java.util.Map<String, Integer> fOrdToIdx = ordToIdx;
             final android.os.Handler mapHandler = new android.os.Handler(android.os.Looper.getMainLooper());
             final Runnable[] mapRefresh = {null};
             mapRefresh[0] = new Runnable() {
@@ -10827,28 +10830,38 @@ public class PinActivity extends AppCompatActivity {
                             String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
                                     + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
                                     + "&routeId=" + fRouteId + "&numOfRows=50&pageNo=1&_type=xml");
-                            java.util.Set<String> newOrd = new java.util.HashSet<>();
-                            for (String item : lcXml.split("<item>")) {
-                                String ord = tag(item, "nodeord");
-                                if (!ord.isEmpty()) newOrd.add(ord);
-                            }
-                            // JS로 버스 마커 위치 업데이트
+                            // 도착정보 API: arrtime(초) 조회
+                            String arvlXml = "";
+                            try {
+                                // LC API에서 nodeord만 → 도착API로 arrtime 보완
+                                arvlXml = lcXml; // LC API 결과 재활용
+                            } catch (Exception ig) {}
+
+                            // [[toIdx, arrSec], ...] 구성
                             StringBuilder jsUpdate = new StringBuilder("updateBuses([");
                             boolean firstBus = true;
-                            for (String ord : newOrd) {
-                                double[] coord = ordToCoord2.get(ord);
-                                if (coord == null) continue;
+                            int cnt = 0;
+                            for (String item : lcXml.split("<item>")) {
+                                String ord = tag(item, "nodeord");
+                                if (ord.isEmpty()) continue;
+                                // toIdx: 다음 정류장 인덱스 (현재 정류장 + 1)
+                                Integer curIdx = fOrdToIdx != null ? fOrdToIdx.get(ord) : null;
+                                if (curIdx == null) continue;
+                                int toIdx = curIdx + 1; // 다음 정류장으로 이동 중
+                                // arrtime: LC API에는 없으므로 정류장 간격 20초로 추정
+                                int arrSec = 20;
                                 if (!firstBus) jsUpdate.append(",");
-                                jsUpdate.append("[").append(coord[0]).append(",").append(coord[1]).append("]");
+                                jsUpdate.append("[").append(toIdx).append(",").append(arrSec).append("]");
                                 firstBus = false;
+                                cnt++;
                             }
                             jsUpdate.append("]);");
                             final String js = jsUpdate.toString();
-                            final int cnt = newOrd.size();
+                            final int fCnt = cnt;
                             runOnUiThread(() -> {
                                 if (mapDlg.isShowing()) {
                                     wv.evaluateJavascript(js, null);
-                                    tvTitle.setText(title.split("  ")[0] + "  " + cnt + "대 운행중");
+                                    tvTitle.setText(title.split("  ")[0] + "  " + fCnt + "대 운행중");
                                 }
                             });
                         } catch (Exception ignored) {}
@@ -10898,7 +10911,10 @@ public class PinActivity extends AppCompatActivity {
     private void buildAndShowMap(String routeId, String routeNo,
                                   java.util.List<String[]> stops,
                                   java.util.Set<String> busOrdSet) {
+        // ord → 좌표 맵 + 순서 리스트
         java.util.Map<String, double[]> ordToCoord = new java.util.HashMap<>();
+        java.util.Map<String, Integer> ordToIdx = new java.util.HashMap<>();
+        java.util.List<double[]> coordList = new java.util.ArrayList<>();
         double centerLat = 36.35, centerLon = 127.38;
         boolean first = true;
         for (String[] s : stops) {
@@ -10906,47 +10922,51 @@ public class PinActivity extends AppCompatActivity {
             try {
                 double la = Double.parseDouble(s[4]), lo = Double.parseDouble(s[5]);
                 ordToCoord.put(s[2], new double[]{la, lo});
+                ordToIdx.put(s[2], coordList.size());
+                coordList.add(new double[]{la, lo});
                 if (first) { centerLat = la; centerLon = lo; first = false; }
             } catch (Exception ignored) {}
         }
 
-        // 노선 좌표 배열
+        // 노선 좌표 배열 JS
         StringBuilder latlngs = new StringBuilder("[");
-        for (String[] s : stops) {
-            if (s.length < 6 || s[4].isEmpty() || s[5].isEmpty()) continue;
+        for (double[] c : coordList) {
             if (latlngs.length() > 1) latlngs.append(",");
-            latlngs.append("[").append(s[4]).append(",").append(s[5]).append("]");
+            latlngs.append("[").append(c[0]).append(",").append(c[1]).append("]");
         }
         latlngs.append("]");
+
+        // 전체 정류장 좌표 JS 배열 (보간용)
+        StringBuilder allCoordsJs = new StringBuilder("var allCoords=[");
+        for (int ci = 0; ci < coordList.size(); ci++) {
+            if (ci > 0) allCoordsJs.append(",");
+            allCoordsJs.append("[").append(coordList.get(ci)[0])
+                       .append(",").append(coordList.get(ci)[1]).append("]");
+        }
+        allCoordsJs.append("];");
 
         // 정류장 마커 JS
         StringBuilder stopJs = new StringBuilder();
         for (String[] s : stops) {
             if (s.length < 6 || s[4].isEmpty() || s[5].isEmpty()) continue;
-            boolean isFirst = s[2].equals("1");
-            boolean isLast = s[2].equals(String.valueOf(stops.size()));
-            String col = isFirst || isLast ? "#E74C3C" : "#0984E3";
+            boolean isFirst2 = s[2].equals("1");
+            boolean isLast2  = s[2].equals(String.valueOf(stops.size()));
+            String col = isFirst2 || isLast2 ? "#E74C3C" : "#0984E3";
             stopJs.append(String.format(
                 "L.circleMarker([%s,%s],{radius:%d,color:'%s',fillColor:'%s',fillOpacity:0.9,weight:2})" +
                 ".bindTooltip('%s',{permanent:false,direction:'top'}).addTo(map);\n",
-                s[4], s[5], isFirst||isLast?7:4, col, col,
-                s[1].replace("'","\\'").replace("\"","&quot;")));
+                s[4], s[5], isFirst2||isLast2?7:4, col, col,
+                s[1].replace("'","\\\'").replace("\"","&quot;")));
         }
 
-        // 버스 마커 JS
+        // 버스 초기 위치 JS
         StringBuilder busJs = new StringBuilder();
         int busIdx = 0;
         for (String ord : busOrdSet) {
             double[] coord = ordToCoord.get(ord);
             if (coord == null) continue;
-            busIdx++;
-            busJs.append(String.format(
-                "L.marker([%f,%f],{icon:L.divIcon({className:'bus-marker'," +
-                "html:'<div class=\"bus-icon\">%s</div>',iconSize:[38,28],iconAnchor:[19,14]})}" +
-                ").bindTooltip('%s번 버스',{permanent:false}).addTo(map);\n",
-                coord[0], coord[1], routeNo, routeNo));
+            busJs.append(String.format("addBus(%d,[%f,%f]);\n", busIdx++, coord[0], coord[1]));
         }
-        if (busIdx == 0) busJs.append("// 운행중인 버스 없음\n");
 
         String html = "<!DOCTYPE html><html><head><meta charset='utf-8'/>" +
             "<meta name='viewport' content='width=device-width,initial-scale=1'/>" +
@@ -10963,22 +10983,35 @@ public class PinActivity extends AppCompatActivity {
             "{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);" +
             "var latlngs=" + latlngs + ";" +
             "L.polyline(latlngs,{color:'#0984E3',weight:4,opacity:0.8}).addTo(map);" +
+            allCoordsJs +
             stopJs +
-            busJs +
-            "if(latlngs.length>0)map.fitBounds(L.polyline(latlngs).getBounds().pad(0.1));" +
-            // 버스 마커 레이어 그룹 (갱신용)
-            "var busLayer=L.layerGroup().addTo(map);" +
-            "function updateBuses(coords){" +
-            "  busLayer.clearLayers();" +
-            "  coords.forEach(function(c){" +
-            "    L.marker(c,{icon:L.divIcon({className:'',html:'<div class=\"bus-icon\">" + routeNo + "</div>'," +
-            "    iconSize:[38,28],iconAnchor:[19,14]})}).addTo(busLayer);" +
-            "  });" +
+            "var buses={};" +
+            "function makeBusIcon(){return L.divIcon({className:'',html:'<div class=\"bus-icon\">" + routeNo + "</div>',iconSize:[38,28],iconAnchor:[19,14]});}" +
+            "function addBus(id,latlng){if(buses[id])buses[id].setLatLng(latlng);else buses[id]=L.marker(latlng,{icon:makeBusIcon()}).addTo(map);}" +
+            "function interp(a,b,t){return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];}" +
+            // updateBuses: [[toIdx, arrSec], ...] — toIdx=도착할정류장인덱스, arrSec=남은초
+            "var animTargets=[];var animTimer=null;var animStart=0;" +
+            "function updateBuses(busData){" +
+            "  animTargets=busData;animStart=Date.now();" +
+            "  if(animTimer)clearInterval(animTimer);" +
+            "  animTimer=setInterval(function(){" +
+            "    var elapsed=(Date.now()-animStart)/1000;" +
+            "    animTargets.forEach(function(b,i){" +
+            "      var toIdx=b[0],arrSec=b[1];" +
+            "      if(toIdx<1||toIdx>=allCoords.length)return;" +
+            "      var fromIdx=toIdx-1;" +
+            // t=0이면 fromIdx, t=1이면 toIdx (arrSec초 후 도착)
+            "      var t=Math.min(elapsed/Math.max(arrSec,1),1);" +
+            "      addBus(i,interp(allCoords[fromIdx],allCoords[toIdx],t));" +
+            "    });" +
+            "  },500);" +
             "}" +
+            "if(latlngs.length>0)map.fitBounds(L.polyline(latlngs).getBounds().pad(0.1));" +
+            busJs +
             "</script></body></html>";
 
-        final java.util.List<String[]> fCoordStops = stops;
-        openMapDialog(routeNo + "번 실시간 버스 위치  " + busOrdSet.size() + "대 운행중", html, routeId, fCoordStops);
+        openMapDialog(routeNo + "번 실시간 버스 위치  " + busOrdSet.size() + "대 운행중",
+                html, routeId, stops, ordToIdx);
     }
 
 
