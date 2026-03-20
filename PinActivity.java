@@ -12295,6 +12295,26 @@ public class PinActivity extends AppCompatActivity {
         // 백그라운드에서 실시간 API 호출 후 갱신
         final LinearLayout fContainer = container;
         new Thread(() -> fetchAndRenderArrival(nodeId, nodeNm, nodeNo, filterRouteNo, fContainer, true)).start();
+
+        // 도착화면 20초 자동 갱신 루틴 시작
+        if (busRefreshRunnable != null) busRefreshHandler.removeCallbacks(busRefreshRunnable);
+        final String fNodeId = nodeId, fNodeNm = nodeNm, fNodeNo = nodeNo, fFilter = filterRouteNo;
+        busRefreshRunnable = new Runnable() {
+            @Override public void run() {
+                if (!isOnSubScreen) return;
+                if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) {
+                    busRefreshHandler.postDelayed(this, 20000);
+                    return;
+                }
+                // 현재 화면이 도착화면인지 확인
+                if (busFixedHeader == null || !("arrival_" + fNodeId).equals(busFixedHeader.getTag())) return;
+                // 세션 캐시 무효화 후 재조회
+                arrivalSessionCache.remove(fNodeId);
+                new Thread(() -> fetchAndRenderArrival(fNodeId, fNodeNm, fNodeNo, fFilter, fContainer, false)).start();
+                busRefreshHandler.postDelayed(this, 20000);
+            }
+        };
+        busRefreshHandler.postDelayed(busRefreshRunnable, 20000);
     }
 
     /** 도착정보 API 호출 + 렌더링 (백그라운드에서 호출) */
