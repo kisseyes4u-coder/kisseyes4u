@@ -17338,10 +17338,10 @@ public class PinActivity extends AppCompatActivity {
                             if (minSecMap.containsKey(rno2) && sec2 >= 0 && sec2 >= minSecMap.get(rno2)) continue;
                             if (sec2 >= 0) minSecMap.put(rno2, sec2);
                             String timeStr2, timeColor2;
-                            if (prev2 == 0) { timeStr2 = "[출발 대기]"; timeColor2 = "#888888"; }
+                            if (prev2 == 0) { timeStr2 = "출발 대기"; timeColor2 = "#888888"; }
                             else if (sec2 <= 0) { timeStr2 = ""; timeColor2 = "#555555"; }
                             else if (sec2 < 60) { timeStr2 = "곧 도착"; timeColor2 = "#E74C3C"; }
-                            else { timeStr2 = "[약 " + (sec2/60) + "분]"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#E74C3C"; }
+                            else { timeStr2 = "약 " + (sec2/60) + "분"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
                             String prevStr2 = prev2 == 1 ? "[바로 앞]" : prev2 > 1 ? "[" + prev2 + "정거장 앞]" : "";
                             if (!timeStr2.isEmpty()) arrMap.put(rno2, new String[]{timeStr2, prevStr2, timeColor2, endnm2, nextnm2});
                         }
@@ -17813,13 +17813,11 @@ public class PinActivity extends AppCompatActivity {
                         .getInt("route_" + rId + "_running", -1);
                 if (runningCnt >= 0) {
                     TextView tvRunning = new TextView(this);
-                    // "[X대 운행중]" - 괄호+숫자+대 연한빨강, " 운행중]" 회색
+                    // "X대 운행중" - 숫자+대 연한빨강, " 운행중" 회색
                     android.text.SpannableStringBuilder rssb = new android.text.SpannableStringBuilder();
-                    int rs0 = rssb.length(); rssb.append("[");
-                    rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#888888")), rs0, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     int rs1 = rssb.length(); rssb.append(runningCnt + "대");
                     rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#FF7675")), rs1, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    int rs2 = rssb.length(); rssb.append(" 운행중]");
+                    int rs2 = rssb.length(); rssb.append(" 운행중");
                     rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#888888")), rs2, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     tvRunning.setText(rssb, android.widget.TextView.BufferType.SPANNABLE);
                     tvRunning.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
@@ -18326,21 +18324,11 @@ public class PinActivity extends AppCompatActivity {
                     }
                     TextView tvArrTime = new TextView(this);
                     if (arrTimeStr.isEmpty()) {
-                        // [출발 대기] - 전체 회색
-                        tvArrTime.setText("[출발 대기]");
+                        // 출발 대기 - 회색
+                        tvArrTime.setText("출발 대기");
                         tvArrTime.setTextColor(Color.parseColor("#AAAAAA"));
-                    } else if (arrTimeStr.startsWith("[") && arrTimeStr.endsWith("]")) {
-                        // [약 X분] 형식 - 괄호 회색, 내용 기존 색깔(시간대별)
-                        android.text.SpannableStringBuilder assb = new android.text.SpannableStringBuilder();
-                        int a0 = assb.length(); assb.append("[");
-                        assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#AAAAAA")), a0, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                        int a1 = assb.length(); assb.append(arrTimeStr, 1, arrTimeStr.length() - 1);
-                        assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor(arrTimeColor)), a1, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                        int a2 = assb.length(); assb.append("]");
-                        assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#AAAAAA")), a2, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                        tvArrTime.setText(assb, android.widget.TextView.BufferType.SPANNABLE);
                     } else {
-                        // 곧 도착 등 기타
+                        // 약 X분, 곧 도착 등 - 기존 색깔(시간대별)
                         tvArrTime.setText(arrTimeStr);
                         tvArrTime.setTextColor(Color.parseColor(arrTimeColor));
                     }
