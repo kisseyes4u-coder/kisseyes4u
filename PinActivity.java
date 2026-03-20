@@ -12570,7 +12570,7 @@ public class PinActivity extends AppCompatActivity {
                     } else {
                         timeStr = "약 " + (sec/60) + "분"; timeColor = "#333333";
                     }
-                    String prevStr = prev == 0 ? "[출발 대기]" : prev == 1 ? "[바로 앞 정거장]" : prev > 0 ? "[" + prev + " 정거장 앞]" : "";
+                    String prevStr = prev == 0 ? "[출발지 대기중]" : prev == 1 ? "[바로 앞 정거장]" : prev > 0 ? "[" + prev + " 정거장 앞]" : "";
                     arrMap.put(rno, new String[]{timeStr, prevStr, timeColor, endnm, nextnm});
 
 
@@ -12797,7 +12797,7 @@ public class PinActivity extends AppCompatActivity {
             } else {
                 String nextDep = getNextDeparture(rno, true);
                 timeStr = nextDep.isEmpty() ? (fEmpty ? "조회중..." : "도착정보 없음") : nextDep;
-                prevStr = nextDep.isEmpty() ? "" : "[출발 대기]";
+                prevStr = nextDep.isEmpty() ? "" : "[출발지 대기중]";
                 timeColor = "#555555"; endNm = etnm; nextNm = "";
             }
             LinearLayout row = new LinearLayout(this);
@@ -17338,7 +17338,7 @@ public class PinActivity extends AppCompatActivity {
                             if (minSecMap.containsKey(rno2) && sec2 >= 0 && sec2 >= minSecMap.get(rno2)) continue;
                             if (sec2 >= 0) minSecMap.put(rno2, sec2);
                             String timeStr2, timeColor2;
-                            if (prev2 == 0) { timeStr2 = "출발 대기"; timeColor2 = "#888888"; }
+                            if (prev2 == 0) { timeStr2 = "출발지 대기중"; timeColor2 = "#888888"; }
                             else if (sec2 <= 0) { timeStr2 = ""; timeColor2 = "#555555"; }
                             else if (sec2 < 60) { timeStr2 = "곧 도착"; timeColor2 = "#E74C3C"; }
                             else { timeStr2 = "약 " + (sec2/60) + "분"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
@@ -18324,8 +18324,8 @@ public class PinActivity extends AppCompatActivity {
                     }
                     TextView tvArrTime = new TextView(this);
                     if (arrTimeStr.isEmpty()) {
-                        // 출발 대기 - 회색
-                        tvArrTime.setText("출발 대기");
+                        // 출발지 대기중 - 회색
+                        tvArrTime.setText("출발지 대기중");
                         tvArrTime.setTextColor(Color.parseColor("#AAAAAA"));
                     } else {
                         // 약 X분, 곧 도착 등 - 기존 색깔(시간대별)
