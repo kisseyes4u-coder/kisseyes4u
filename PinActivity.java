@@ -11175,7 +11175,6 @@ public class PinActivity extends AppCompatActivity {
         busRefreshRunnable = new Runnable() {
             @Override public void run() {
                 if (!isOnSubScreen) return;
-                // 검색화면(busSearchArea 보임)이면 갱신 안 함
                 if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) {
                     busRefreshHandler.postDelayed(this, 20000);
                     return;
@@ -11189,36 +11188,47 @@ public class PinActivity extends AppCompatActivity {
                         try { cnt = Integer.parseInt(tag(lcXml,"totalCount")); } catch(Exception ig){}
                         java.util.Set<String> ordSet = new java.util.HashSet<>();
                         java.util.Map<String,String> vehMap = new java.util.HashMap<>();
+                        java.util.Map<String,double[]> newGpsMap = new java.util.HashMap<>();
                         for (String item : lcXml.split("<item>")) {
                             String ord=tag(item,"nodeord"), vno=tag(item,"vehicleno");
                             String gla=tag(item,"gpslati"), glo=tag(item,"gpslong");
                             if (ord.isEmpty()) continue;
-                            // GPS 좌표로 가장 가까운 정류장 ord 계산
+                            // GPS 좌표 수집
                             String useOrd = ord;
-                            if (!gla.isEmpty() && !glo.isEmpty() && !fStops.isEmpty()) {
+                            if (!gla.isEmpty() && !glo.isEmpty()) {
                                 try {
-                                    double gla2=Double.parseDouble(gla), glo2=Double.parseDouble(glo);
-                                    String nearOrd = gpsToNearestOrd(gla2, glo2, fStops);
-                                    if (!nearOrd.isEmpty()) useOrd = nearOrd;
+                                    double la=Double.parseDouble(gla), lo=Double.parseDouble(glo);
+                                    newGpsMap.put(ord, new double[]{la, lo});
+                                    // GPS로 가장 가까운 정류장 계산
+                                    if (!fStops.isEmpty()) {
+                                        String nearOrd = gpsToNearestOrd(la, lo, fStops);
+                                        if (!nearOrd.isEmpty()) useOrd = nearOrd;
+                                    }
                                 } catch(Exception ig){}
                             }
                             ordSet.add(useOrd);
                             if (!vno.isEmpty()) vehMap.put(useOrd, vno);
                         }
+                        // GPS 맵 갱신
+                        if (!newGpsMap.isEmpty()) busGpsMap = newGpsMap;
+                        final boolean hasGps = !newGpsMap.isEmpty();
                         final int fCnt=cnt;
                         final java.util.Set<String> fOrd=ordSet;
                         final java.util.Map<String,String> fVeh=vehMap;
                         runOnUiThread(() -> {
                             if (!isOnSubScreen) return;
-                            // 검색화면이면 타임라인 갱신 차단
                             if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
                             renderBusTimeline(fRId, fRNo, fDir, container,
                                     fSNm, fENm, fStF, fEtF, fInterval, fRTp,
                                     fCnt, fVeh, fOrd, fStops, fTurnOrd);
                         });
-                    } catch (Exception ignored) {}
+                        // GPS 수신 중이면 3초, 아니면 20초 간격
+                        int delay = hasGps ? 3000 : 20000;
+                        busRefreshHandler.postDelayed(this, delay);
+                    } catch (Exception ignored) {
+                        busRefreshHandler.postDelayed(this, 20000);
+                    }
                 }).start();
-                busRefreshHandler.postDelayed(this, 20000);
             }
         };
         busRefreshHandler.postDelayed(busRefreshRunnable, 0); // 즉시 첫 갱신
