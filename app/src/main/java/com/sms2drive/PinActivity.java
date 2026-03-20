@@ -10946,7 +10946,7 @@ public class PinActivity extends AppCompatActivity {
                 String nearUrl = BUS_BASE2 + "BusSttnInfoInqireService/getCrdntPrxmtSttnList"
                         + "?serviceKey=" + BUS_KEY
                         + "&cityCode=" + BUS_CITY
-                        + "&GPS_LATI=" + myLat + "&GPS_LONG=" + myLon
+                        + "&gpsLati=" + myLat + "&gpsLong=" + myLon
                         + "&numOfRows=20&pageNo=1&_type=xml";
                 String nearXml = httpGet(nearUrl);
                 android.util.Log.d("NearbyStop", "URL: " + nearUrl);
