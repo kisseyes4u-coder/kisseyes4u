@@ -11697,6 +11697,7 @@ public class PinActivity extends AppCompatActivity {
                 rowDiv3.setLayoutParams(div3Lp);
                 content2.addView(rowDiv3);
             }
+        } // for 루프 끝
 
         // 하단 버튼 (알림시작 / 알림종료)
         boolean alreadySet = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
