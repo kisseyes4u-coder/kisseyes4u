@@ -11734,6 +11734,7 @@ public class PinActivity extends AppCompatActivity {
             boolean nowSet = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
                     .getBoolean("alarm_alight_" + routeId + "_" + alightNodeId, false);
             if (nowSet) {
+                // 알림 종료
                 getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
                         .remove("alarm_alight_" + routeId + "_" + alightNodeId)
                         .remove("alarm_alight_last_" + routeId)
@@ -11741,18 +11742,245 @@ public class PinActivity extends AppCompatActivity {
                 if (busBottomBar != null) busBottomBar.setVisibility(android.view.View.GONE);
                 busNavigateBack();
             } else {
-                getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
-                        .putBoolean("alarm_alight_" + routeId + "_" + alightNodeId, true)
-                        .putString("alarm_alight_last_" + routeId, alightNodeId)
-                        .apply();
-                android.widget.Toast.makeText(this,
-                        alightNodeNm + " 하차알림이 설정되었습니다", android.widget.Toast.LENGTH_SHORT).show();
-                tvAlarmBtn.setText("알림종료");
-                alarmBtnBg.setColor(Color.parseColor("#F05454"));
-                tvAlarmBtn.setBackground(alarmBtnBg);
+                // 알림시작 팝업
+                showAlarmStartPopup(routeNo, routeId, boardNodeNm, boardNodeNo,
+                        alightNodeId, alightNodeNm, colorHex, tvAlarmBtn, alarmBtnBg);
             }
         });
         if (busBottomBar != null) busBottomBar.addView(tvAlarmBtn);
+    }
+
+    /** 알림시작 확인 팝업 */
+    private void showAlarmStartPopup(String routeNo, String routeId,
+                                      String boardNodeNm, String boardNodeNo,
+                                      String alightNodeId, String alightNodeNm,
+                                      String colorHex, TextView tvAlarmBtn,
+                                      android.graphics.drawable.GradientDrawable alarmBtnBg) {
+        android.app.Dialog dlg = new android.app.Dialog(this, android.R.style.Theme_Material_Light_Dialog);
+        dlg.setCanceledOnTouchOutside(true);
+
+        LinearLayout dlgRoot = new LinearLayout(this);
+        dlgRoot.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable dlgBg = new android.graphics.drawable.GradientDrawable();
+        dlgBg.setColor(Color.WHITE);
+        dlgBg.setCornerRadius(dpToPx(20));
+        dlgRoot.setBackground(dlgBg);
+        dlgRoot.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+
+        // 제목
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("🔔 하차 알림 설정");
+        tvTitle.setTextColor(Color.parseColor("#111111"));
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvTitle.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.setMargins(0, 0, 0, dpToPx(20));
+        tvTitle.setLayoutParams(titleLp);
+        dlgRoot.addView(tvTitle);
+
+        // 노선 색상
+        int busColor3 = android.graphics.Color.parseColor(colorHex);
+        android.content.SharedPreferences bc3 = getSharedPreferences("bus_cache", MODE_PRIVATE);
+        String rTp3 = bc3.getString("route_" + routeId + "_rTp", "");
+        String[] badge3 = routeTypeBadge(rTp3);
+
+        // 노선 카드
+        LinearLayout routeCard = new LinearLayout(this);
+        routeCard.setOrientation(LinearLayout.HORIZONTAL);
+        routeCard.setGravity(Gravity.CENTER_VERTICAL);
+        android.graphics.drawable.GradientDrawable rcBg = new android.graphics.drawable.GradientDrawable();
+        rcBg.setColor(Color.parseColor("#F8F9FA"));
+        rcBg.setCornerRadius(dpToPx(12));
+        rcBg.setStroke(dpToPx(1), Color.parseColor(colorHex));
+        routeCard.setBackground(rcBg);
+        routeCard.setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12));
+        LinearLayout.LayoutParams rcLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rcLp.setMargins(0, 0, 0, dpToPx(16));
+        routeCard.setLayoutParams(rcLp);
+
+        // 버스 아이콘
+        android.widget.ImageView ivBusP = new android.widget.ImageView(this);
+        android.graphics.Bitmap busBmpP = getBusIconColor(busColor3);
+        if (busBmpP != null) ivBusP.setImageBitmap(busBmpP);
+        ivBusP.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24)));
+        routeCard.addView(ivBusP);
+
+        TextView tvRnoP = new TextView(this);
+        tvRnoP.setText("  " + routeNo);
+        tvRnoP.setTextColor(Color.parseColor(colorHex));
+        tvRnoP.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
+        tvRnoP.setTypeface(null, android.graphics.Typeface.BOLD);
+        routeCard.addView(tvRnoP);
+
+        dlgRoot.addView(routeCard);
+
+        // 승차 → 하차 타임라인 (간단)
+        LinearLayout tlCard = new LinearLayout(this);
+        tlCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable tlBg = new android.graphics.drawable.GradientDrawable();
+        tlBg.setColor(Color.parseColor("#F8F9FA"));
+        tlBg.setCornerRadius(dpToPx(12));
+        tlCard.setBackground(tlBg);
+        tlCard.setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14));
+        LinearLayout.LayoutParams tlLp2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlLp2.setMargins(0, 0, 0, dpToPx(16));
+        tlCard.setLayoutParams(tlLp2);
+
+        // 승차 행
+        LinearLayout boardRow = new LinearLayout(this);
+        boardRow.setOrientation(LinearLayout.HORIZONTAL);
+        boardRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView tvBoardBadge = new TextView(this);
+        tvBoardBadge.setText("승차");
+        tvBoardBadge.setTextColor(Color.parseColor(colorHex));
+        tvBoardBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        tvBoardBadge.setTypeface(null, android.graphics.Typeface.BOLD);
+        android.graphics.drawable.GradientDrawable bbBg = new android.graphics.drawable.GradientDrawable();
+        bbBg.setColor(Color.parseColor("#EBF5FF")); bbBg.setCornerRadius(dpToPx(4));
+        bbBg.setStroke(dpToPx(1), Color.parseColor(colorHex));
+        tvBoardBadge.setBackground(bbBg);
+        tvBoardBadge.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+        boardRow.addView(tvBoardBadge);
+        TextView tvBoardNm = new TextView(this);
+        tvBoardNm.setText("  " + boardNodeNm + (boardNodeNo.isEmpty() ? "" : " (" + boardNodeNo + ")"));
+        tvBoardNm.setTextColor(Color.parseColor("#333333"));
+        tvBoardNm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvBoardNm.setTypeface(null, android.graphics.Typeface.BOLD);
+        boardRow.addView(tvBoardNm);
+        tlCard.addView(boardRow);
+
+        // 연결 선 + 화살표
+        LinearLayout arrowRow = new LinearLayout(this);
+        arrowRow.setOrientation(LinearLayout.HORIZONTAL);
+        arrowRow.setGravity(Gravity.CENTER_VERTICAL);
+        arrowRow.setPadding(dpToPx(6), dpToPx(4), 0, dpToPx(4));
+        LinearLayout arrowCol = new LinearLayout(this);
+        arrowCol.setOrientation(LinearLayout.VERTICAL);
+        arrowCol.setGravity(Gravity.CENTER_HORIZONTAL);
+        android.view.View lineA = new android.view.View(this);
+        lineA.setBackgroundColor(Color.parseColor("#AED6F1"));
+        LinearLayout.LayoutParams laLp = new LinearLayout.LayoutParams(dpToPx(2), dpToPx(16));
+        laLp.gravity = Gravity.CENTER_HORIZONTAL;
+        lineA.setLayoutParams(laLp);
+        arrowCol.addView(lineA);
+        TextView tvArrow = new TextView(this);
+        tvArrow.setText("▼");
+        tvArrow.setTextColor(Color.parseColor("#AED6F1"));
+        tvArrow.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+        tvArrow.setGravity(Gravity.CENTER_HORIZONTAL);
+        arrowCol.addView(tvArrow);
+        android.view.View lineB = new android.view.View(this);
+        lineB.setBackgroundColor(Color.parseColor("#AED6F1"));
+        LinearLayout.LayoutParams lbLp2 = new LinearLayout.LayoutParams(dpToPx(2), dpToPx(16));
+        lbLp2.gravity = Gravity.CENTER_HORIZONTAL;
+        lineB.setLayoutParams(lbLp2);
+        arrowCol.addView(lineB);
+        LinearLayout.LayoutParams acLp = new LinearLayout.LayoutParams(dpToPx(20), LinearLayout.LayoutParams.WRAP_CONTENT);
+        arrowCol.setLayoutParams(acLp);
+        arrowRow.addView(arrowCol);
+        tlCard.addView(arrowRow);
+
+        // 하차 행
+        LinearLayout alightRow = new LinearLayout(this);
+        alightRow.setOrientation(LinearLayout.HORIZONTAL);
+        alightRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView tvAlightBadge = new TextView(this);
+        tvAlightBadge.setText("하차");
+        tvAlightBadge.setTextColor(Color.WHITE);
+        tvAlightBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        tvAlightBadge.setTypeface(null, android.graphics.Typeface.BOLD);
+        android.graphics.drawable.GradientDrawable abBg = new android.graphics.drawable.GradientDrawable();
+        abBg.setColor(busColor3); abBg.setCornerRadius(dpToPx(4));
+        tvAlightBadge.setBackground(abBg);
+        tvAlightBadge.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+        alightRow.addView(tvAlightBadge);
+        TextView tvAlightNm = new TextView(this);
+        tvAlightNm.setText("  " + alightNodeNm);
+        tvAlightNm.setTextColor(Color.parseColor(colorHex));
+        tvAlightNm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvAlightNm.setTypeface(null, android.graphics.Typeface.BOLD);
+        alightRow.addView(tvAlightNm);
+        tlCard.addView(alightRow);
+        dlgRoot.addView(tlCard);
+
+        // 안내 메시지
+        TextView tvDesc = new TextView(this);
+        tvDesc.setText("버스가 하차 정류장 2정거장 전에\n알림을 드립니다 🔔");
+        tvDesc.setTextColor(Color.parseColor("#555555"));
+        tvDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tvDesc.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        descLp.setMargins(0, 0, 0, dpToPx(20));
+        tvDesc.setLayoutParams(descLp);
+        dlgRoot.addView(tvDesc);
+
+        // 버튼 행
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setGravity(Gravity.CENTER);
+
+        // 취소 버튼
+        TextView tvCancel = new TextView(this);
+        tvCancel.setText("취소");
+        tvCancel.setTextColor(Color.parseColor("#888888"));
+        tvCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvCancel.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvCancel.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable cancelBg = new android.graphics.drawable.GradientDrawable();
+        cancelBg.setColor(Color.parseColor("#F0F0F0"));
+        cancelBg.setCornerRadius(dpToPx(12));
+        tvCancel.setBackground(cancelBg);
+        tvCancel.setPadding(0, dpToPx(14), 0, dpToPx(14));
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        cancelLp.setMargins(0, 0, dpToPx(8), 0);
+        tvCancel.setLayoutParams(cancelLp);
+        tvCancel.setOnClickListener(vv -> dlg.dismiss());
+        btnRow.addView(tvCancel);
+
+        // 확인 버튼
+        TextView tvConfirm = new TextView(this);
+        tvConfirm.setText("알림 시작");
+        tvConfirm.setTextColor(Color.WHITE);
+        tvConfirm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvConfirm.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvConfirm.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable confirmBg = new android.graphics.drawable.GradientDrawable();
+        confirmBg.setColor(busColor3);
+        confirmBg.setCornerRadius(dpToPx(12));
+        tvConfirm.setBackground(confirmBg);
+        tvConfirm.setPadding(0, dpToPx(14), 0, dpToPx(14));
+        tvConfirm.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        tvConfirm.setOnClickListener(vv -> {
+            dlg.dismiss();
+            // 저장
+            getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                    .putBoolean("alarm_alight_" + routeId + "_" + alightNodeId, true)
+                    .putString("alarm_alight_last_" + routeId, alightNodeId)
+                    .apply();
+            // 버튼 → 알림종료로 변경
+            tvAlarmBtn.setText("알림종료");
+            alarmBtnBg.setColor(Color.parseColor("#F05454"));
+            tvAlarmBtn.setBackground(alarmBtnBg);
+            android.widget.Toast.makeText(this,
+                    "🔔 " + alightNodeNm + " 하차 알림이 시작되었습니다",
+                    android.widget.Toast.LENGTH_SHORT).show();
+        });
+        btnRow.addView(tvConfirm);
+        dlgRoot.addView(btnRow);
+
+        dlg.setContentView(dlgRoot);
+        if (dlg.getWindow() != null) {
+            dlg.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+            android.view.WindowManager.LayoutParams wlp = dlg.getWindow().getAttributes();
+            wlp.width = (int)(getResources().getDisplayMetrics().widthPixels * 0.88f);
+            dlg.getWindow().setAttributes(wlp);
+        }
+        dlg.show();
     }
 
     /** 승/하차 정류장 행 빌더 */
