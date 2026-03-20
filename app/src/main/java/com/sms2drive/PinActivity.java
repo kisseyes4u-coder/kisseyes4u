@@ -19717,7 +19717,14 @@ public class PinActivity extends AppCompatActivity {
                             && !fc.getString(fcKey + "_stops", "").isEmpty();
 
                     if (hasCache) {
-                        // ── 캐시 HIT: UI 스레드에서 즉시 렌더링 ──
+                        // ── 캐시 HIT: 백스택 push 후 즉시 렌더링 ──
+                        // 백스택에 타임라인 push (renderBusTimeline 가드 통과 필수)
+                        boolean alreadyTl = !busBackStack.isEmpty()
+                                && "timeline".equals(busBackStack.peek()[0])
+                                && fRId.equals(busBackStack.peek()[1]);
+                        if (!alreadyTl) {
+                            busBackStack.push(new String[]{"timeline", fRId, fRNo, fRDirKey, ""});
+                        }
                         String sNm = fc.getString(fcKey+"_startNm","기점");
                         String eNm = fc.getString(fcKey+"_endNm","종점");
                         String sTm = fc.getString(fcKey+"_startTime","");
