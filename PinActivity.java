@@ -18330,12 +18330,12 @@ public class PinActivity extends AppCompatActivity {
                         tvArrTime.setText("[출발지 대기중]");
                         tvArrTime.setTextColor(Color.parseColor("#AAAAAA"));
                     } else if (arrTimeStr.startsWith("[") && arrTimeStr.endsWith("]")) {
-                        // [약 X분] 형식 - 괄호 회색, 내용 빨간색
+                        // [약 X분] 형식 - 괄호 회색, 내용 기존 색깔(시간대별)
                         android.text.SpannableStringBuilder assb = new android.text.SpannableStringBuilder();
                         int a0 = assb.length(); assb.append("[");
                         assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#AAAAAA")), a0, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                         int a1 = assb.length(); assb.append(arrTimeStr, 1, arrTimeStr.length() - 1);
-                        assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")), a1, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor(arrTimeColor)), a1, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                         int a2 = assb.length(); assb.append("]");
                         assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#AAAAAA")), a2, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                         tvArrTime.setText(assb, android.widget.TextView.BufferType.SPANNABLE);
