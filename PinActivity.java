@@ -17341,7 +17341,7 @@ public class PinActivity extends AppCompatActivity {
                             if (prev2 == 0) { timeStr2 = "[출발지 대기중]"; timeColor2 = "#888888"; }
                             else if (sec2 <= 0) { timeStr2 = ""; timeColor2 = "#555555"; }
                             else if (sec2 < 60) { timeStr2 = "곧 도착"; timeColor2 = "#E74C3C"; }
-                            else { timeStr2 = "[약 " + (sec2/60) + "분]"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
+                            else { timeStr2 = "약 " + (sec2/60) + "분"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
                             String prevStr2 = prev2 == 1 ? "[바로 앞]" : prev2 > 1 ? "[" + prev2 + "정거장 앞]" : "";
                             if (!timeStr2.isEmpty()) arrMap.put(rno2, new String[]{timeStr2, prevStr2, timeColor2, endnm2, nextnm2});
                         }
@@ -17813,11 +17813,13 @@ public class PinActivity extends AppCompatActivity {
                         .getInt("route_" + rId + "_running", -1);
                 if (runningCnt >= 0) {
                     TextView tvRunning = new TextView(this);
-                    // "9대" 빨간색 + " 운행중" 회색
+                    // "[X대 운행중]" - 괄호+숫자+대 연한빨강, " 운행중]" 회색
                     android.text.SpannableStringBuilder rssb = new android.text.SpannableStringBuilder();
+                    int rs0 = rssb.length(); rssb.append("[");
+                    rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#888888")), rs0, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     int rs1 = rssb.length(); rssb.append(runningCnt + "대");
                     rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#FF7675")), rs1, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    int rs2 = rssb.length(); rssb.append(" 운행중");
+                    int rs2 = rssb.length(); rssb.append(" 운행중]");
                     rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#888888")), rs2, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     tvRunning.setText(rssb, android.widget.TextView.BufferType.SPANNABLE);
                     tvRunning.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
