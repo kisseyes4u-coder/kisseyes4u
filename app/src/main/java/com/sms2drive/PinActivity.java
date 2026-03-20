@@ -20212,7 +20212,7 @@ public class PinActivity extends AppCompatActivity {
                         tvArrTime.setText(arrTimeStr);
                         tvArrTime.setTextColor(Color.parseColor(arrTimeColor));
                     }
-                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                     tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
                     tvArrTime.setGravity(Gravity.CENTER);
                     tvArrTime.setSingleLine(true);
