@@ -202,7 +202,7 @@ public class PinActivity extends AppCompatActivity {
     private android.widget.EditText busEtSearch = null;
     private TextView busTabBus = null;  // 버스번호 탭 버튼
     private TextView busTabStop = null; // 정류장 탭 버튼
-    private TextView busTabMap = null; // 지도 탭 버튼
+    private android.view.View busTabMap = null; // GPS 탭 버튼
     private java.util.Map<String,double[]> busGpsMap = new java.util.HashMap<>(); // 버스 실시간 GPS
     private java.util.Map<String,String>   busVehMapForMap = new java.util.HashMap<>(); // 버스 차량번호
     private Runnable busUpdateTabStyle = null; // 탭 스타일 업데이트
@@ -10125,88 +10125,39 @@ public class PinActivity extends AppCompatActivity {
         tabRow.addView(tabStop);
 
         // 지도 버튼 (탭과 동일한 스타일 - 내 위치 기반 주변 정류장 지도)
-        busTabMap = new TextView(this);
-        TextView tabMyLoc = busTabMap;
-        tabMyLoc.setText("지도");
-        tabMyLoc.setGravity(Gravity.CENTER);
-        tabMyLoc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
-        tabMyLoc.setTypeface(null, android.graphics.Typeface.BOLD);
-        tabMyLoc.setPadding(dpToPx(12), dpToPx(11), dpToPx(12), dpToPx(11));
+        // GPS 이미지 탭 (지도 텍스트 제거 → GPS 아이콘)
+        busTabMap = new android.widget.ImageView(this);
+        android.widget.ImageView tabGpsIv = (android.widget.ImageView) busTabMap;
+        try {
+            android.graphics.Bitmap gpsBm0 = android.graphics.BitmapFactory
+                    .decodeStream(getAssets().open("gps0.png"));
+            tabGpsIv.setImageBitmap(gpsBm0);
+        } catch (Exception ignored) {}
+        tabGpsIv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
         android.graphics.drawable.GradientDrawable myLocBg = new android.graphics.drawable.GradientDrawable();
         myLocBg.setColor(Color.WHITE);
         myLocBg.setCornerRadius(dpToPx(8));
         myLocBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
-        tabMyLoc.setBackground(myLocBg);
-        tabMyLoc.setTextColor(Color.parseColor("#555555"));
-        tabMyLoc.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        tabMyLoc.setOnClickListener(v -> {
-            // 지도 탭 선택 시 두 탭 비활성화
-            isBusTab[0] = false;
-            android.graphics.drawable.GradientDrawable ub1 = new android.graphics.drawable.GradientDrawable();
-            ub1.setColor(Color.WHITE); ub1.setCornerRadius(dpToPx(8));
-            ub1.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
-            tabBus.setBackground(ub1); tabBus.setTextColor(Color.parseColor("#555555"));
-            android.graphics.drawable.GradientDrawable ub2 = new android.graphics.drawable.GradientDrawable();
-            ub2.setColor(Color.WHITE); ub2.setCornerRadius(dpToPx(8));
-            ub2.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
-            tabStop.setBackground(ub2); tabStop.setTextColor(Color.parseColor("#555555"));
-            // 지도 탭 활성화
-            android.graphics.drawable.GradientDrawable selMyLoc = new android.graphics.drawable.GradientDrawable();
-            selMyLoc.setColor(Color.parseColor("#5BA9F0")); selMyLoc.setCornerRadius(dpToPx(8));
-            tabMyLoc.setBackground(selMyLoc); tabMyLoc.setTextColor(Color.WHITE);
-            // 백스택에서 현재 타임라인 노선 찾기
-            String mapRouteId = "", mapRouteNo = "";
-            for (String[] entry : busBackStack) {
-                if ("timeline".equals(entry[0])) {
-                    mapRouteId = entry[1]; mapRouteNo = entry[2]; break;
-                }
+        tabGpsIv.setBackground(myLocBg);
+        tabGpsIv.setPadding(dpToPx(6), dpToPx(6), dpToPx(6), dpToPx(6));
+        tabGpsIv.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        tabGpsIv.setOnClickListener(v -> {
+            // 즐겨찾기 버스들의 GPS 즉시 갱신
+            arrivalSessionCache.clear();
+            if (busFavSection != null) {
+                android.graphics.drawable.GradientDrawable selBg = new android.graphics.drawable.GradientDrawable();
+                selBg.setColor(Color.parseColor("#5BA9F0")); selBg.setCornerRadius(dpToPx(8));
+                tabGpsIv.setBackground(selBg);
+                // 0.5초 후 다시 원래 배경으로
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    android.graphics.drawable.GradientDrawable resetBg = new android.graphics.drawable.GradientDrawable();
+                    resetBg.setColor(Color.WHITE); resetBg.setCornerRadius(dpToPx(8));
+                    resetBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                    tabGpsIv.setBackground(resetBg);
+                }, 500);
             }
-            if (mapRouteId.isEmpty()) {
-                android.widget.Toast.makeText(this, "먼저 버스 타임라인을 열어주세요", android.widget.Toast.LENGTH_SHORT).show();
-                // 지도 탭 비활성으로 되돌리기
-                android.graphics.drawable.GradientDrawable rb = new android.graphics.drawable.GradientDrawable();
-                rb.setColor(Color.WHITE); rb.setCornerRadius(dpToPx(8));
-                rb.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
-                tabMyLoc.setBackground(rb); tabMyLoc.setTextColor(Color.parseColor("#555555"));
-                return;
-            }
-            final String fMapRouteId = mapRouteId, fMapRouteNo = mapRouteNo;
-            // bus_cache에서 정류장 캐시 로드 후 지도 표시
-            android.content.SharedPreferences fc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
-            java.util.List<String[]> cachedStops = new java.util.ArrayList<>();
-            for (String line : fc2.getString("route_" + fMapRouteId + "_stops", "").split(";")) {
-                String[] p = line.split("\\|", -1);
-                if (p.length >= 4) cachedStops.add(p);
-            }
-            // 버스 현재 위치(ordSet) 실시간으로 가져오기
-            final java.util.List<String[]> fCachedStops = cachedStops;
-            new Thread(() -> {
-                try {
-                    String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
-                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                            + "&routeId=" + fMapRouteId + "&numOfRows=50&pageNo=1&_type=xml");
-                    java.util.Set<String> ordSet2 = new java.util.HashSet<>();
-                    java.util.Map<String,String> vehMap2 = new java.util.HashMap<>();
-                    java.util.Map<String,double[]> gpsMap2 = new java.util.HashMap<>();
-                    for (String item : lcXml.split("<item>")) {
-                        String ord = tag(item, "nodeord"), vno = tag(item, "vehicleno");
-                        String gla = tag(item, "gpslati"), glo = tag(item, "gpslong");
-                        if (!ord.isEmpty()) {
-                            ordSet2.add(ord);
-                            if (!vno.isEmpty()) vehMap2.put(ord, vno);
-                            if (!gla.isEmpty() && !glo.isEmpty()) {
-                                try { gpsMap2.put(ord, new double[]{Double.parseDouble(gla), Double.parseDouble(glo)}); } catch(Exception ig){}
-                            }
-                        }
-                    }
-                    final java.util.Set<String> fOrd = ordSet2;
-                    final java.util.Map<String,String> fVeh2 = vehMap2;
-                    final java.util.Map<String,double[]> fGps2 = gpsMap2;
-                    runOnUiThread(() -> showBusMapDialogWithGps(fMapRouteId, fMapRouteNo, fCachedStops, fOrd, fVeh2, fGps2));
-                } catch (Exception e) {
-                    runOnUiThread(() -> showBusMapDialog(fMapRouteId, fMapRouteNo, fCachedStops, new java.util.HashSet<>(), new java.util.HashMap<>()));
-                }
-            }).start();
+            refreshBusFavorites();
+            android.widget.Toast.makeText(this, "GPS 갱신 중...", android.widget.Toast.LENGTH_SHORT).show();
         });
         tabRow.addView(tabMyLoc);
 
