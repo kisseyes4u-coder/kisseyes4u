@@ -10336,7 +10336,6 @@ public class PinActivity extends AppCompatActivity {
         busOverlayLayer.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
                 android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
                 android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
-        busOverlayLayer.setPointerIcon(null); // 터치 이벤트 통과
         busOverlayLayer.setClickable(false);
         busOverlayLayer.setFocusable(false);
         busTimelineOverlayFrame = busOverlayLayer;
@@ -11185,113 +11184,119 @@ public class PinActivity extends AppCompatActivity {
                                      java.util.List<String[]> stops,
                                      java.util.Map<String,String> vehMap,
                                      int duration) {
-        if (busTimelineOverlayFrame == null || busTimelineSvInner == null) return;
-        android.graphics.Bitmap busBmp = getBusIcon();
-        if (busBmp == null) return;
+        runOnUiThread(() -> {
+            try {
+                if (busTimelineOverlayFrame == null || busTimelineSvInner == null) return;
+                android.graphics.Bitmap busBmp = getBusIcon();
+                if (busBmp == null) return;
 
-        // 기존 애니메이터 취소
-        for (android.animation.ValueAnimator va : busAnimators.values()) va.cancel();
-        busAnimators.clear();
-
-        int busIdx = 0;
-        for (java.util.Map.Entry<String,double[]> entry : gpsMap.entrySet()) {
-            double gLat = entry.getValue()[0], gLon = entry.getValue()[1];
-
-            // 가장 가까운 두 정류장 찾기
-            String ord1 = "", ord2 = "";
-            double dist1 = Double.MAX_VALUE, dist2 = Double.MAX_VALUE;
-            for (String[] s : stops) {
-                if (s.length < 6 || s[4].isEmpty() || s[5].isEmpty()) continue;
-                try {
-                    double sLat = Double.parseDouble(s[4]), sLon = Double.parseDouble(s[5]);
-                    double dlat = Math.toRadians(sLat-gLat), dlon = Math.toRadians(sLon-gLon);
-                    double a = Math.sin(dlat/2)*Math.sin(dlat/2)
-                            + Math.cos(Math.toRadians(gLat))*Math.cos(Math.toRadians(sLat))
-                            * Math.sin(dlon/2)*Math.sin(dlon/2);
-                    double dist = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                    if (dist < dist1) { dist2=dist1; ord2=ord1; dist1=dist; ord1=s[2]; }
-                    else if (dist < dist2) { dist2=dist; ord2=s[2]; }
-                } catch (Exception ig) {}
-            }
-            if (ord1.isEmpty()) continue;
-            float t = (dist1+dist2 > 0) ? (float)(dist2/(dist1+dist2)) : 0f;
-
-            // row Y 좌표 (svInner 기준)
-            android.view.View row1 = findRowByOrd(busTimelineSvInner, ord1);
-            android.view.View row2 = ord2.isEmpty() ? null : findRowByOrd(busTimelineSvInner, ord2);
-            if (row1 == null) continue;
-
-            final int fBusIdx = busIdx;
-            final float fT = t;
-            final android.view.View fRow1 = row1, fRow2 = row2;
-            final String vno = vehMap.getOrDefault(ord1, "");
-            final String shortNo = vno.length() > 4 ? vno.substring(vno.length()-4) : vno;
-
-            row1.post(() -> {
-                // svInner 기준 Y 좌표
-                int[] r1Loc = new int[2], innerLoc = new int[2];
-                fRow1.getLocationOnScreen(r1Loc);
-                busTimelineSvInner.getLocationOnScreen(innerLoc);
-                float y1 = (r1Loc[1] - innerLoc[1]) + fRow1.getHeight() / 2f;
-                float y2 = y1;
-                if (fRow2 != null) {
-                    int[] r2Loc = new int[2];
-                    fRow2.getLocationOnScreen(r2Loc);
-                    y2 = (r2Loc[1] - innerLoc[1]) + fRow2.getHeight() / 2f;
+                for (android.animation.ValueAnimator va : busAnimators.values()) {
+                    try { va.cancel(); } catch (Exception ig) {}
                 }
-                // 스크롤 오프셋 반영한 overlayFrame 기준 Y
-                float scrollY = busTimelineSv != null ? busTimelineSv.getScrollY() : 0;
-                float targetY = y1 + (y2 - y1) * fT - scrollY - dpToPx(13);
-                // X: tlFrame 폭(40dp) 중앙
-                float targetX = dpToPx(12); // svInner padding 반영
+                busAnimators.clear();
 
-                // 기존 마커 재사용 또는 생성
-                final String busKey = "bus_" + fBusIdx;
-                android.widget.ImageView iv = busAnimMarkers.get(busKey);
-                if (iv == null || iv.getParent() != busTimelineOverlayFrame) {
-                    if (iv != null && iv.getParent() != null)
-                        ((android.view.ViewGroup)iv.getParent()).removeView(iv);
-                    iv = new android.widget.ImageView(PinActivity.this);
-                    iv.setImageBitmap(busBmp);
-                    iv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-                    android.widget.FrameLayout.LayoutParams ivLp = new android.widget.FrameLayout.LayoutParams(
-                            dpToPx(26), dpToPx(22));
-                    iv.setLayoutParams(ivLp);
-                    iv.setAlpha(0f);
-                    busTimelineOverlayFrame.addView(iv);
-                    busAnimMarkers.put(busKey, iv);
+                int[] busIdxArr = {0};
+                for (java.util.Map.Entry<String,double[]> entry : gpsMap.entrySet()) {
+                    try {
+                        double gLat = entry.getValue()[0], gLon = entry.getValue()[1];
+                        String ord1 = "", ord2 = "";
+                        double dist1 = Double.MAX_VALUE, dist2 = Double.MAX_VALUE;
+                        for (String[] s : stops) {
+                            if (s.length < 6 || s[4].isEmpty() || s[5].isEmpty()) continue;
+                            try {
+                                double sLat = Double.parseDouble(s[4]), sLon = Double.parseDouble(s[5]);
+                                double dlat = Math.toRadians(sLat-gLat), dlon = Math.toRadians(sLon-gLon);
+                                double a = Math.sin(dlat/2)*Math.sin(dlat/2)
+                                        + Math.cos(Math.toRadians(gLat))*Math.cos(Math.toRadians(sLat))
+                                        * Math.sin(dlon/2)*Math.sin(dlon/2);
+                                double dist = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                                if (dist < dist1) { dist2=dist1; ord2=ord1; dist1=dist; ord1=s[2]; }
+                                else if (dist < dist2) { dist2=dist; ord2=s[2]; }
+                            } catch (Exception ig) {}
+                        }
+                        if (ord1.isEmpty()) continue;
+                        float t = (dist1+dist2 > 0) ? (float)(dist2/(dist1+dist2)) : 0f;
+
+                        android.view.View row1 = findRowByOrd(busTimelineSvInner, ord1);
+                        android.view.View row2 = ord2.isEmpty() ? null : findRowByOrd(busTimelineSvInner, ord2);
+                        if (row1 == null) continue;
+
+                        final int fBusIdx = busIdxArr[0];
+                        final float fT = t;
+                        final android.view.View fRow1 = row1, fRow2 = row2;
+                        final String vno = vehMap.getOrDefault(ord1, "");
+
+                        row1.post(() -> {
+                            try {
+                                int[] r1Loc = new int[2], innerLoc = new int[2];
+                                fRow1.getLocationOnScreen(r1Loc);
+                                busTimelineSvInner.getLocationOnScreen(innerLoc);
+                                float y1 = (r1Loc[1] - innerLoc[1]) + fRow1.getHeight() / 2f;
+                                float y2 = y1;
+                                if (fRow2 != null) {
+                                    int[] r2Loc = new int[2];
+                                    fRow2.getLocationOnScreen(r2Loc);
+                                    y2 = (r2Loc[1] - innerLoc[1]) + fRow2.getHeight() / 2f;
+                                }
+                                float scrollY = busTimelineSv != null ? busTimelineSv.getScrollY() : 0;
+                                float targetY = y1 + (y2 - y1) * fT - scrollY - dpToPx(13);
+                                float targetX = dpToPx(12);
+                                final float svAbsY = y1 + (y2 - y1) * fT - dpToPx(13);
+
+                                final String busKey = "bus_" + fBusIdx;
+                                android.widget.ImageView iv = busAnimMarkers.get(busKey);
+                                if (iv == null || iv.getParent() != busTimelineOverlayFrame) {
+                                    if (iv != null && iv.getParent() != null)
+                                        ((android.view.ViewGroup)iv.getParent()).removeView(iv);
+                                    iv = new android.widget.ImageView(PinActivity.this);
+                                    iv.setImageBitmap(busBmp);
+                                    iv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                                    android.widget.FrameLayout.LayoutParams ivLp =
+                                            new android.widget.FrameLayout.LayoutParams(dpToPx(26), dpToPx(22));
+                                    iv.setLayoutParams(ivLp);
+                                    iv.setAlpha(0f);
+                                    busTimelineOverlayFrame.addView(iv);
+                                    busAnimMarkers.put(busKey, iv);
+                                }
+                                final android.widget.ImageView fIv = iv;
+                                final float fromY = fIv.getAlpha() > 0 ? fIv.getTranslationY() : targetY;
+                                fIv.setTranslationX(targetX);
+
+                                android.animation.ValueAnimator va =
+                                        android.animation.ValueAnimator.ofFloat(fromY, targetY);
+                                va.setDuration(duration);
+                                va.setInterpolator(new android.view.animation.DecelerateInterpolator());
+                                va.addUpdateListener(anim -> {
+                                    try {
+                                        float val = (float) anim.getAnimatedValue();
+                                        fIv.setTranslationY(val);
+                                        fIv.setAlpha(1f);
+                                        fIv.setTag(svAbsY);
+                                    } catch (Exception ig) {}
+                                });
+                                va.start();
+                                if (busAnimators.containsKey(busKey)) {
+                                    try { busAnimators.get(busKey).cancel(); } catch(Exception ig){}
+                                }
+                                busAnimators.put(busKey, va);
+                            } catch (Exception ignored) {}
+                        });
+                        busIdxArr[0]++;
+                    } catch (Exception ig) {}
                 }
-                final android.widget.ImageView fIv = iv;
-                final float fromY = fIv.getAlpha() > 0 ? fIv.getTranslationY() : targetY;
-                fIv.setTranslationX(targetX);
 
-                // ValueAnimator로 부드럽게 이동
-                android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(fromY, targetY);
-                va.setDuration(duration);
-                va.setInterpolator(new android.view.animation.DecelerateInterpolator());
-                final float svInnerTargetY = y1 + (y2 - y1) * fT - dpToPx(13); // svInner 절대 Y 저장
-                va.addUpdateListener(anim -> {
-                    float val = (float) anim.getAnimatedValue();
-                    fIv.setTranslationY(val);
-                    fIv.setAlpha(1f);
-                    fIv.setTag(svInnerTargetY); // 스크롤 보정용 저장
-                });
-                va.start();
-                if (busAnimators.containsKey(busKey)) busAnimators.get(busKey).cancel();
-                busAnimators.put(busKey, va);
-            });
-            busIdx++;
-        }
-
-        // 사용하지 않는 마커 숨기기
-        final int fBusTotal = busIdx;
-        for (java.util.Map.Entry<String,android.widget.ImageView> e : busAnimMarkers.entrySet()) {
-            int idx = 0; try { idx = Integer.parseInt(e.getKey().replace("bus_","")); } catch(Exception ig){}
-            if (idx >= fBusTotal) e.getValue().setAlpha(0f);
-        }
+                final int fBusTotal = busIdxArr[0];
+                for (java.util.Map.Entry<String,android.widget.ImageView> e : busAnimMarkers.entrySet()) {
+                    try {
+                        int idx = Integer.parseInt(e.getKey().replace("bus_",""));
+                        if (idx >= fBusTotal) e.getValue().setAlpha(0f);
+                    } catch (Exception ig) {}
+                }
+            } catch (Exception ignored) {}
+        });
     }
 
-        private android.view.View findRowByOrd(LinearLayout parent, String ord) {
+    private android.view.View findRowByOrd(LinearLayout parent, String ord) {
         for (int i = 0; i < parent.getChildCount(); i++) {
             android.view.View child = parent.getChildAt(i);
             Object tag = child.getTag(android.R.id.text1);
