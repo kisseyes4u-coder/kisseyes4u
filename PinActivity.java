@@ -17341,7 +17341,7 @@ public class PinActivity extends AppCompatActivity {
                             if (prev2 == 0) { timeStr2 = "[출발지 대기중]"; timeColor2 = "#888888"; }
                             else if (sec2 <= 0) { timeStr2 = ""; timeColor2 = "#555555"; }
                             else if (sec2 < 60) { timeStr2 = "곧 도착"; timeColor2 = "#E74C3C"; }
-                            else { timeStr2 = "약 " + (sec2/60) + "분"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
+                            else { timeStr2 = "[약 " + (sec2/60) + "분]"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#E74C3C"; }
                             String prevStr2 = prev2 == 1 ? "[바로 앞]" : prev2 > 1 ? "[" + prev2 + "정거장 앞]" : "";
                             if (!timeStr2.isEmpty()) arrMap.put(rno2, new String[]{timeStr2, prevStr2, timeColor2, endnm2, nextnm2});
                         }
@@ -18325,8 +18325,25 @@ public class PinActivity extends AppCompatActivity {
                         } catch (Exception ig) {}
                     }
                     TextView tvArrTime = new TextView(this);
-                    tvArrTime.setText(arrTimeStr.isEmpty() ? "[출발지 대기중]" : arrTimeStr);
-                    tvArrTime.setTextColor(Color.parseColor(arrTimeStr.isEmpty() ? "#AAAAAA" : arrTimeColor));
+                    if (arrTimeStr.isEmpty()) {
+                        // [출발지 대기중] - 전체 회색
+                        tvArrTime.setText("[출발지 대기중]");
+                        tvArrTime.setTextColor(Color.parseColor("#AAAAAA"));
+                    } else if (arrTimeStr.startsWith("[") && arrTimeStr.endsWith("]")) {
+                        // [약 X분] 형식 - 괄호 회색, 내용 빨간색
+                        android.text.SpannableStringBuilder assb = new android.text.SpannableStringBuilder();
+                        int a0 = assb.length(); assb.append("[");
+                        assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#AAAAAA")), a0, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        int a1 = assb.length(); assb.append(arrTimeStr, 1, arrTimeStr.length() - 1);
+                        assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")), a1, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        int a2 = assb.length(); assb.append("]");
+                        assb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#AAAAAA")), a2, assb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        tvArrTime.setText(assb, android.widget.TextView.BufferType.SPANNABLE);
+                    } else {
+                        // 곧 도착 등 기타
+                        tvArrTime.setText(arrTimeStr);
+                        tvArrTime.setTextColor(Color.parseColor(arrTimeColor));
+                    }
                     tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
                     tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
                     tvArrTime.setGravity(Gravity.CENTER);
