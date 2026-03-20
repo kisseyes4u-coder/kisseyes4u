@@ -17338,7 +17338,18 @@ public class PinActivity extends AppCompatActivity {
                             if (minSecMap.containsKey(rno2) && sec2 >= 0 && sec2 >= minSecMap.get(rno2)) continue;
                             if (sec2 >= 0) minSecMap.put(rno2, sec2);
                             String timeStr2, timeColor2;
-                            if (prev2 == 0) { timeStr2 = "출발지 대기중"; timeColor2 = "#888888"; }
+                            if (prev2 == 0) {
+                                // 출발지 대기중 → 배차시간표에서 다음 출발시간 표시
+                                String nd2 = getNextDeparture(rno2, true);
+                                if (nd2.isEmpty()) nd2 = getNextDeparture(rno2, false);
+                                if (!nd2.isEmpty()) {
+                                    // "20시 41분 출발" → "20:41 출발" 형식 변환
+                                    String fmt2 = nd2.replaceAll("(\\d+)시 (\\d+)분 출발", "$1:$2 출발");
+                                    timeStr2 = fmt2; timeColor2 = "#555555";
+                                } else {
+                                    timeStr2 = "출발지 대기중"; timeColor2 = "#888888";
+                                }
+                            }
                             else if (sec2 <= 0) { timeStr2 = ""; timeColor2 = "#555555"; }
                             else if (sec2 < 60) { timeStr2 = "곧 도착"; timeColor2 = "#E74C3C"; }
                             else { timeStr2 = "약 " + (sec2/60) + "분"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
