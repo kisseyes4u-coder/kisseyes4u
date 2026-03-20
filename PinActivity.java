@@ -12362,17 +12362,37 @@ public class PinActivity extends AppCompatActivity {
                 // 로컬 캐시 없으면 실시간 API 결과만 사용 (fallback)
                 boolean localDataFound = !allRoutes.isEmpty();
 
-                // ── 방면 정보 업데이트: allRoutes의 etnm(종점명) 수집 ──────────
-                if (!allRoutes.isEmpty() && busDirectionTV != null) {
-                    java.util.LinkedHashSet<String> dirSet2 = new java.util.LinkedHashSet<>();
+                // ── 방면 계산: 각 노선에서 nodeId 다음 정류소 수집 → 최빈값 ──
+                if (busDirectionTV != null && !allRoutes.isEmpty()) {
+                    java.util.Map<String, Integer> nextStopCount = new java.util.HashMap<>();
+                    android.content.SharedPreferences bc5 = getSharedPreferences("bus_cache", MODE_PRIVATE);
                     for (String[] rt : allRoutes) {
-                        if (rt.length > 3 && !rt[3].isEmpty()) dirSet2.add(rt[3] + "방면");
+                        String rid5 = rt.length > 1 ? rt[1] : "";
+                        if (rid5.isEmpty()) continue;
+                        String stopsStr5 = bc5.getString("route_" + rid5 + "_stops", "");
+                        if (stopsStr5.isEmpty()) continue;
+                        String[] items5 = stopsStr5.split(";");
+                        for (int si5 = 0; si5 < items5.length - 1; si5++) {
+                            String[] sp5 = items5[si5].split("\\|");
+                            if (sp5.length > 0 && sp5[0].equals(nodeId)) {
+                                String[] spN = items5[si5 + 1].split("\\|");
+                                if (spN.length > 1 && !spN[1].isEmpty()) {
+                                    String nm5 = spN[1];
+                                    nextStopCount.put(nm5, nextStopCount.getOrDefault(nm5, 0) + 1);
+                                }
+                                break;
+                            }
+                        }
                     }
-                    if (!dirSet2.isEmpty()) {
-                        final String dirText = android.text.TextUtils.join("  ", dirSet2);
-                        runOnUiThread(() -> {
-                            if (busDirectionTV != null) busDirectionTV.setText(dirText);
-                        });
+                    if (!nextStopCount.isEmpty()) {
+                        // 가장 많이 나온 다음 정류소
+                        String topNext = "";
+                        int topCnt = 0;
+                        for (java.util.Map.Entry<String, Integer> e5 : nextStopCount.entrySet()) {
+                            if (e5.getValue() > topCnt) { topCnt = e5.getValue(); topNext = e5.getKey(); }
+                        }
+                        final String dirFinal = topNext + " 방면";
+                        runOnUiThread(() -> { if (busDirectionTV != null) busDirectionTV.setText(dirFinal); });
                     }
                 }
 
@@ -12424,18 +12444,7 @@ public class PinActivity extends AppCompatActivity {
                         }
                         String prevStr = prev == 0 ? "[출발지 대기중]" : prev == 1 ? "[바로 앞 정거장]" : prev > 0 ? "[" + prev + " 정거장 앞]" : "";
                         arrMap.put(rno, new String[]{timeStr, prevStr, timeColor, endnm, nextnm});
-                        // 방면 실시간 업데이트 (arrMap에서 endnm 수집)
-                        if (busDirectionTV != null && !endnm.isEmpty()) {
-                            final String endnmFinal = endnm + "방면";
-                            runOnUiThread(() -> {
-                                if (busDirectionTV != null) {
-                                    String cur2 = busDirectionTV.getText().toString();
-                                    if (!cur2.contains(endnm)) {
-                                        busDirectionTV.setText(cur2.isEmpty() ? endnmFinal : cur2 + "  " + endnmFinal);
-                                    }
-                                }
-                            });
-                        }
+
 
                         // 로컬 캐시 없으면 API 노선도 목록에 추가
                         if (!localDataFound) {
@@ -12561,17 +12570,6 @@ public class PinActivity extends AppCompatActivity {
         if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
         // 도착화면 태그 검증
         if (busFixedHeader == null || !("arrival_" + nodeId).equals(busFixedHeader.getTag())) return;
-
-        // 방면 수집: arrMap에서 endNm 모아서 busDirectionTV에 표시
-        if (busDirectionTV != null && arrMap != null && !arrMap.isEmpty()) {
-            java.util.LinkedHashSet<String> dirSet = new java.util.LinkedHashSet<>();
-            for (String[] ai : arrMap.values()) {
-                if (ai != null && ai.length > 3 && !ai[3].isEmpty()) dirSet.add(ai[3] + "방면");
-            }
-            if (!dirSet.isEmpty()) {
-                runOnUiThread(() -> busDirectionTV.setText(android.text.TextUtils.join("  ", dirSet)));
-            }
-        }
 
         // 가장 빠른 버스 계산
         String soonRno = ""; int soonSec = Integer.MAX_VALUE;
