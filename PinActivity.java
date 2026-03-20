@@ -17806,8 +17806,8 @@ public class PinActivity extends AppCompatActivity {
                 card.setOrientation(LinearLayout.VERTICAL);
                 card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
                 card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-                card.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
-                LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(0, dpToPx(110), 1f);
+                card.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
+                LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
                 cardLp.setMargins(0, 0, colIdx % 2 == 0 ? dpToPx(6) : 0, 0);
                 card.setLayoutParams(cardLp);
 
@@ -17819,8 +17819,10 @@ public class PinActivity extends AppCompatActivity {
                 LinearLayout sIconBtnRow = new LinearLayout(this);
                 sIconBtnRow.setOrientation(LinearLayout.HORIZONTAL);
                 sIconBtnRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-                sIconBtnRow.setLayoutParams(new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                LinearLayout.LayoutParams sIconBtnRowLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                sIconBtnRowLp.setMargins(0, 0, 0, dpToPx(4));
+                sIconBtnRow.setLayoutParams(sIconBtnRowLp);
 
                 // 버스 아이콘 (왼쪽) - routeType 색상
                 String sTpCached = getSharedPreferences("bus_cache", MODE_PRIVATE)
@@ -18139,7 +18141,7 @@ public class PinActivity extends AppCompatActivity {
                 }
                 LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                rNoLp2.setMargins(0, dpToPx(4), 0, 0);
+                rNoLp2.setMargins(0, dpToPx(2), 0, 0);
                 tvStopRouteNo.setLayoutParams(rNoLp2);
                 card.addView(tvStopRouteNo);
 
@@ -18162,6 +18164,32 @@ public class PinActivity extends AppCompatActivity {
                     stopSubLp.setMargins(0, dpToPx(3), 0, 0);
                     tvStopSub.setLayoutParams(stopSubLp);
                     card.addView(tvStopSub);
+                }
+
+                // 도착시간 표시 (캐시에 있으면)
+                if (!routeNo.isEmpty()) {
+                    String fNodeId2 = compositeKey.contains("_")
+                            ? compositeKey.substring(compositeKey.indexOf("_") + 1)
+                            : compositeKey;
+                    Object[] cached2 = arrivalSessionCache.get(fNodeId2);
+                    String arrTimeStr = "";
+                    if (cached2 != null && cached2.length >= 3) {
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, String[]> arrMap2 = (java.util.Map<String, String[]>) cached2[2];
+                        String[] ai2 = arrMap2.get(routeNo);
+                        if (ai2 != null && !ai2[0].isEmpty()) arrTimeStr = ai2[0];
+                    }
+                    TextView tvArrTime = new TextView(this);
+                    tvArrTime.setText(arrTimeStr.isEmpty() ? "도착정보 없음" : arrTimeStr);
+                    tvArrTime.setTextColor(Color.parseColor(arrTimeStr.isEmpty() ? "#AAAAAA" : "#E74C3C"));
+                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                    tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvArrTime.setSingleLine(true);
+                    LinearLayout.LayoutParams arrLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    arrLp.setMargins(0, dpToPx(3), 0, 0);
+                    tvArrTime.setLayoutParams(arrLp);
+                    card.addView(tvArrTime);
                 }
 
                 // 카드 탭 → 노선 있으면 타임라인 해당 정류장 중앙 스크롤만 (화면 전환 없음)
