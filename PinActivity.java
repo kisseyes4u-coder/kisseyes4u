@@ -18132,9 +18132,8 @@ public class PinActivity extends AppCompatActivity {
         // 가장 빠른 시간 하나만 표시
         int minSec = busSoonCache.firstKey();
         String timeLabel = minSec == 0 ? "곧 도착 " : (minSec / 60) + "분 후 ";
-        // 전체 버스 수집
-        java.util.List<String> allBuses = new java.util.ArrayList<>();
-        for (java.util.List<String> rl : busSoonCache.values()) allBuses.addAll(rl);
+        // X분 후에 해당하는 버스만 수집 (첫번째 키=최소시간)
+        java.util.List<String> allBuses = new java.util.ArrayList<>(busSoonCache.firstEntry().getValue());
         // 정렬 적용
         if (busSortMode == 1) { // 번호순
             allBuses.sort((a, b) -> {
