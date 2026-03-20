@@ -10954,6 +10954,7 @@ public class PinActivity extends AppCompatActivity {
                                 .append(stop[2]).append("|").append(stop[3]);
                     }
                     cache.edit().putString(cKey+"_stops", sb.toString()).apply();
+                    cache.edit().putInt(cKey+"_running", cnt).apply(); // 운행 대수 저장
 
                     boolean isReverse = "reverse".equals(direction);
                     if (isReverse) java.util.Collections.reverse(stops);
@@ -17670,31 +17671,51 @@ public class PinActivity extends AppCompatActivity {
                 iconBtnRow.addView(tvBell);
                 rCard.addView(iconBtnRow);
 
-                // 버스 번호
+                // 버스 번호 + 운행대수 가로 행
+                LinearLayout rNoRow = new LinearLayout(this);
+                rNoRow.setOrientation(LinearLayout.HORIZONTAL);
+                rNoRow.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams rNoRowLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rNoRowLp.setMargins(0, dpToPx(2), 0, 0);
+                rNoRow.setLayoutParams(rNoRowLp);
+
                 TextView tvRNo = new TextView(this);
-                tvRNo.setText(rNo + "번");
+                tvRNo.setText(rNo); // "번" 제거
                 tvRNo.setTextColor(Color.parseColor(rTypeColor));
                 tvRNo.setSingleLine(true);
                 tvRNo.setEllipsize(null);
                 // 글자수에 따라 크기 조정
                 {
-                    String rNoTxt = rNo + "번";
-                    if (rNoTxt.length() > 9) {
+                    if (rNo.length() > 8) {
                         tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
                         tvRNo.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                    } else if (rNoTxt.length() > 6) {
+                    } else if (rNo.length() > 5) {
                         tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
-                        tvRNo.setEllipsize(null);
                     }
                 }
                 tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
                 tvRNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
                 tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
-                LinearLayout.LayoutParams rNoLp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                rNoLp.setMargins(0, dpToPx(2), 0, 0);
-                tvRNo.setLayoutParams(rNoLp);
-                rCard.addView(tvRNo);
+                tvRNo.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                rNoRow.addView(tvRNo);
+
+                // 운행중 대수 (bus_cache에서)
+                int runningCnt = getSharedPreferences("bus_cache", MODE_PRIVATE)
+                        .getInt("route_" + rId + "_running", -1);
+                if (runningCnt >= 0) {
+                    TextView tvRunning = new TextView(this);
+                    tvRunning.setText("  " + runningCnt + "대 운행중");
+                    tvRunning.setTextColor(Color.parseColor("#E74C3C"));
+                    tvRunning.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    tvRunning.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvRunning.setSingleLine(true);
+                    tvRunning.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    rNoRow.addView(tvRunning);
+                }
+                rCard.addView(rNoRow);
 
                 // 방면 (메모 or 방향)
                 String subText = rMemo.isEmpty() ? rDir : rMemo;
@@ -18115,12 +18136,19 @@ public class PinActivity extends AppCompatActivity {
                 sIconBtnRow.addView(tvStopBell);
                 card.addView(sIconBtnRow);
 
-                // 노선 번호 (보라색)
-                // 노선+정류소: "708번" + 정류소명 / 정류소만: 정류소명 + 번호
+                // 노선 번호 + 도착시간 가로 행
                 String stopMemo = prefs.getString(favKey2 + "_memo", "");
+                LinearLayout stopNoRow = new LinearLayout(this);
+                stopNoRow.setOrientation(LinearLayout.HORIZONTAL);
+                stopNoRow.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rNoLp2.setMargins(0, dpToPx(2), 0, 0);
+                stopNoRow.setLayoutParams(rNoLp2);
+
                 TextView tvStopRouteNo = new TextView(this);
                 if (!routeNo.isEmpty()) {
-                    tvStopRouteNo.setText(routeNo + "번");
+                    tvStopRouteNo.setText(routeNo); // "번" 제거
                 } else {
                     tvStopRouteNo.setText(stopMemo.isEmpty() ? stopName : stopMemo);
                 }
@@ -18129,23 +18157,43 @@ public class PinActivity extends AppCompatActivity {
                 tvStopRouteNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
                 tvStopRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
                 tvStopRouteNo.setSingleLine(true);
-                tvStopRouteNo.setEllipsize(null);
-                // 글자수에 따라 크기 조정
                 {
                     String txt = tvStopRouteNo.getText().toString();
-                    if (txt.length() > 9) {
+                    if (txt.length() > 8) {
                         tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
                         tvStopRouteNo.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                    } else if (txt.length() > 6) {
+                    } else if (txt.length() > 5) {
                         tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
-                        tvStopRouteNo.setEllipsize(null);
                     }
                 }
-                LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                rNoLp2.setMargins(0, dpToPx(2), 0, 0);
-                tvStopRouteNo.setLayoutParams(rNoLp2);
-                card.addView(tvStopRouteNo);
+                tvStopRouteNo.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                stopNoRow.addView(tvStopRouteNo);
+
+                // 번호 오른쪽: 도착시간 (버스번호+정류장 즐겨찾기)
+                if (!routeNo.isEmpty()) {
+                    String fNodeId2 = compositeKey.contains("_")
+                            ? compositeKey.substring(compositeKey.indexOf("_") + 1)
+                            : compositeKey;
+                    Object[] cached2 = arrivalSessionCache.get(fNodeId2);
+                    String arrTimeStr = "";
+                    if (cached2 != null && cached2.length >= 3) {
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, String[]> arrMap2 = (java.util.Map<String, String[]>) cached2[2];
+                        String[] ai2 = arrMap2.get(routeNo);
+                        if (ai2 != null && !ai2[0].isEmpty()) arrTimeStr = ai2[0];
+                    }
+                    TextView tvArrTime = new TextView(this);
+                    tvArrTime.setText(arrTimeStr.isEmpty() ? "  정보없음" : "  " + arrTimeStr);
+                    tvArrTime.setTextColor(Color.parseColor(arrTimeStr.isEmpty() ? "#AAAAAA" : "#E74C3C"));
+                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                    tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvArrTime.setSingleLine(true);
+                    tvArrTime.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    stopNoRow.addView(tvArrTime);
+                }
+                card.addView(stopNoRow);
 
                 // 서브 텍스트
                 String stopSubText;
@@ -18166,32 +18214,6 @@ public class PinActivity extends AppCompatActivity {
                     stopSubLp.setMargins(0, dpToPx(3), 0, 0);
                     tvStopSub.setLayoutParams(stopSubLp);
                     card.addView(tvStopSub);
-                }
-
-                // 도착시간 표시 (캐시에 있으면)
-                if (!routeNo.isEmpty()) {
-                    String fNodeId2 = compositeKey.contains("_")
-                            ? compositeKey.substring(compositeKey.indexOf("_") + 1)
-                            : compositeKey;
-                    Object[] cached2 = arrivalSessionCache.get(fNodeId2);
-                    String arrTimeStr = "";
-                    if (cached2 != null && cached2.length >= 3) {
-                        @SuppressWarnings("unchecked")
-                        java.util.Map<String, String[]> arrMap2 = (java.util.Map<String, String[]>) cached2[2];
-                        String[] ai2 = arrMap2.get(routeNo);
-                        if (ai2 != null && !ai2[0].isEmpty()) arrTimeStr = ai2[0];
-                    }
-                    TextView tvArrTime = new TextView(this);
-                    tvArrTime.setText(arrTimeStr.isEmpty() ? "도착정보 없음" : arrTimeStr);
-                    tvArrTime.setTextColor(Color.parseColor(arrTimeStr.isEmpty() ? "#AAAAAA" : "#E74C3C"));
-                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                    tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
-                    tvArrTime.setSingleLine(true);
-                    LinearLayout.LayoutParams arrLp = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    arrLp.setMargins(0, dpToPx(3), 0, 0);
-                    tvArrTime.setLayoutParams(arrLp);
-                    card.addView(tvArrTime);
                 }
 
                 // 카드 탭 → 노선 있으면 타임라인 해당 정류장 중앙 스크롤만 (화면 전환 없음)
