@@ -19669,7 +19669,7 @@ public class PinActivity extends AppCompatActivity {
                         tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
                     }
                 }
-                tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
+                tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
                 tvRNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
                 tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
                 tvRNo.setLayoutParams(new LinearLayout.LayoutParams(
@@ -19693,7 +19693,7 @@ public class PinActivity extends AppCompatActivity {
                     int rs2 = rssb.length(); rssb.append(" 운행중");
                     rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#888888")), rs2, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     tvRunning.setText(rssb, android.widget.TextView.BufferType.SPANNABLE);
-                    tvRunning.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
+                    tvRunning.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                     tvRunning.setTypeface(null, android.graphics.Typeface.BOLD);
                     tvRunning.setGravity(Gravity.CENTER);
                     tvRunning.setSingleLine(true);
@@ -20153,7 +20153,7 @@ public class PinActivity extends AppCompatActivity {
                     tvStopRouteNo.setText(stopMemo.isEmpty() ? stopName : stopMemo);
                 }
                 tvStopRouteNo.setTextColor(Color.parseColor(sTypeColor));
-                tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
+                tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
                 tvStopRouteNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
                 tvStopRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
                 tvStopRouteNo.setSingleLine(true);
@@ -20212,7 +20212,7 @@ public class PinActivity extends AppCompatActivity {
                         tvArrTime.setText(arrTimeStr);
                         tvArrTime.setTextColor(Color.parseColor(arrTimeColor));
                     }
-                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
+                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                     tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
                     tvArrTime.setGravity(Gravity.CENTER);
                     tvArrTime.setSingleLine(true);
