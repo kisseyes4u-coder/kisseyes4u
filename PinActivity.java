@@ -10142,13 +10142,11 @@ public class PinActivity extends AppCompatActivity {
         tabGpsIv.setPadding(dpToPx(6), dpToPx(6), dpToPx(6), dpToPx(6));
         tabGpsIv.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         tabGpsIv.setOnClickListener(v -> {
-            // 즐겨찾기 버스들의 GPS 즉시 갱신
             arrivalSessionCache.clear();
             if (busFavSection != null) {
-                android.graphics.drawable.GradientDrawable selBg = new android.graphics.drawable.GradientDrawable();
-                selBg.setColor(Color.parseColor("#5BA9F0")); selBg.setCornerRadius(dpToPx(8));
-                tabGpsIv.setBackground(selBg);
-                // 0.5초 후 다시 원래 배경으로
+                android.graphics.drawable.GradientDrawable gpsSelBg = new android.graphics.drawable.GradientDrawable();
+                gpsSelBg.setColor(Color.parseColor("#5BA9F0")); gpsSelBg.setCornerRadius(dpToPx(8));
+                tabGpsIv.setBackground(gpsSelBg);
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                     android.graphics.drawable.GradientDrawable resetBg = new android.graphics.drawable.GradientDrawable();
                     resetBg.setColor(Color.WHITE); resetBg.setCornerRadius(dpToPx(8));
@@ -10156,10 +10154,10 @@ public class PinActivity extends AppCompatActivity {
                     tabGpsIv.setBackground(resetBg);
                 }, 500);
             }
-            refreshBusFavorites();
+            refreshBusFavorites(busFavSection, busResultContainer);
             android.widget.Toast.makeText(this, "GPS 갱신 중...", android.widget.Toast.LENGTH_SHORT).show();
         });
-        tabRow.addView(tabMyLoc);
+        tabRow.addView(tabGpsIv);
 
         searchArea.addView(tabRow);
 
