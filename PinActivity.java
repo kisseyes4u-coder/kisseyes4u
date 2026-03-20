@@ -11978,7 +11978,7 @@ public class PinActivity extends AppCompatActivity {
             busFixedHeader.removeAllViews();
             busFixedHeader.setTag("arrival_" + nodeId); // 화면 식별 태그
             busFixedHeader.setVisibility(android.view.View.VISIBLE);
-            busFixedHeader.setBackgroundColor(Color.WHITE);
+            busFixedHeader.setBackgroundColor(Color.parseColor("#F2F4F8"));
             busFixedHeader.setPadding(0, 0, 0, 0);
 
             LinearLayout titleBar = new LinearLayout(this);
