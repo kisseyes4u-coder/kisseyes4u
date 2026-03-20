@@ -14107,8 +14107,9 @@ public class PinActivity extends AppCompatActivity {
             // 로컬 캐시 없으면 실시간 API 결과만 사용 (fallback)
             boolean localDataFound = !allRoutes.isEmpty();
 
-            // ★ 최후 폴백: 모든 캐시에서 못 찾으면 도착정보 API에서 노선 목록 직접 조회
+            // ★ 최후 폴백: 모든 캐시에서 못 찾으면 API로 직접 조회
             if (allRoutes.isEmpty()) {
+                // A) 도착정보 API (운행중일 때만 결과 있음)
                 try {
                     String arvlFb = httpGet(BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
                             + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
@@ -14122,6 +14123,34 @@ public class PinActivity extends AppCompatActivity {
                         allRoutes.add(new String[]{rno, rid, "", "", ""});
                     }
                 } catch (Exception ig) {}
+
+                // B) 도착정보로 못 찾으면 nodeNo로 주변정류소 노선 API 시도
+                if (allRoutes.isEmpty() && !nodeNo.isEmpty()) {
+                    try {
+                        String routeXml = httpGet(BUS_BASE2 + "BusRouteInfoInqireService/getRouteNoList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&nodeNo=" + nodeNo + "&numOfRows=50&pageNo=1&_type=xml");
+                        java.util.Set<String> seenRno2 = new java.util.LinkedHashSet<>();
+                        for (String item : routeXml.split("<item>")) {
+                            String rno = tag(item, "routeno");
+                            String rid = tag(item, "routeid");
+                            if (rno.isEmpty() || seenRno2.contains(rno)) continue;
+                            seenRno2.add(rno);
+                            allRoutes.add(new String[]{rno, rid, "", "", ""});
+                        }
+                    } catch (Exception ig) {}
+                }
+
+                // C) 찾았으면 arrival_cache에 저장해서 다음번엔 즉시 표시
+                if (!allRoutes.isEmpty()) {
+                    StringBuilder sb2 = new StringBuilder();
+                    for (String[] r : allRoutes) {
+                        if (sb2.length() > 0) sb2.append(";");
+                        sb2.append(r[0]).append("|").append(r[1]).append("|||");
+                    }
+                    getSharedPreferences("arrival_cache", MODE_PRIVATE).edit()
+                            .putString("routes_" + nodeId, sb2.toString()).apply();
+                }
             }
 
             // allRoutes 확정 시 정류장 노선 영구캐시 저장 (노선 변경 감지 포함)
