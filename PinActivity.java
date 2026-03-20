@@ -10139,8 +10139,8 @@ public class PinActivity extends AppCompatActivity {
         myLocBg.setCornerRadius(dpToPx(8));
         myLocBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
         tabGpsIv.setBackground(myLocBg);
-        tabGpsIv.setPadding(dpToPx(6), dpToPx(6), dpToPx(6), dpToPx(6));
-        tabGpsIv.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        tabGpsIv.setPadding(dpToPx(8), dpToPx(5), dpToPx(8), dpToPx(5));
+        tabGpsIv.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(44), 1f));
         tabGpsIv.setOnClickListener(v -> {
             arrivalSessionCache.clear();
             if (busFavSection != null) {
