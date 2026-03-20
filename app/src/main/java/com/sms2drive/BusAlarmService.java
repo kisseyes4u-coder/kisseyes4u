@@ -23,223 +23,204 @@ public class BusAlarmService extends Service {
 
     private static final String TAG = "BusAlarmService";
 
-    // 인텐트 액션
-    public static final String ACTION_START  = "com.sms2drive.BUS_ALARM_START";
-    public static final String ACTION_STOP   = "com.sms2drive.BUS_ALARM_STOP";
+    public static final String ACTION_START = "com.sms2drive.BUS_ALARM_START";
+    public static final String ACTION_STOP  = "com.sms2drive.BUS_ALARM_STOP";
 
-    // 인텐트 extras
-    public static final String EXTRA_ROUTE_ID     = "route_id";
-    public static final String EXTRA_ROUTE_NO     = "route_no";
-    public static final String EXTRA_BOARD_NM     = "board_nm";
-    public static final String EXTRA_ALIGHT_ID    = "alight_id";
-    public static final String EXTRA_ALIGHT_NM    = "alight_nm";
-    public static final String EXTRA_ALIGHT_ORD   = "alight_ord";  // 하차 정류장 순번
-    public static final String EXTRA_COLOR        = "color";
+    public static final String EXTRA_ROUTE_ID   = "route_id";
+    public static final String EXTRA_ROUTE_NO   = "route_no";
+    public static final String EXTRA_BOARD_NM   = "board_nm";
+    public static final String EXTRA_BOARD_NO   = "board_no";
+    public static final String EXTRA_ALIGHT_ID  = "alight_id";
+    public static final String EXTRA_ALIGHT_NM  = "alight_nm";
+    public static final String EXTRA_ALIGHT_ORD = "alight_ord";
+    public static final String EXTRA_COLOR      = "color";
 
-    // 알림 채널
-    private static final String CH_FOREGROUND  = "bus_alarm_fg";
-    private static final String CH_ALERT       = "bus_alarm_alert";
-    private static final int    NOTIF_FG_ID    = 9002;
-    private static final int    NOTIF_ALERT_ID = 9003;
+    private static final String CH_FG    = "bus_alarm_fg";
+    private static final String CH_ALERT = "bus_alarm_alert";
+    private static final int NOTIF_FG_ID    = 9002;
+    private static final int NOTIF_ALERT_ID = 9003;
 
-    // API
     private static final String BUS_KEY   = "4f9182aa6a8d775a6013c074fc5620578371c0031a6f97e9c0434e3973bcf1d5";
     private static final String BUS_BASE2 = "https://apis.data.go.kr/1613000/";
     private static final String BUS_CITY  = "25";
     private static final String PREF_NAME = "sms2drive_prefs";
+    private static final String PREF_SVC  = "bus_alarm_svc";
 
-    // 폴링 간격 (30초)
     private static final long POLL_INTERVAL = 30_000L;
-    // 하차 N정거장 전 알림
-    private static final int ALERT_BEFORE_STOPS = 2;
+    private static final int  ALERT_STOPS   = 2;
 
-    private Handler handler;
+    private Handler  handler;
     private Runnable pollRunnable;
 
-    private String routeId, routeNo, boardNm, alightId, alightNm, colorHex;
-    private int alightOrd = -1;
-
-    private boolean alarmFired = false; // 중복 알림 방지
+    private String routeId, routeNo, boardNm, boardNo, alightId, alightNm, colorHex;
+    private int    alightOrd   = -1;
+    private boolean alarmFired = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
-        createNotificationChannels();
+        createChannels();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null) return START_NOT_STICKY;
+        if (intent == null) { restoreFromPrefs(); return START_STICKY; }
 
         String action = intent.getAction();
-
-        if (ACTION_STOP.equals(action)) {
-            stopAlarm();
-            return START_NOT_STICKY;
-        }
+        if (ACTION_STOP.equals(action)) { stopAlarm(); return START_NOT_STICKY; }
 
         if (ACTION_START.equals(action)) {
             routeId   = intent.getStringExtra(EXTRA_ROUTE_ID);
             routeNo   = intent.getStringExtra(EXTRA_ROUTE_NO);
             boardNm   = intent.getStringExtra(EXTRA_BOARD_NM);
+            boardNo   = intent.getStringExtra(EXTRA_BOARD_NO);
             alightId  = intent.getStringExtra(EXTRA_ALIGHT_ID);
             alightNm  = intent.getStringExtra(EXTRA_ALIGHT_NM);
             alightOrd = intent.getIntExtra(EXTRA_ALIGHT_ORD, -1);
             colorHex  = intent.getStringExtra(EXTRA_COLOR);
             if (colorHex == null) colorHex = "#0984E3";
             alarmFired = false;
-
-            // 포그라운드 시작
-            startForeground(NOTIF_FG_ID, buildForegroundNotif());
-            Log.d(TAG, "하차알림 서비스 시작: " + routeNo + " → " + alightNm);
-
-            // 폴링 시작
+            saveToPrefs();
+            startForeground(NOTIF_FG_ID, buildFgNotif("버스 위치 확인 중..."));
+            Log.d(TAG, "시작: " + routeNo + " → " + alightNm + " ord=" + alightOrd);
             startPolling();
         }
-
         return START_STICKY;
     }
 
-    @Override
-    public IBinder onBind(Intent intent) { return null; }
+    @Override public IBinder onBind(Intent intent) { return null; }
 
     @Override
     public void onDestroy() {
-        if (handler != null && pollRunnable != null)
-            handler.removeCallbacks(pollRunnable);
+        if (handler != null && pollRunnable != null) handler.removeCallbacks(pollRunnable);
+        clearPrefs();
         super.onDestroy();
     }
 
-    // ── 폴링 ─────────────────────────────────────────
     private void startPolling() {
         if (pollRunnable != null) handler.removeCallbacks(pollRunnable);
         pollRunnable = new Runnable() {
-            @Override
-            public void run() {
+            @Override public void run() {
                 new Thread(() -> {
-                    try {
-                        checkBusLocation();
-                    } catch (Exception e) {
-                        Log.e(TAG, "폴링 오류", e);
-                    }
-                    // 알람 안 울렸으면 재예약
-                    if (!alarmFired) {
-                        handler.postDelayed(this, POLL_INTERVAL);
-                    }
+                    try { poll(); } catch (Exception e) { Log.w(TAG, "폴링 오류", e); }
+                    if (!alarmFired) handler.postDelayed(this, POLL_INTERVAL);
                 }).start();
             }
         };
         handler.post(pollRunnable);
     }
 
-    private void checkBusLocation() throws Exception {
-        // 버스 실시간 위치 조회
-        String url = BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
-                + "?serviceKey=" + BUS_KEY
-                + "&cityCode=" + BUS_CITY
-                + "&routeId=" + routeId
-                + "&numOfRows=50&pageNo=1&_type=xml";
+    private void poll() throws Exception {
+        if (alightOrd > 0) pollByLocation();
+        else                pollByArrival();
+    }
 
-        String xml = httpGet(url);
-        if (xml == null || xml.isEmpty()) return;
+    private void pollByLocation() throws Exception {
+        String xml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                + "&routeId=" + routeId + "&numOfRows=50&pageNo=1&_type=xml");
+        if (xml.isEmpty()) return;
 
-        // 각 버스의 현재 정류장 순번 파싱
-        // 하차 정류장 순번에서 ALERT_BEFORE_STOPS 빼면 알림 발동 순번
-        int alertOrd = alightOrd - ALERT_BEFORE_STOPS;
-        if (alertOrd < 1) alertOrd = 1;
-
+        int alertOrd = Math.max(1, alightOrd - ALERT_STOPS);
         for (String item : xml.split("<item>")) {
-            String nodeordStr = tag(item, "nodeord");
-            if (nodeordStr.isEmpty()) continue;
-            int nodeord;
-            try { nodeord = Integer.parseInt(nodeordStr); } catch (Exception e) { continue; }
-
-            // 버스가 alertOrd ~ alightOrd-1 구간에 있으면 알림
-            if (nodeord >= alertOrd && nodeord < alightOrd) {
-                int remaining = alightOrd - nodeord;
-                fireAlarm(remaining);
+            String ordStr = tag(item, "nodeord");
+            if (ordStr.isEmpty()) continue;
+            int ord;
+            try { ord = Integer.parseInt(ordStr); } catch (Exception e) { continue; }
+            if (ord >= alertOrd && ord < alightOrd) {
+                fireAlarm(alightOrd - ord);
                 return;
             }
         }
-
-        // 포그라운드 알림 텍스트 업데이트 (상태 표시)
-        updateForegroundNotif("모니터링 중... " + routeNo + "번 → " + alightNm);
+        updateFgNotif(routeNo + "번 모니터링 중 → " + alightNm);
     }
 
-    private void fireAlarm(int remainingStops) {
+    private void pollByArrival() throws Exception {
+        String xml = httpGet(BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
+                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                + "&nodeId=" + alightId + "&numOfRows=50&pageNo=1&_type=xml");
+        if (xml.isEmpty()) return;
+
+        for (String item : xml.split("<item>")) {
+            if (!tag(item, "routeno").equals(routeNo)) continue;
+            int arrSec  = -1; try { arrSec  = Integer.parseInt(tag(item, "arrtime")); }            catch(Exception ig){}
+            int prevCnt = -1; try { prevCnt = Integer.parseInt(tag(item, "arrprevstationcnt")); }  catch(Exception ig){}
+
+            if ((prevCnt >= 0 && prevCnt <= ALERT_STOPS) || (arrSec > 0 && arrSec <= 180)) {
+                fireAlarm(prevCnt >= 0 ? prevCnt : 0);
+                return;
+            }
+            String st = prevCnt > 0 ? prevCnt + "정거장 전" : (arrSec > 0 ? (arrSec/60) + "분 후" : "확인 중");
+            updateFgNotif(routeNo + "번 " + alightNm + " · " + st);
+            break;
+        }
+    }
+
+    private void fireAlarm(int remaining) {
         if (alarmFired) return;
         alarmFired = true;
 
-        Log.d(TAG, "하차 알림 발동! 남은 정거장: " + remainingStops);
-
-        // 클릭 시 앱으로 복귀
-        Intent launchIntent = new Intent(this, PinActivity.class);
-        launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pi = PendingIntent.getActivity(this, 0, launchIntent,
+        Intent launch = new Intent(this, PinActivity.class);
+        launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pi = PendingIntent.getActivity(this, 0, launch,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        String title = remainingStops <= 0
-                ? "🔔 곧 하차합니다!"
-                : "🔔 " + remainingStops + "정거장 후 " + alightNm;
-        String body = routeNo + "번 버스 | " + boardNm + " → " + alightNm;
+        String title = remaining <= 0 ? "🔔 곧 하차합니다!" : "🔔 " + remaining + "정거장 후 " + alightNm;
+        String body  = routeNo + "번 · " + boardNm + " → " + alightNm;
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CH_ALERT)
+        Notification n = new NotificationCompat.Builder(this, CH_ALERT)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
                 .setContentIntent(pi)
                 .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setDefaults(NotificationCompat.DEFAULT_ALL) // 소리 + 진동
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build();
 
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (nm != null) nm.notify(NOTIF_ALERT_ID, builder.build());
+        if (nm != null) nm.notify(NOTIF_ALERT_ID, n);
 
-        // SharedPreferences 알림 해제 (자동 종료)
-        SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-        prefs.edit()
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
                 .remove("alarm_alight_" + routeId + "_" + alightId)
                 .remove("alarm_alight_last_" + routeId)
                 .apply();
 
-        // 서비스 종료
-        stopSelf();
-    }
-
-    private void stopAlarm() {
-        Log.d(TAG, "하차알림 서비스 수동 종료");
-        if (handler != null && pollRunnable != null)
-            handler.removeCallbacks(pollRunnable);
         stopForeground(true);
         stopSelf();
     }
 
-    // ── 알림 빌더 ─────────────────────────────────────
-    private Notification buildForegroundNotif() {
-        return buildForegroundNotif("모니터링 시작 중...");
+    private void stopAlarm() {
+        if (handler != null && pollRunnable != null) handler.removeCallbacks(pollRunnable);
+        stopForeground(true);
+        stopSelf();
     }
 
-    private Notification buildForegroundNotif(String text) {
-        Intent launchIntent = new Intent(this, PinActivity.class);
-        launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pi = PendingIntent.getActivity(this, 0, launchIntent,
+    private Notification buildFgNotif(String text) {
+        Intent launch = new Intent(this, PinActivity.class);
+        launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent lPi = PendingIntent.getActivity(this, 0, launch,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        // 알림 종료 버튼
-        Intent stopIntent = new Intent(this, BusAlarmService.class);
-        stopIntent.setAction(ACTION_STOP);
-        PendingIntent stopPi = PendingIntent.getService(this, 1, stopIntent,
+        Intent stopI = new Intent(this, BusAlarmService.class);
+        stopI.setAction(ACTION_STOP);
+        PendingIntent sPi = PendingIntent.getService(this, 1, stopI,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        return new NotificationCompat.Builder(this, CH_FOREGROUND)
+        String title = routeNo != null
+                ? "🚌 " + routeNo + "번 → " + alightNm + " 하차 알림"
+                : "🚌 하차 알림 대기 중";
+
+        return new NotificationCompat.Builder(this, CH_FG)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("🚌 " + routeNo + "번 → " + alightNm + " 하차 알림")
+                .setContentTitle(title)
                 .setContentText(text)
-                .setContentIntent(pi)
-                .addAction(android.R.drawable.ic_delete, "알림 종료", stopPi)
+                .setContentIntent(lPi)
+                .addAction(android.R.drawable.ic_delete, "알림 종료", sPi)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -247,60 +228,75 @@ public class BusAlarmService extends Service {
                 .build();
     }
 
-    private void updateForegroundNotif(String text) {
+    private void updateFgNotif(String text) {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (nm != null) nm.notify(NOTIF_FG_ID, buildForegroundNotif(text));
+        if (nm != null) nm.notify(NOTIF_FG_ID, buildFgNotif(text));
     }
 
-    private void createNotificationChannels() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm == null) return;
-
-            // 포그라운드 상주 채널 (조용히)
-            NotificationChannel fg = new NotificationChannel(
-                    CH_FOREGROUND, "하차알림 모니터링", NotificationManager.IMPORTANCE_LOW);
-            fg.setDescription("버스 하차 알림 모니터링 중");
-            fg.setShowBadge(false);
-            nm.createNotificationChannel(fg);
-
-            // 알림 발동 채널 (소리+진동)
-            NotificationChannel alert = new NotificationChannel(
-                    CH_ALERT, "하차 알림", NotificationManager.IMPORTANCE_HIGH);
-            alert.setDescription("버스 하차 정거장 도착 알림");
-            alert.enableVibration(true);
-            alert.setShowBadge(true);
-            nm.createNotificationChannel(alert);
-        }
+    private void createChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        NotificationChannel fg = new NotificationChannel(CH_FG, "하차알림 모니터링", NotificationManager.IMPORTANCE_LOW);
+        fg.setShowBadge(false);
+        nm.createNotificationChannel(fg);
+        NotificationChannel al = new NotificationChannel(CH_ALERT, "하차 알림", NotificationManager.IMPORTANCE_HIGH);
+        al.enableVibration(true);
+        nm.createNotificationChannel(al);
     }
 
-    // ── 유틸 ─────────────────────────────────────────
+    private void saveToPrefs() {
+        getSharedPreferences(PREF_SVC, MODE_PRIVATE).edit()
+                .putString("route_id",   routeId)
+                .putString("route_no",   routeNo)
+                .putString("board_nm",   boardNm != null ? boardNm : "")
+                .putString("board_no",   boardNo  != null ? boardNo  : "")
+                .putString("alight_id",  alightId)
+                .putString("alight_nm",  alightNm)
+                .putInt   ("alight_ord", alightOrd)
+                .putString("color",      colorHex)
+                .apply();
+    }
+
+    private void restoreFromPrefs() {
+        SharedPreferences p = getSharedPreferences(PREF_SVC, MODE_PRIVATE);
+        routeId   = p.getString("route_id",   null);
+        routeNo   = p.getString("route_no",   null);
+        boardNm   = p.getString("board_nm",   "");
+        boardNo   = p.getString("board_no",   "");
+        alightId  = p.getString("alight_id",  null);
+        alightNm  = p.getString("alight_nm",  null);
+        alightOrd = p.getInt   ("alight_ord", -1);
+        colorHex  = p.getString("color",      "#0984E3");
+        alarmFired = false;
+        if (routeId != null && alightId != null) {
+            Log.d(TAG, "재시작 복원: " + routeNo + " → " + alightNm);
+            startForeground(NOTIF_FG_ID, buildFgNotif("재시작 후 모니터링 중..."));
+            startPolling();
+        } else { stopSelf(); }
+    }
+
+    private void clearPrefs() {
+        getSharedPreferences(PREF_SVC, MODE_PRIVATE).edit().clear().apply();
+    }
+
     private String httpGet(String urlStr) {
         try {
-            URL url = new URL(urlStr);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(8000);
-            conn.setReadTimeout(8000);
+            HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+            conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
             conn.setRequestMethod("GET");
             BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            String line;
+            StringBuilder sb = new StringBuilder(); String line;
             while ((line = br.readLine()) != null) sb.append(line);
-            br.close();
-            conn.disconnect();
+            br.close(); conn.disconnect();
             return sb.toString();
-        } catch (Exception e) {
-            Log.e(TAG, "httpGet 오류: " + urlStr, e);
-            return "";
-        }
+        } catch (Exception e) { Log.w(TAG, "httpGet: " + e.getMessage()); return ""; }
     }
 
-    private String tag(String xml, String tagName) {
+    private String tag(String xml, String t) {
         try {
-            int s = xml.indexOf("<" + tagName + ">");
-            int e = xml.indexOf("</" + tagName + ">");
-            if (s < 0 || e < 0) return "";
-            return xml.substring(s + tagName.length() + 2, e).trim();
+            int s = xml.indexOf("<" + t + ">"), e = xml.indexOf("</" + t + ">");
+            return (s < 0 || e < 0) ? "" : xml.substring(s + t.length() + 2, e).trim();
         } catch (Exception ex) { return ""; }
     }
 }

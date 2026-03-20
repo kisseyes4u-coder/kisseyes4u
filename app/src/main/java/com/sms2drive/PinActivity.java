@@ -12011,6 +12011,7 @@ public class PinActivity extends AppCompatActivity {
             svcIntent.putExtra(BusAlarmService.EXTRA_ROUTE_ID,   routeId);
             svcIntent.putExtra(BusAlarmService.EXTRA_ROUTE_NO,   routeNo);
             svcIntent.putExtra(BusAlarmService.EXTRA_BOARD_NM,   boardNodeNm);
+            svcIntent.putExtra(BusAlarmService.EXTRA_BOARD_NO,   boardNodeNo);
             svcIntent.putExtra(BusAlarmService.EXTRA_ALIGHT_ID,  alightNodeId);
             svcIntent.putExtra(BusAlarmService.EXTRA_ALIGHT_NM,  alightNodeNm);
             svcIntent.putExtra(BusAlarmService.EXTRA_ALIGHT_ORD, alightOrd);
