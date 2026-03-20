@@ -18169,22 +18169,37 @@ public class PinActivity extends AppCompatActivity {
                 return routeTypeBadge(ta)[0].compareTo(routeTypeBadge(tb)[0]);
             });
         }
-        // SpannableString 생성
+        // SpannableString 생성 - X분 후 + 번호들 (쉼표 구분, 줄바꿈 시 들여쓰기)
         android.text.SpannableStringBuilder ssb = new android.text.SpannableStringBuilder();
-        // X분 후 (빨강 20dp)
+        // X분 후 (빨강 17dp)
         int ts = ssb.length(); ssb.append(timeLabel);
         ssb.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#E74C3C")), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(17), true), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        // 버스번호들 (종류별 색상 20dp)
-        for (String rn : allBuses) {
+        // 버스번호들 (쉼표 공백 구분, 17dp)
+        for (int bi = 0; bi < allBuses.size(); bi++) {
+            String rn = allBuses.get(bi);
             String rtp = getRtp(rn);
             String[] bdg = routeTypeBadge(rtp);
-            int bs = ssb.length(); ssb.append(rn + " ");
+            // 쉼표 + 공백 구분 (첫번째는 이미 timeLabel에 공백 있음)
+            String sep = (bi == 0) ? "" : " , ";
+            int sepStart = ssb.length();
+            if (!sep.isEmpty()) {
+                ssb.append(sep);
+                ssb.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#888888")), sepStart, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(17), true), sepStart, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+            int bs = ssb.length(); ssb.append(rn);
             ssb.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor(bdg[1])), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(17), true), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
+        // LeadingMarginSpan으로 줄바꿈 시 "X분 후 " 너비만큼 들여쓰기
+        android.graphics.Paint measurePaint = new android.graphics.Paint();
+        measurePaint.setTextSize(fs(17) * getResources().getDisplayMetrics().density);
+        measurePaint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        int indent = (int) measurePaint.measureText(timeLabel);
+        ssb.setSpan(new android.text.style.LeadingMarginSpan.Standard(0, indent), 0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         busSoonTV.setText(ssb, android.widget.TextView.BufferType.SPANNABLE);
         busSoonTV.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
     }
