@@ -181,6 +181,7 @@ public class PinActivity extends AppCompatActivity {
     private ScrollView busTimelineSv = null;  // 타임라인 ScrollView
     private int busTurnRowY = -1;             // 회차 정류소 Y 좌표
     private String busPendingScrollDir = null;  // 방향전환 후 자동 스크롤 ("forward"/"reverse")
+    private int busTimelineRestoreScrollY = -1; // 타임라인 복원 시 스크롤 위치
     // nodeno(표시번호) → 노선번호 목록 (예: "46820" → "211,212,601,708")
     private java.util.Map<String, String> nodeNoToRoutes = new java.util.HashMap<>();
     // 도착정보 세션 캐시: nodeId → [렌더링용 데이터 스냅샷, 캐시시각]
@@ -10775,7 +10776,15 @@ public class PinActivity extends AppCompatActivity {
             String routeId = prev[1], routeNo = prev[2], dir = prev[3], rtp = prev[4];
             if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
             if (busResultContainer != null) busResultContainer.removeAllViews();
+            final int restoreY = busTimelineRestoreScrollY;
+            busTimelineRestoreScrollY = -1;
             busScreenLoadStops(routeId, routeNo, busResultContainer, dir, rtp);
+            // 저장된 스크롤 위치 복원
+            if (restoreY > 0 && busTimelineSv != null) {
+                busResultContainer.postDelayed(() -> {
+                    if (busTimelineSv != null) busTimelineSv.scrollTo(0, restoreY);
+                }, 400);
+            }
         } else if ("arrival".equals(type)) {
             String nodeId = prev[1], nodeNm = prev[2], nodeNo = prev[3], filter = prev[4];
             if (busFixedHeader != null) { busFixedHeader.removeAllViews(); }
@@ -18162,6 +18171,8 @@ public class PinActivity extends AppCompatActivity {
                         String fNodeId = fCompositeKey.contains("_")
                                 ? fCompositeKey.substring(fCompositeKey.indexOf("_") + 1)
                                 : fCompositeKey;
+                        // 현재 스크롤 위치 저장 (돌아오기용)
+                        busTimelineRestoreScrollY = -1; // 아직 타임라인 진입 전이므로 초기화
                         busScreenLoadStops(fRouteId, fRouteNo, busResultContainer, "forward", "");
                         // 렌더링 완료 후 해당 정류장 중앙 스크롤만
                         busResultContainer.postDelayed(() -> {
@@ -18174,7 +18185,9 @@ public class PinActivity extends AppCompatActivity {
                                 busTimelineSv.getLocationOnScreen(svLoc);
                                 int rowY = busTimelineSv.getScrollY() + (loc[1] - svLoc[1]);
                                 int offset = busTimelineSv.getHeight() / 2 - targetRow.getHeight() / 2;
-                                busTimelineSv.scrollTo(0, Math.max(0, rowY - offset));
+                                int targetY = Math.max(0, rowY - offset);
+                                busTimelineSv.scrollTo(0, targetY);
+                                busTimelineRestoreScrollY = targetY; // 돌아오기용 저장
                             }
                         }, 400);
                     } else {
