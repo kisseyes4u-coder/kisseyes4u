@@ -10392,11 +10392,9 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
         btnRefreshBar.setLayoutParams(refreshLp);
         btnRefreshBar.setOnClickListener(v -> {
-            // 즐겨찾기 화면(백스택 비어있고 즐겨찾기 표시 중)이면 실시간 갱신
-            if (busBackStack.isEmpty() || (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE)) {
-                if (busFavSection != null && busFavSection2 != null
-                        && busFavSection2.getVisibility() == android.view.View.VISIBLE) {
-                    // 즐겨찾기 실시간 재갱신 (캐시 클리어 후 API 재호출)
+            // 즐겨찾기 화면이면 실시간 갱신 (백스택 비어있고 즐겨찾기 섹션 존재)
+            if (busBackStack.isEmpty()) {
+                if (busFavSection != null) {
                     arrivalSessionCache.clear();
                     refreshBusFavorites(busFavSection, busResultContainer);
                     return;
@@ -17779,7 +17777,7 @@ public class PinActivity extends AppCompatActivity {
                         .getInt("route_" + rId + "_running", -1);
                 if (runningCnt >= 0) {
                     TextView tvRunning = new TextView(this);
-                    // "9대" 빨간색 + " 운행중" 검정색
+                    // "9대" 빨간색 + " 운행중" 회색
                     android.text.SpannableStringBuilder rssb = new android.text.SpannableStringBuilder();
                     int rs1 = rssb.length(); rssb.append(runningCnt + "대");
                     rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")), rs1, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
