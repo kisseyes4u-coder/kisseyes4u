@@ -20464,11 +20464,13 @@ public class PinActivity extends AppCompatActivity {
     private void updateGpsStrength(int total, int gpsReceived) {
         if (total <= 0) return;
         int newStrength = (int)((double)gpsReceived / total * 100);
-        // 기존보다 높으면 즉시 반영, 낮으면 서서히 감소 (튀는 현상 방지)
-        if (newStrength >= busGpsStrength || busGpsStrength - newStrength > 30) {
+        if (newStrength >= busGpsStrength) {
+            // 올라갈 때: 즉시 반영
             busGpsStrength = newStrength;
         } else {
-            busGpsStrength = Math.max(0, busGpsStrength - 10);
+            // 내려갈 때: 한 단계씩 감소 (gps4→3→2→1→0)
+            // 갱신 주기 8~30초마다 호출되므로 약 40~150초에 걸쳐 서서히 감소
+            busGpsStrength = Math.max(0, busGpsStrength - 20);
         }
         applyGpsImage();
     }
