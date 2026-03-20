@@ -11451,11 +11451,29 @@ public class PinActivity extends AppCompatActivity {
 
         TextView tvBoardInfo = new TextView(this);
         tvBoardInfo.setGravity(Gravity.CENTER);
+        tvBoardInfo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+        tvBoardInfo.setTypeface(null, android.graphics.Typeface.BOLD);
         tvBoardInfo.setTextColor(Color.parseColor("#AAAAAA"));
-        tvBoardInfo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-        tvBoardInfo.setText("도착 정보 없음");
+        tvBoardInfo.setText("조회중...");
         boardCard.addView(tvBoardInfo);
         content.addView(boardCard);
+
+        // arrivalSessionCache 우선 확인
+        String cachedText = null; String cachedColor = null;
+        Object[] cached = arrivalSessionCache.get(nodeId);
+        if (cached != null && cached.length >= 3) {
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, String[]> cArrMap = (java.util.Map<String, String[]>) cached[2];
+            String[] ai = cArrMap.get(routeNo);
+            if (ai != null && !ai[0].isEmpty()) {
+                cachedText = ai[0]; cachedColor = ai.length > 2 ? ai[2] : "#333333";
+            }
+        }
+        if (cachedText != null) {
+            final String ft = cachedText, fc = cachedColor;
+            tvBoardInfo.setText(ft);
+            tvBoardInfo.setTextColor(Color.parseColor(fc));
+        }
 
         new Thread(() -> {
             try {
@@ -11464,21 +11482,29 @@ public class PinActivity extends AppCompatActivity {
                         + "&nodeId=" + nodeId + "&numOfRows=50&pageNo=1&_type=xml";
                 String arvlXml = httpGet(arvlUrl);
                 String boardText = "도착 정보 없음"; String boardColor2 = "#AAAAAA";
+                int minSec = Integer.MAX_VALUE;
                 for (String item : arvlXml.split("<item>")) {
                     String rno2 = tag(item, "routeno");
                     if (!rno2.equals(routeNo)) continue;
                     int sec2 = -1; try { sec2 = Integer.parseInt(tag(item, "arrtime")); } catch(Exception ig){}
                     int prev2 = -1; try { prev2 = Integer.parseInt(tag(item, "arrprevstationcnt")); } catch(Exception ig){}
-                    if (sec2 > 0) {
-                        if (sec2 < 60) { boardText = "곧 도착"; boardColor2 = "#E74C3C"; }
-                        else { boardText = "약 " + (sec2/60) + "분 후 도착"; boardColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
-                        if (prev2 > 0) boardText += "\n[" + prev2 + " 정거장 앞]";
+                    if (sec2 >= 0 && sec2 < minSec) {
+                        minSec = sec2;
+                        if (prev2 == 0)      { boardText = "출발지 대기중"; boardColor2 = "#888888"; }
+                        else if (sec2 < 60)  { boardText = "곧 도착"; boardColor2 = "#E74C3C"; }
+                        else {
+                            int min2 = sec2 / 60;
+                            boardText = "약 " + min2 + "분";
+                            boardColor2 = min2 <= 5 ? "#E74C3C" : "#333333";
+                        }
+                        if (prev2 > 0) boardText += "  [" + prev2 + "정거장 앞]";
                     }
-                    break;
                 }
                 final String fText = boardText, fColor = boardColor2;
-                runOnUiThread(() -> { tvBoardInfo.setText(fText); tvBoardInfo.setTextColor(Color.parseColor(fColor));
-                    tvBoardInfo.setTypeface(null, android.graphics.Typeface.BOLD); });
+                runOnUiThread(() -> {
+                    tvBoardInfo.setText(fText);
+                    tvBoardInfo.setTextColor(Color.parseColor(fColor));
+                });
             } catch (Exception ignored) {}
         }).start();
 
