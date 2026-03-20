@@ -10803,17 +10803,18 @@ public class PinActivity extends AppCompatActivity {
         tvTitle.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         titleBar2.addView(tvTitle);
 
-        // GPS 수신 상태 표시 (ImageView)
+        // GPS 수신 상태 표시 (지도 좌측 하단 오버레이)
         final android.widget.ImageView ivGps = new android.widget.ImageView(this);
-        ivGps.setPadding(dpToPx(6), 0, 0, 0);
-        // 초기: 미수신 (gps1.png)
         try {
             android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeStream(getAssets().open("gps1.png"));
             ivGps.setImageBitmap(bm);
         } catch (Exception ignored) {}
-        LinearLayout.LayoutParams gpsLp = new LinearLayout.LayoutParams(dpToPx(40), dpToPx(28));
+        ivGps.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        android.widget.FrameLayout.LayoutParams gpsLp = new android.widget.FrameLayout.LayoutParams(
+                dpToPx(80), dpToPx(40));
+        gpsLp.gravity = Gravity.BOTTOM | Gravity.START;
+        gpsLp.setMargins(dpToPx(12), 0, 0, dpToPx(12));
         ivGps.setLayoutParams(gpsLp);
-        titleBar2.addView(ivGps);
 
         // WebView
         android.webkit.WebView wv = new android.webkit.WebView(this);
@@ -10832,6 +10833,7 @@ public class PinActivity extends AppCompatActivity {
 
         frame.addView(wv);
         frame.addView(titleBar2);
+        frame.addView(ivGps);
         mapDlg.setContentView(frame);
         mapDlg.show();
         wv.post(() -> wv.loadDataWithBaseURL("https://unpkg.com", html, "text/html", "UTF-8", null));
