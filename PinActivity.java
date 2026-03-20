@@ -10803,14 +10803,17 @@ public class PinActivity extends AppCompatActivity {
         tvTitle.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         titleBar2.addView(tvTitle);
 
-        // GPS 수신 상태 표시
-        final TextView tvGps = new TextView(this);
-        tvGps.setText("📡✕");
-        tvGps.setTextColor(Color.parseColor("#FF7675"));
-        tvGps.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-        tvGps.setTypeface(null, android.graphics.Typeface.BOLD);
-        tvGps.setPadding(dpToPx(6), 0, 0, 0);
-        titleBar2.addView(tvGps);
+        // GPS 수신 상태 표시 (ImageView)
+        final android.widget.ImageView ivGps = new android.widget.ImageView(this);
+        ivGps.setPadding(dpToPx(6), 0, 0, 0);
+        // 초기: 미수신 (gps1.png)
+        try {
+            android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeStream(getAssets().open("gps1.png"));
+            ivGps.setImageBitmap(bm);
+        } catch (Exception ignored) {}
+        LinearLayout.LayoutParams gpsLp = new LinearLayout.LayoutParams(dpToPx(40), dpToPx(28));
+        ivGps.setLayoutParams(gpsLp);
+        titleBar2.addView(ivGps);
 
         // WebView
         android.webkit.WebView wv = new android.webkit.WebView(this);
@@ -10835,7 +10838,7 @@ public class PinActivity extends AppCompatActivity {
 
         // 실시간 갱신 (routeId 있을 때만 - 타임라인 버스 위치)
         if (routeId != null && !routeId.isEmpty() && coordStops != null) {
-            final TextView fTvGps = tvGps;
+            final android.widget.ImageView fIvGps = ivGps;
             // ordToCoord 맵 생성
             final java.util.Map<String, double[]> ordToCoord2 = new java.util.HashMap<>();
             for (String[] s : coordStops) {
@@ -10901,21 +10904,20 @@ public class PinActivity extends AppCompatActivity {
                                     wv.evaluateJavascript(js, null);
                                     tvTitle.setText(title.split("  ")[0] + "  " + fCnt + "대 운행중");
                                     // GPS 수신 상태 업데이트
+                                    String gpsFile;
                                     if (gpsCount > 0 && fCnt > 0) {
                                         int strength = (int)((double)gpsCount / fCnt * 100);
-                                        String bar;
-                                        if (strength >= 80) bar = "▂▄▆█";
-                                        else if (strength >= 60) bar = "▂▄▆░";
-                                        else if (strength >= 40) bar = "▂▄░░";
-                                        else bar = "▂░░░";
-                                        fTvGps.setText("📡" + bar);
-                                        fTvGps.setTextColor(strength >= 60
-                                                ? Color.parseColor("#55EFC4")
-                                                : Color.parseColor("#FDCB6E"));
+                                        if (strength >= 80) gpsFile = "gps4.png";
+                                        else if (strength >= 40) gpsFile = "gps3.png";
+                                        else gpsFile = "gps2.png";
                                     } else {
-                                        fTvGps.setText("📡✕");
-                                        fTvGps.setTextColor(Color.parseColor("#FF7675"));
+                                        gpsFile = "gps1.png";
                                     }
+                                    try {
+                                        android.graphics.Bitmap bm = android.graphics.BitmapFactory
+                                                .decodeStream(getAssets().open(gpsFile));
+                                        fIvGps.setImageBitmap(bm);
+                                    } catch (Exception ignored) {}
                                 }
                             });
                         } catch (Exception ignored) {}
