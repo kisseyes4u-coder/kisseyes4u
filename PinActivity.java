@@ -12516,7 +12516,7 @@ public class PinActivity extends AppCompatActivity {
                                     firstGrp = false;
                                     int ts = ssb.length(); ssb.append(tLbl);
                                     ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                    ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(16), true), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                    ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(13), true), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                     ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                     for (String rn : secEnt.getValue()) {
                                         String rtp2 = "";
@@ -12524,7 +12524,7 @@ public class PinActivity extends AppCompatActivity {
                                         String[] bdg = routeTypeBadge(rtp2);
                                         int bs = ssb.length(); ssb.append(rn + "번 ");
                                         ssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor(bdg[1])), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                                        ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(20), true), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                                        ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(13), true), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                         ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                                     }
                                 }
