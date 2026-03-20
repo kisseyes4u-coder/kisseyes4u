@@ -10806,7 +10806,7 @@ public class PinActivity extends AppCompatActivity {
         // GPS 수신 상태 표시 (지도 좌측 하단 오버레이)
         final android.widget.ImageView ivGps = new android.widget.ImageView(this);
         try {
-            android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeStream(getAssets().open("gps1.png"));
+            android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeStream(getAssets().open("gps0.png"));
             ivGps.setImageBitmap(bm);
         } catch (Exception ignored) {}
         ivGps.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
@@ -10910,10 +10910,11 @@ public class PinActivity extends AppCompatActivity {
                                     if (gpsCount > 0 && fCnt > 0) {
                                         int strength = (int)((double)gpsCount / fCnt * 100);
                                         if (strength >= 80) gpsFile = "gps4.png";
-                                        else if (strength >= 40) gpsFile = "gps3.png";
-                                        else gpsFile = "gps2.png";
+                                        else if (strength >= 60) gpsFile = "gps3.png";
+                                        else if (strength >= 40) gpsFile = "gps2.png";
+                                        else gpsFile = "gps1.png";
                                     } else {
-                                        gpsFile = "gps1.png";
+                                        gpsFile = "gps0.png";
                                     }
                                     try {
                                         android.graphics.Bitmap bm = android.graphics.BitmapFactory
@@ -11781,7 +11782,7 @@ public class PinActivity extends AppCompatActivity {
         int gpsRcv = 0;
         for (String ord : busOrdSet) { if (busGpsMap.containsKey(ord)) gpsRcv++; }
         int gpsSt = (fRunning > 0 && gpsRcv > 0) ? (int)((double)gpsRcv / fRunning * 100) : 0;
-        String gpsF = gpsSt >= 80 ? "gps4.png" : gpsSt >= 40 ? "gps3.png" : gpsSt > 0 ? "gps2.png" : "gps1.png";
+        String gpsF = gpsSt >= 80 ? "gps4.png" : gpsSt >= 60 ? "gps3.png" : gpsSt >= 40 ? "gps2.png" : gpsSt > 0 ? "gps1.png" : "gps0.png";
         try {
             android.graphics.Bitmap gpsBm2 = android.graphics.BitmapFactory
                     .decodeStream(getAssets().open(gpsF));
@@ -12638,7 +12639,7 @@ public class PinActivity extends AppCompatActivity {
             // 초기값: gps1 (미수신)
             try {
                 android.graphics.Bitmap gpsBm = android.graphics.BitmapFactory
-                        .decodeStream(getAssets().open("gps1.png"));
+                        .decodeStream(getAssets().open("gps0.png"));
                 ivGpsArr.setImageBitmap(gpsBm);
             } catch (Exception ignored) {}
             ivGpsArr.setTag("gps_arr_iv");
@@ -13158,9 +13159,7 @@ public class PinActivity extends AppCompatActivity {
                     int totalBus = allRoutes.size();
                     int gpsCnt = gpsDistMap.size();
                     int strength = totalBus > 0 ? (int)((double)gpsCnt/totalBus*100) : 0;
-                    String gpsFile = strength >= 80 ? "gps4.png"
-                                   : strength >= 40 ? "gps3.png"
-                                   : strength > 0   ? "gps2.png" : "gps1.png";
+                    String gpsFile = strength >= 80 ? "gps4.png" : strength >= 60 ? "gps3.png" : strength >= 40 ? "gps2.png" : strength > 0 ? "gps1.png" : "gps0.png";
                     try {
                         android.graphics.Bitmap bm = android.graphics.BitmapFactory
                                 .decodeStream(getAssets().open(gpsFile));
@@ -13211,7 +13210,7 @@ public class PinActivity extends AppCompatActivity {
                         if (busFixedHeader == null) return;
                         android.view.View gpsIv = busFixedHeader.findViewWithTag("gps_arr_iv");
                         if (gpsIv instanceof android.widget.ImageView) {
-                            String gpsFile = fUsedGps ? "gps4.png" : "gps1.png";
+                            String gpsFile = fUsedGps ? "gps4.png" : "gps0.png";
                             try {
                                 android.graphics.Bitmap bm = android.graphics.BitmapFactory
                                         .decodeStream(getAssets().open(gpsFile));
