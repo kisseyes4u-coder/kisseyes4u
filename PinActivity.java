@@ -12104,6 +12104,29 @@ public class PinActivity extends AppCompatActivity {
         rbLp.setMargins(0,0,0,dpToPx(4)); runBanner.setLayoutParams(rbLp);
         View rbSpace = new View(this);
         rbSpace.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); runBanner.addView(rbSpace);
+
+        // GPS 수신 이미지 (버스 이미지 왼쪽)
+        android.widget.ImageView ivGpsTimeline = new android.widget.ImageView(this);
+        // GPS 수신률 계산: busOrdSet 중 busGpsMap에 있는 비율
+        int gpsReceived = 0;
+        for (String ord : busOrdSet) { if (busGpsMap.containsKey(ord)) gpsReceived++; }
+        int gpsStrength = (fRunning > 0 && gpsReceived > 0)
+                ? (int)((double)gpsReceived / fRunning * 100) : 0;
+        String gpsFile = gpsStrength >= 80 ? "gps4.png"
+                       : gpsStrength >= 40 ? "gps3.png"
+                       : gpsStrength > 0   ? "gps2.png" : "gps1.png";
+        try {
+            android.graphics.Bitmap gpsBm = android.graphics.BitmapFactory
+                    .decodeStream(getAssets().open(gpsFile));
+            ivGpsTimeline.setImageBitmap(gpsBm);
+        } catch (Exception ignored) {}
+        ivGpsTimeline.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams gpsTimelineLp = new LinearLayout.LayoutParams(dpToPx(44), dpToPx(22));
+        gpsTimelineLp.setMargins(0, 0, dpToPx(6), 0);
+        gpsTimelineLp.gravity = Gravity.CENTER_VERTICAL;
+        ivGpsTimeline.setLayoutParams(gpsTimelineLp);
+        runBanner.addView(ivGpsTimeline);
+
         // 버스 이미지
         android.widget.ImageView ivRunBus = new android.widget.ImageView(this);
         android.graphics.Bitmap runBusBmp = getBusIcon();
