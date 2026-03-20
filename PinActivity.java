@@ -203,6 +203,8 @@ public class PinActivity extends AppCompatActivity {
     private TextView busTabBus = null;  // 버스번호 탭 버튼
     private TextView busTabStop = null; // 정류장 탭 버튼
     private TextView busTabMap = null; // 지도 탭 버튼
+    private java.util.Map<String,double[]> busGpsMap = new java.util.HashMap<>(); // 버스 실시간 GPS
+    private java.util.Map<String,String>   busVehMapForMap = new java.util.HashMap<>(); // 버스 차량번호
     private Runnable busUpdateTabStyle = null; // 탭 스타일 업데이트
     private boolean[] busIsBusTab = {true}; // 현재 탭 상태
     private TextView splashLoadingTv = null;
@@ -10185,13 +10187,22 @@ public class PinActivity extends AppCompatActivity {
                             + "&routeId=" + fMapRouteId + "&numOfRows=50&pageNo=1&_type=xml");
                     java.util.Set<String> ordSet2 = new java.util.HashSet<>();
                     java.util.Map<String,String> vehMap2 = new java.util.HashMap<>();
+                    java.util.Map<String,double[]> gpsMap2 = new java.util.HashMap<>();
                     for (String item : lcXml.split("<item>")) {
                         String ord = tag(item, "nodeord"), vno = tag(item, "vehicleno");
-                        if (!ord.isEmpty()) { ordSet2.add(ord); if (!vno.isEmpty()) vehMap2.put(ord, vno); }
+                        String gla = tag(item, "gpslati"), glo = tag(item, "gpslong");
+                        if (!ord.isEmpty()) {
+                            ordSet2.add(ord);
+                            if (!vno.isEmpty()) vehMap2.put(ord, vno);
+                            if (!gla.isEmpty() && !glo.isEmpty()) {
+                                try { gpsMap2.put(ord, new double[]{Double.parseDouble(gla), Double.parseDouble(glo)}); } catch(Exception ig){}
+                            }
+                        }
                     }
                     final java.util.Set<String> fOrd = ordSet2;
                     final java.util.Map<String,String> fVeh2 = vehMap2;
-                    runOnUiThread(() -> showBusMapDialog(fMapRouteId, fMapRouteNo, fCachedStops, fOrd, fVeh2));
+                    final java.util.Map<String,double[]> fGps2 = gpsMap2;
+                    runOnUiThread(() -> showBusMapDialogWithGps(fMapRouteId, fMapRouteNo, fCachedStops, fOrd, fVeh2, fGps2));
                 } catch (Exception e) {
                     runOnUiThread(() -> showBusMapDialog(fMapRouteId, fMapRouteNo, fCachedStops, new java.util.HashSet<>(), new java.util.HashMap<>()));
                 }
@@ -10842,25 +10853,35 @@ public class PinActivity extends AppCompatActivity {
                                 arvlXml = lcXml; // LC API 결과 재활용
                             } catch (Exception ig) {}
 
-                            // [[toIdx, arrSec, shortNo], ...] 구성
+                            // GPS 좌표 + 보간 겸용: [[toIdx,arrSec,shortNo,lat,lon],...]
                             StringBuilder jsUpdate = new StringBuilder("updateBuses([");
                             boolean firstBus = true;
                             int cnt = 0;
+                            java.util.Map<String,double[]> newGpsMap = new java.util.HashMap<>();
                             for (String item : lcXml.split("<item>")) {
                                 String ord = tag(item, "nodeord");
                                 String vno = tag(item, "vehicleno");
+                                String gla = tag(item, "gpslati");
+                                String glo = tag(item, "gpslong");
                                 if (ord.isEmpty()) continue;
                                 Integer curIdx = fOrdToIdx != null ? fOrdToIdx.get(ord) : null;
                                 if (curIdx == null) continue;
                                 int toIdx = curIdx + 1;
                                 int arrSec = 20;
                                 String shortNo = vno.length() > 4 ? vno.substring(vno.length()-4) : vno;
+                                double lat = -1, lon = -1;
+                                if (!gla.isEmpty() && !glo.isEmpty()) {
+                                    try { lat = Double.parseDouble(gla); lon = Double.parseDouble(glo);
+                                          newGpsMap.put(ord, new double[]{lat, lon}); } catch(Exception ig){}
+                                }
                                 if (!firstBus) jsUpdate.append(",");
                                 jsUpdate.append("[").append(toIdx).append(",").append(arrSec)
-                                        .append(",'").append(shortNo).append("']");
+                                        .append(",'").append(shortNo).append("'")
+                                        .append(",").append(lat).append(",").append(lon).append("]");
                                 firstBus = false;
                                 cnt++;
                             }
+                            if (!newGpsMap.isEmpty()) busGpsMap = newGpsMap;
                             jsUpdate.append("]);");
                             final String js = jsUpdate.toString();
                             final int fCnt = cnt;
@@ -10879,6 +10900,17 @@ public class PinActivity extends AppCompatActivity {
             mapHandler.postDelayed(mapRefresh[0], 20000);
             mapDlg.setOnDismissListener(d -> mapHandler.removeCallbacks(mapRefresh[0]));
         }
+    }
+
+    /** GPS 좌표 직접 수신 버전 */
+    private void showBusMapDialogWithGps(String routeId, String routeNo,
+                                          java.util.List<String[]> stops,
+                                          java.util.Set<String> busOrdSet,
+                                          java.util.Map<String,String> vehMap,
+                                          java.util.Map<String,double[]> gpsMap) {
+        busGpsMap = gpsMap;
+        busVehMapForMap = vehMap;
+        showBusMapDialog(routeId, routeNo, stops, busOrdSet, vehMap);
     }
 
     /** 버스 노선 실시간 지도 (Leaflet.js + OpenStreetMap) */
@@ -10981,9 +11013,11 @@ public class PinActivity extends AppCompatActivity {
         StringBuilder busJs = new StringBuilder();
         int busIdx = 0;
         for (String ord : busOrdSet) {
-            double[] coord = ordToCoord.get(ord);
+            // GPS 좌표 우선 사용, 없으면 정류장 좌표 fallback
+            double[] gpsCoord = busGpsMap.get(ord);
+            double[] coord = gpsCoord != null ? gpsCoord : ordToCoord.get(ord);
             if (coord == null) continue;
-            String vno = vehMap.getOrDefault(ord, "");
+            String vno = vehMap.getOrDefault(ord, busVehMapForMap.getOrDefault(ord, ""));
             String shortNo = vno.length() > 4 ? vno.substring(vno.length() - 4) : vno;
             busJs.append(String.format("addBus(%d,[%f,%f],'%s');\n", busIdx++, coord[0], coord[1], shortNo));
         }
@@ -11027,12 +11061,15 @@ public class PinActivity extends AppCompatActivity {
             "  animTimer=setInterval(function(){" +
             "    var elapsed=(Date.now()-animStart)/1000;" +
             "    animTargets.forEach(function(b,i){" +
-            "      var toIdx=b[0],arrSec=b[1],lbl=b[2]||'';" +
-            "      if(toIdx<1||toIdx>=allCoords.length)return;" +
-            "      var fromIdx=toIdx-1;" +
-            // t=0이면 fromIdx, t=1이면 toIdx (arrSec초 후 도착)
-            "      var t=Math.min(elapsed/Math.max(arrSec,1),1);" +
-            "      addBus(i,interp(allCoords[fromIdx],allCoords[toIdx],t),lbl);" +
+            "      var toIdx=b[0],arrSec=b[1],lbl=b[2]||'',lat=b[3],lon=b[4];" +
+            "      if(lat&&lat>0&&lon&&lon>0){" +
+            "        addBus(i,[lat,lon],lbl);" +
+            "      } else {" +
+            "        if(toIdx<1||toIdx>=allCoords.length)return;" +
+            "        var fromIdx=toIdx-1;" +
+            "        var t=Math.min(elapsed/Math.max(arrSec,1),1);" +
+            "        addBus(i,interp(allCoords[fromIdx],allCoords[toIdx],t),lbl);" +
+            "      }" +
             "    });" +
             "  },500);" +
             "}" +
