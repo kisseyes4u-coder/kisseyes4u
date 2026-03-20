@@ -12012,45 +12012,6 @@ public class PinActivity extends AppCompatActivity {
             final String stopOnlyFavKey = "fav_stop_" + nodeId;
             boolean stopOnlyFaved = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(stopOnlyFavKey, false);
             TextView tvStopOnlyFav = new TextView(this);
-            // 정렬 버튼 (도착순/번호순/유형순)
-            final String[] sortModes = {"도착순", "번호순", "유형순"};
-            TextView tvSort = new TextView(this);
-            tvSort.setText(sortModes[busSortMode]);
-            tvSort.setTextColor(Color.parseColor("#0984E3"));
-            tvSort.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-            tvSort.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvSort.setGravity(Gravity.CENTER);
-            tvSort.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
-            android.graphics.drawable.GradientDrawable sortBg = new android.graphics.drawable.GradientDrawable();
-            sortBg.setColor(Color.parseColor("#EBF5FB"));
-            sortBg.setStroke(dpToPx(1), Color.parseColor("#0984E3"));
-            sortBg.setCornerRadius(dpToPx(6));
-            tvSort.setBackground(sortBg);
-            LinearLayout.LayoutParams sortLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            sortLp.gravity = Gravity.CENTER_VERTICAL;
-            sortLp.setMargins(0, 0, dpToPx(6), 0);
-            tvSort.setLayoutParams(sortLp);
-            tvSort.setClickable(true); tvSort.setFocusable(true);
-            // 정렬 클릭 → row 재정렬
-            final String fNodeId2 = nodeId, fNodeNm2 = nodeNm, fNodeNo2 = nodeNo;
-            tvSort.setOnClickListener(vs -> {
-                busSortMode = (busSortMode + 1) % 3;
-                tvSort.setText(sortModes[busSortMode]);
-                // busResultContainer 재렌더링
-                if (busResultContainer != null) {
-                    busResultContainer.removeAllViews();
-                    Object[] cached = arrivalSessionCache.get(fNodeId2);
-                    if (cached != null) {
-                        java.util.List<String[]> cachedRoutes = (java.util.List<String[]>) cached[1];
-                        java.util.Map<String, String[]> cachedMap = (java.util.Map<String, String[]>) cached[2];
-                        renderArrivalRows(fNodeId2, fNodeNm2, fNodeNo2, "", busResultContainer, cachedRoutes, cachedMap);
-                    }
-                }
-            });
-            busSortTV = tvSort;
-            titleBar.addView(tvSort);
-
             tvStopOnlyFav.setText("즐겨찾기");
             tvStopOnlyFav.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
             tvStopOnlyFav.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -12216,7 +12177,41 @@ public class PinActivity extends AppCompatActivity {
             tvSoonPH.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             busSoonTV = tvSoonPH;
             soonRow.addView(tvSoonPH);
-            // 정렬 버튼은 titleBar로 이동
+            // 정렬 버튼 (오른쪽 끝)
+            final String[] sortModes = {"도착순", "번호순", "유형순"};
+            TextView tvSort = new TextView(this);
+            tvSort.setText(sortModes[busSortMode]);
+            tvSort.setTextColor(Color.parseColor("#0984E3"));
+            tvSort.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvSort.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvSort.setGravity(Gravity.CENTER);
+            tvSort.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
+            android.graphics.drawable.GradientDrawable sortBg = new android.graphics.drawable.GradientDrawable();
+            sortBg.setColor(Color.parseColor("#EBF5FB"));
+            sortBg.setStroke(dpToPx(1), Color.parseColor("#0984E3"));
+            sortBg.setCornerRadius(dpToPx(6));
+            tvSort.setBackground(sortBg);
+            LinearLayout.LayoutParams sortLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            sortLp.gravity = Gravity.CENTER_VERTICAL;
+            tvSort.setLayoutParams(sortLp);
+            tvSort.setClickable(true); tvSort.setFocusable(true);
+            final String fNodeId2 = nodeId, fNodeNm2 = nodeNm, fNodeNo2 = nodeNo;
+            tvSort.setOnClickListener(vs -> {
+                busSortMode = (busSortMode + 1) % 3;
+                tvSort.setText(sortModes[busSortMode]);
+                if (busResultContainer != null) {
+                    busResultContainer.removeAllViews();
+                    Object[] cached = arrivalSessionCache.get(fNodeId2);
+                    if (cached != null) {
+                        java.util.List<String[]> cachedRoutes = (java.util.List<String[]>) cached[1];
+                        java.util.Map<String, String[]> cachedMap = (java.util.Map<String, String[]>) cached[2];
+                        renderArrivalRows(fNodeId2, fNodeNm2, fNodeNo2, "", busResultContainer, cachedRoutes, cachedMap);
+                    }
+                }
+            });
+            busSortTV = tvSort;
+            soonRow.addView(tvSort);
             infoBox.addView(soonRow);
             // 구분선 아래
             android.view.View divDown = new android.view.View(this);
@@ -18154,7 +18149,7 @@ public class PinActivity extends AppCompatActivity {
         // 5분(300초) 이상이면 "곧 도착 없음" 표시
         if (minSec >= 300) {
             busSoonTV.setText("곧 도착 없음");
-            busSoonTV.setTextColor(android.graphics.Color.parseColor("#AAAAAA"));
+            busSoonTV.setTextColor(android.graphics.Color.parseColor("#222222"));
             busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
             busSoonTV.setTypeface(null, android.graphics.Typeface.BOLD);
             return;
