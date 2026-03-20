@@ -12554,19 +12554,52 @@ public class PinActivity extends AppCompatActivity {
             @Override public void run() {
                 if (!isOnSubScreen) return;
                 if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) {
-                    arrivalRefreshHandler.postDelayed(this, 30000); return;
+                    arrivalRefreshHandler.postDelayed(this, 20000); return;
                 }
                 if (!busBackStack.isEmpty() && "arrival".equals(busBackStack.peek()[0])
                         && arrivalRefreshNodeId.equals(busBackStack.peek()[1])) {
-                    arrivalSessionCache.remove(arrivalRefreshNodeId);
-                    new Thread(() -> fetchAndRenderArrival(
-                            arrivalRefreshNodeId, arrivalRefreshNodeNm,
-                            arrivalRefreshNodeNo, arrivalRefreshRouteNo, fArrContainer, true)).start();
+                    // LC API로 GPS 먼저 조회
+                    new Thread(() -> {
+                        try {
+                            boolean hasGps = false;
+                            // 즐겨찾기 노선 중 이 정류장을 지나는 노선들의 GPS 조회
+                            android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+                            java.util.Map<String, ?> allPrefs = prefs.getAll();
+                            for (java.util.Map.Entry<String, ?> entry : allPrefs.entrySet()) {
+                                String key = entry.getKey();
+                                if (!key.startsWith("fav_route_") || key.contains("_no_") || key.contains("_dir_") || key.contains("_id_") || key.contains("_dirkey_") || key.contains("_memo_")) continue;
+                                String routeId2 = prefs.getString(key.replace("fav_route_", "fav_route_id_"), "");
+                                if (routeId2.isEmpty()) continue;
+                                try {
+                                    String lcUrl = BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                            + "&routeId=" + routeId2 + "&numOfRows=50&pageNo=1&_type=xml";
+                                    String lcXml2 = httpGet(lcUrl);
+                                    for (String item : lcXml2.split("<item>")) {
+                                        String gla = tag(item, "gpslati"), glo = tag(item, "gpslong");
+                                        if (!gla.isEmpty() && !glo.isEmpty()) { hasGps = true; break; }
+                                    }
+                                } catch (Exception ig) {}
+                                if (hasGps) break;
+                            }
+                            final boolean fHasGps = hasGps;
+                            // GPS 있으면 도착시간 GPS 우선으로 갱신, 없으면 기존 방식
+                            arrivalSessionCache.remove(arrivalRefreshNodeId);
+                            fetchAndRenderArrival(arrivalRefreshNodeId, arrivalRefreshNodeNm,
+                                    arrivalRefreshNodeNo, arrivalRefreshRouteNo, fArrContainer, true);
+                            // GPS 수신 중이면 5초, 없으면 20초 (하지만 계속 재시도)
+                            int delay = fHasGps ? 5000 : 20000;
+                            arrivalRefreshHandler.postDelayed(this, delay);
+                        } catch (Exception ignored) {
+                            arrivalRefreshHandler.postDelayed(this, 20000);
+                        }
+                    }).start();
+                } else {
+                    arrivalRefreshHandler.postDelayed(this, 20000);
                 }
-                arrivalRefreshHandler.postDelayed(this, 30000);
             }
         };
-        arrivalRefreshHandler.postDelayed(arrivalRefreshRunnable, 30000); // 30초 후부터 자동갱신
+        arrivalRefreshHandler.postDelayed(arrivalRefreshRunnable, 20000); // 20초 후부터 자동갱신
         // ② 검색창·즐겨찾기 숨기기
         if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
         if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
