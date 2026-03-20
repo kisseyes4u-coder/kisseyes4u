@@ -18131,6 +18131,13 @@ public class PinActivity extends AppCompatActivity {
         if (busSoonTV == null || busSoonCache == null || busSoonCache.isEmpty()) return;
         // 가장 빠른 시간 하나만 표시
         int minSec = busSoonCache.firstKey();
+        // 5분(300초) 이상이면 "곧 도착 없음" 표시
+        if (minSec >= 300) {
+            busSoonTV.setText("곧 도착 없음");
+            busSoonTV.setTextColor(android.graphics.Color.parseColor("#AAAAAA"));
+            busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            return;
+        }
         String timeLabel = minSec == 0 ? "곧 도착 " : (minSec / 60) + "분 후 ";
         // X분 후에 해당하는 버스만 수집 (첫번째 키=최소시간)
         java.util.List<String> allBuses = new java.util.ArrayList<>(busSoonCache.firstEntry().getValue());
@@ -18151,7 +18158,7 @@ public class PinActivity extends AppCompatActivity {
         // X분 후 (빨강 20dp)
         int ts = ssb.length(); ssb.append(timeLabel);
         ssb.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#E74C3C")), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(20), true), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(17), true), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         // 버스번호들 (종류별 색상 20dp)
         for (String rn : allBuses) {
@@ -18159,7 +18166,7 @@ public class PinActivity extends AppCompatActivity {
             String[] bdg = routeTypeBadge(rtp);
             int bs = ssb.length(); ssb.append(rn + "번 ");
             ssb.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor(bdg[1])), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(20), true), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(17), true), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         busSoonTV.setText(ssb, android.widget.TextView.BufferType.SPANNABLE);
