@@ -11790,7 +11790,7 @@ public class PinActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
         ivGpsHeader.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
         LinearLayout.LayoutParams gpsHLp = new LinearLayout.LayoutParams(dpToPx(36), dpToPx(36));
-        gpsHLp.setMargins(0, 0, dpToPx(4), 0);
+        gpsHLp.setMargins(0, 0, dpToPx(12), 0);
         gpsHLp.gravity = Gravity.CENTER_VERTICAL;
         ivGpsHeader.setLayoutParams(gpsHLp);
         topHeader.addView(ivGpsHeader);
