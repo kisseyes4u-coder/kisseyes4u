@@ -17338,9 +17338,10 @@ public class PinActivity extends AppCompatActivity {
                             if (minSecMap.containsKey(rno2) && sec2 >= 0 && sec2 >= minSecMap.get(rno2)) continue;
                             if (sec2 >= 0) minSecMap.put(rno2, sec2);
                             String timeStr2, timeColor2;
-                            if (sec2 <= 0 || prev2 == 0) { timeStr2 = ""; timeColor2 = "#555555"; }
+                            if (prev2 == 0) { timeStr2 = "[출발지 대기중]"; timeColor2 = "#888888"; }
+                            else if (sec2 <= 0) { timeStr2 = ""; timeColor2 = "#555555"; }
                             else if (sec2 < 60) { timeStr2 = "곧 도착"; timeColor2 = "#E74C3C"; }
-                            else { timeStr2 = "약 " + (sec2/60) + "분"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
+                            else { timeStr2 = "[약 " + (sec2/60) + "분]"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
                             String prevStr2 = prev2 == 1 ? "[바로 앞]" : prev2 > 1 ? "[" + prev2 + "정거장 앞]" : "";
                             if (!timeStr2.isEmpty()) arrMap.put(rno2, new String[]{timeStr2, prevStr2, timeColor2, endnm2, nextnm2});
                         }
@@ -18307,9 +18308,23 @@ public class PinActivity extends AppCompatActivity {
                         String[] ai2 = arrMap2.get(routeNo);
                         if (ai2 != null && !ai2[0].isEmpty()) arrTimeStr = ai2[0];
                     }
+                    // timeColor: arrMap의 [2]에서 읽기, 없으면 기본값
+                    String arrTimeColor = "#AAAAAA";
+                    if (!arrTimeStr.isEmpty()) {
+                        try {
+                            Object[] c3 = arrivalSessionCache.get(
+                                    compositeKey.contains("_") ? compositeKey.substring(compositeKey.indexOf("_")+1) : compositeKey);
+                            if (c3 != null && c3.length >= 3) {
+                                @SuppressWarnings("unchecked")
+                                java.util.Map<String, String[]> am3 = (java.util.Map<String, String[]>) c3[2];
+                                String[] ai3 = am3.get(routeNo);
+                                if (ai3 != null && ai3.length > 2) arrTimeColor = ai3[2];
+                            }
+                        } catch (Exception ig) {}
+                    }
                     TextView tvArrTime = new TextView(this);
-                    tvArrTime.setText(arrTimeStr.isEmpty() ? "정보없음" : arrTimeStr);
-                    tvArrTime.setTextColor(Color.parseColor(arrTimeStr.isEmpty() ? "#AAAAAA" : "#E74C3C"));
+                    tvArrTime.setText(arrTimeStr.isEmpty() ? "[출발지 대기중]" : arrTimeStr);
+                    tvArrTime.setTextColor(Color.parseColor(arrTimeStr.isEmpty() ? "#AAAAAA" : arrTimeColor));
                     tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
                     tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
                     tvArrTime.setGravity(Gravity.CENTER);
