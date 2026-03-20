@@ -11747,7 +11747,7 @@ public class PinActivity extends AppCompatActivity {
                         }
                         if (!fShortNo.isEmpty()) {
                             android.graphics.Paint np2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                            np2.setColor(Color.parseColor("#E74C3C")); np2.setTextSize(dpToPx(8));
+                            np2.setColor(Color.parseColor("#E74C3C")); np2.setTextSize(dpToPx(10));
                             np2.setTextAlign(android.graphics.Paint.Align.CENTER); np2.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
                             canvas.drawText(fShortNo, cx, startY+imgH+gap+numH*0.8f, np2);
                         }
