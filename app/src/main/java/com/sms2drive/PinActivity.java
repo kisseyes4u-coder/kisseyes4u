@@ -14107,6 +14107,23 @@ public class PinActivity extends AppCompatActivity {
             // 로컬 캐시 없으면 실시간 API 결과만 사용 (fallback)
             boolean localDataFound = !allRoutes.isEmpty();
 
+            // ★ 최후 폴백: 모든 캐시에서 못 찾으면 도착정보 API에서 노선 목록 직접 조회
+            if (allRoutes.isEmpty()) {
+                try {
+                    String arvlFb = httpGet(BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
+                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                            + "&nodeId=" + nodeId + "&numOfRows=50&pageNo=1&_type=xml");
+                    java.util.Set<String> seenRno = new java.util.LinkedHashSet<>();
+                    for (String item : arvlFb.split("<item>")) {
+                        String rno = tag(item, "routeno");
+                        String rid = tag(item, "routeid");
+                        if (rno.isEmpty() || seenRno.contains(rno)) continue;
+                        seenRno.add(rno);
+                        allRoutes.add(new String[]{rno, rid, "", "", ""});
+                    }
+                } catch (Exception ig) {}
+            }
+
             // allRoutes 확정 시 정류장 노선 영구캐시 저장 (노선 변경 감지 포함)
             if (!allRoutes.isEmpty()) {
                 StringBuilder routesSb = new StringBuilder();
