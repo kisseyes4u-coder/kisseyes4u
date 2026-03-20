@@ -10392,13 +10392,19 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
         btnRefreshBar.setLayoutParams(refreshLp);
         btnRefreshBar.setOnClickListener(v -> {
-            // 검색화면(백스택 비어있음)이면 검색 리셋
+            // 즐겨찾기 화면(백스택 비어있고 즐겨찾기 표시 중)이면 실시간 갱신
             if (busBackStack.isEmpty() || (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE)) {
+                if (busFavSection != null && busFavSection2 != null
+                        && busFavSection2.getVisibility() == android.view.View.VISIBLE) {
+                    // 즐겨찾기 실시간 재갱신 (캐시 클리어 후 API 재호출)
+                    arrivalSessionCache.clear();
+                    refreshBusFavorites(busFavSection, busResultContainer);
+                    return;
+                }
                 // 검색화면 리셋
                 if (busEtSearch != null) busEtSearch.setText("");
                 if (busTabBus != null) busTabBus.performClick();
                 if (busResultContainer != null) busResultContainer.removeAllViews();
-                // 키보드 숨김
                 android.view.inputmethod.InputMethodManager imm2 =
                         (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
                 if (imm2 != null && busEtSearch != null) imm2.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
@@ -10407,13 +10413,11 @@ public class PinActivity extends AppCompatActivity {
             if (!busBackStack.isEmpty()) {
                 String[] cur = busBackStack.peek();
                 if ("timeline".equals(cur[0])) {
-                    // 타임라인 새로고침 - 자동갱신 재시작
                     if (busRefreshRunnable != null) busRefreshHandler.removeCallbacks(busRefreshRunnable);
                     busResultContainer.removeAllViews();
                     busFixedHeader.removeAllViews();
                     busScreenLoadStops(cur[1], cur[2], busResultContainer, cur[3], cur[4]);
                 } else if ("arrival".equals(cur[0])) {
-                    // 도착화면 새로고침 - 시간정보(API)만 재조회
                     arrivalSessionCache.remove(cur[1]);
                     if (busResultContainer != null) busResultContainer.removeAllViews();
                     final String nId = cur[1], nNm = cur[2], nNo = cur[3], fRno2 = cur[4];
@@ -17780,7 +17784,7 @@ public class PinActivity extends AppCompatActivity {
                     int rs1 = rssb.length(); rssb.append(runningCnt + "대");
                     rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")), rs1, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     int rs2 = rssb.length(); rssb.append(" 운행중");
-                    rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#222222")), rs2, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#888888")), rs2, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     tvRunning.setText(rssb, android.widget.TextView.BufferType.SPANNABLE);
                     tvRunning.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                     tvRunning.setTypeface(null, android.graphics.Typeface.BOLD);
