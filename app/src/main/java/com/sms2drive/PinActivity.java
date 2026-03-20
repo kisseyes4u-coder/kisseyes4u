@@ -14238,30 +14238,14 @@ public class PinActivity extends AppCompatActivity {
                     boolean usedGps = false;
                     if (gpsDistMap.containsKey(rno)) {
                         int distM = gpsDistMap.get(rno);
-                        // 버스 평균속도 20km/h(시내 정체) = 5.56m/s
                         int gpsSec = (int)(distM / 5.56);
                         if (sec > 0) {
-                            // GPS 값 우선 사용, arrtime은 보조
                             sec = gpsSec;
                         } else {
                             sec = gpsSec;
                         }
                         usedGps = true;
                     }
-                    // GPS 이미지 업데이트 (헤더에서 찾아서)
-                    final boolean fUsedGps = usedGps;
-                    runOnUiThread(() -> {
-                        if (busFixedHeader == null) return;
-                        android.view.View gpsIv = busFixedHeader.findViewWithTag("gps_arr_iv");
-                        if (gpsIv instanceof android.widget.ImageView) {
-                            String gpsFile = fUsedGps ? "gps4.png" : "gps0.png";
-                            try {
-                                android.graphics.Bitmap bm = android.graphics.BitmapFactory
-                                        .decodeStream(getAssets().open(gpsFile));
-                                ((android.widget.ImageView)gpsIv).setImageBitmap(bm);
-                            } catch(Exception ig){}
-                        }
-                    });
 
                     if (minSec.containsKey(rno) && sec >= 0 && sec >= minSec.get(rno)) continue;
                     if (sec >= 0) minSec.put(rno, sec);
