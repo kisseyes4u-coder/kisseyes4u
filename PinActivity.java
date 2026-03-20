@@ -10184,14 +10184,16 @@ public class PinActivity extends AppCompatActivity {
                             + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
                             + "&routeId=" + fMapRouteId + "&numOfRows=50&pageNo=1&_type=xml");
                     java.util.Set<String> ordSet2 = new java.util.HashSet<>();
+                    java.util.Map<String,String> vehMap2 = new java.util.HashMap<>();
                     for (String item : lcXml.split("<item>")) {
-                        String ord = tag(item, "nodeord");
-                        if (!ord.isEmpty()) ordSet2.add(ord);
+                        String ord = tag(item, "nodeord"), vno = tag(item, "vehicleno");
+                        if (!ord.isEmpty()) { ordSet2.add(ord); if (!vno.isEmpty()) vehMap2.put(ord, vno); }
                     }
                     final java.util.Set<String> fOrd = ordSet2;
-                    runOnUiThread(() -> showBusMapDialog(fMapRouteId, fMapRouteNo, fCachedStops, fOrd));
+                    final java.util.Map<String,String> fVeh2 = vehMap2;
+                    runOnUiThread(() -> showBusMapDialog(fMapRouteId, fMapRouteNo, fCachedStops, fOrd, fVeh2));
                 } catch (Exception e) {
-                    runOnUiThread(() -> showBusMapDialog(fMapRouteId, fMapRouteNo, fCachedStops, new java.util.HashSet<>()));
+                    runOnUiThread(() -> showBusMapDialog(fMapRouteId, fMapRouteNo, fCachedStops, new java.util.HashSet<>(), new java.util.HashMap<>()));
                 }
             }).start();
         });
@@ -10840,21 +10842,22 @@ public class PinActivity extends AppCompatActivity {
                                 arvlXml = lcXml; // LC API 결과 재활용
                             } catch (Exception ig) {}
 
-                            // [[toIdx, arrSec], ...] 구성
+                            // [[toIdx, arrSec, shortNo], ...] 구성
                             StringBuilder jsUpdate = new StringBuilder("updateBuses([");
                             boolean firstBus = true;
                             int cnt = 0;
                             for (String item : lcXml.split("<item>")) {
                                 String ord = tag(item, "nodeord");
+                                String vno = tag(item, "vehicleno");
                                 if (ord.isEmpty()) continue;
-                                // toIdx: 다음 정류장 인덱스 (현재 정류장 + 1)
                                 Integer curIdx = fOrdToIdx != null ? fOrdToIdx.get(ord) : null;
                                 if (curIdx == null) continue;
-                                int toIdx = curIdx + 1; // 다음 정류장으로 이동 중
-                                // arrtime: LC API에는 없으므로 정류장 간격 20초로 추정
+                                int toIdx = curIdx + 1;
                                 int arrSec = 20;
+                                String shortNo = vno.length() > 4 ? vno.substring(vno.length()-4) : vno;
                                 if (!firstBus) jsUpdate.append(",");
-                                jsUpdate.append("[").append(toIdx).append(",").append(arrSec).append("]");
+                                jsUpdate.append("[").append(toIdx).append(",").append(arrSec)
+                                        .append(",'").append(shortNo).append("']");
                                 firstBus = false;
                                 cnt++;
                             }
@@ -10882,6 +10885,12 @@ public class PinActivity extends AppCompatActivity {
     private void showBusMapDialog(String routeId, String routeNo,
                                    java.util.List<String[]> stops,
                                    java.util.Set<String> busOrdSet) {
+        showBusMapDialog(routeId, routeNo, stops, busOrdSet, new java.util.HashMap<>());
+    }
+    private void showBusMapDialog(String routeId, String routeNo,
+                                   java.util.List<String[]> stops,
+                                   java.util.Set<String> busOrdSet,
+                                   java.util.Map<String,String> vehMap) {
         java.util.List<String[]> coordStops = new java.util.ArrayList<>();
         for (String[] s : stops) {
             if (s.length >= 6 && !s[4].isEmpty() && !s[5].isEmpty()) coordStops.add(s);
@@ -10900,20 +10909,26 @@ public class PinActivity extends AppCompatActivity {
                                 tag(item,"nodeord"),tag(item,"nodeno"),
                                 tag(item,"gpslati"),tag(item,"gpslong")});
                     }
-                    runOnUiThread(() -> buildAndShowMap(routeId, routeNo, freshStops, busOrdSet));
+                    runOnUiThread(() -> buildAndShowMap(routeId, routeNo, freshStops, busOrdSet, vehMap));
                 } catch (Exception e) {
                     runOnUiThread(() -> android.widget.Toast.makeText(this,
                             "지도 로드 실패", android.widget.Toast.LENGTH_SHORT).show());
                 }
             }).start();
         } else {
-            buildAndShowMap(routeId, routeNo, coordStops, busOrdSet);
+            buildAndShowMap(routeId, routeNo, coordStops, busOrdSet, vehMap);
         }
     }
 
     private void buildAndShowMap(String routeId, String routeNo,
                                   java.util.List<String[]> stops,
                                   java.util.Set<String> busOrdSet) {
+        buildAndShowMap(routeId, routeNo, stops, busOrdSet, new java.util.HashMap<>());
+    }
+    private void buildAndShowMap(String routeId, String routeNo,
+                                  java.util.List<String[]> stops,
+                                  java.util.Set<String> busOrdSet,
+                                  java.util.Map<String,String> vehMap) {
         // ord → 좌표 맵 + 순서 리스트
         java.util.Map<String, double[]> ordToCoord = new java.util.HashMap<>();
         java.util.Map<String, Integer> ordToIdx = new java.util.HashMap<>();
@@ -10968,7 +10983,9 @@ public class PinActivity extends AppCompatActivity {
         for (String ord : busOrdSet) {
             double[] coord = ordToCoord.get(ord);
             if (coord == null) continue;
-            busJs.append(String.format("addBus(%d,[%f,%f]);\n", busIdx++, coord[0], coord[1]));
+            String vno = vehMap.getOrDefault(ord, "");
+            String shortNo = vno.length() > 4 ? vno.substring(vno.length() - 4) : vno;
+            busJs.append(String.format("addBus(%d,[%f,%f],'%s');\n", busIdx++, coord[0], coord[1], shortNo));
         }
 
         String html = "<!DOCTYPE html><html><head><meta charset='utf-8'/>" +
@@ -10991,10 +11008,13 @@ public class PinActivity extends AppCompatActivity {
             allCoordsJs +
             stopJs +
             "var buses={};" +
-            "function makeBusIcon(){return L.divIcon({className:''," +
-            "html:'<div class=\"bus-wrap\"><img src=\"file:///android_asset/bluebus.png\" width=\"48\" height=\"36\" style=\"filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))\"/><div class=\"bus-label\">" + routeNo + "</div></div>'," +
+            "function makeBusIcon(label){return L.divIcon({className:''," +
+            "html:'<div class=\"bus-wrap\"><img src=\"file:///android_asset/bluebus.png\" width=\"48\" height=\"36\" style=\"filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))\"/><div class=\"bus-label\">'+label+'</div></div>'," +
             "iconSize:[48,54],iconAnchor:[24,27]});}" +
-            "function addBus(id,latlng){if(buses[id])buses[id].setLatLng(latlng);else buses[id]=L.marker(latlng,{icon:makeBusIcon()}).addTo(map);}" +
+            "function addBus(id,latlng,label){" +
+            "  var lbl=label||'';" +
+            "  if(buses[id]){buses[id].setLatLng(latlng);}else{buses[id]=L.marker(latlng,{icon:makeBusIcon(lbl)}).addTo(map);}" +
+            "}" +
             "function interp(a,b,t){return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];}" +
             // updateBuses: [[toIdx, arrSec], ...] — toIdx=도착할정류장인덱스, arrSec=남은초
             "var animTargets=[];var animTimer=null;var animStart=0;" +
@@ -11004,12 +11024,12 @@ public class PinActivity extends AppCompatActivity {
             "  animTimer=setInterval(function(){" +
             "    var elapsed=(Date.now()-animStart)/1000;" +
             "    animTargets.forEach(function(b,i){" +
-            "      var toIdx=b[0],arrSec=b[1];" +
+            "      var toIdx=b[0],arrSec=b[1],lbl=b[2]||'';" +
             "      if(toIdx<1||toIdx>=allCoords.length)return;" +
             "      var fromIdx=toIdx-1;" +
             // t=0이면 fromIdx, t=1이면 toIdx (arrSec초 후 도착)
             "      var t=Math.min(elapsed/Math.max(arrSec,1),1);" +
-            "      addBus(i,interp(allCoords[fromIdx],allCoords[toIdx],t));" +
+            "      addBus(i,interp(allCoords[fromIdx],allCoords[toIdx],t),lbl);" +
             "    });" +
             "  },500);" +
             "}" +
