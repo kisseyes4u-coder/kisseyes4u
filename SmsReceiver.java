@@ -322,7 +322,7 @@ public class SmsReceiver extends BroadcastReceiver {
                         String afterAmt = t.substring(om2.end()).trim();
                         if (!afterAmt.isEmpty() && out4.isEmpty()) {
                             // 괄호 처리: ((주)씨엠비) → (주)씨엠비
-                            afterAmt = afterAmt.replaceAll("^\\(\\(", "(").replaceAll("\\)\\)$", ")");
+                            afterAmt = afterAmt.replaceAll("^\\(\\(", "(");
                             out4 = afterAmt;
                         }
                     } else {
