@@ -10295,10 +10295,15 @@ public class PinActivity extends AppCompatActivity {
         root.addView(fixedHeader);
 
         // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
+        // FrameLayout으로 감싸서 버스 오버레이를 절대 위치로 표시
+        android.widget.FrameLayout svFrame = new android.widget.FrameLayout(this);
+        svFrame.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         ScrollView sv = new ScrollView(this);
         busTimelineSv = sv; // 타임라인 스크롤 제어용
-        sv.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        sv.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
         sv.setOnTouchListener((v, event) -> {
             if (event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
                 if (immBus != null) immBus.hideSoftInputFromWindow(sv.getWindowToken(), 0);
@@ -10306,11 +10311,37 @@ public class PinActivity extends AppCompatActivity {
             }
             return false;
         });
+        sv.getViewTreeObserver().addOnScrollChangedListener(() -> {
+            // 스크롤 시 버스 오버레이 Y 위치를 스크롤 오프셋만큼 보정
+            if (busTimelineOverlayFrame == null) return;
+            float scrollY = sv.getScrollY();
+            for (android.widget.ImageView iv : busAnimMarkers.values()) {
+                if (iv.getAlpha() > 0) {
+                    // 원래 svInner 기준 Y에서 현재 스크롤 반영
+                    Object tag = iv.getTag();
+                    if (tag instanceof Float) {
+                        iv.setTranslationY((float)tag - scrollY);
+                    }
+                }
+            }
+        });
         LinearLayout svInner = new LinearLayout(this);
         busTimelineSvInner = svInner;
         svInner.setOrientation(LinearLayout.VERTICAL);
         svInner.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(12));
         sv.addView(svInner);
+        svFrame.addView(sv);
+
+        // 버스 애니메이션 오버레이 레이어 (스크롤 위에 겹침)
+        android.widget.FrameLayout busOverlayLayer = new android.widget.FrameLayout(this);
+        busOverlayLayer.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        busOverlayLayer.setPointerIcon(null); // 터치 이벤트 통과
+        busOverlayLayer.setClickable(false);
+        busOverlayLayer.setFocusable(false);
+        busTimelineOverlayFrame = busOverlayLayer;
+        svFrame.addView(busOverlayLayer);
 
         // 즐겨찾기 섹션
         LinearLayout favSection = new LinearLayout(this);
@@ -10333,7 +10364,7 @@ public class PinActivity extends AppCompatActivity {
         refreshBusFavorites(favSection, resultContainer);
         startFavAutoRefresh(); // 즐겨찾기 자동갱신 시작
 
-        root.addView(sv);
+        root.addView(svFrame);
 
         // ── 오너 전용: 정류장 DB 업데이트 버튼 ────────────
         if (isOwner) {
@@ -11155,13 +11186,11 @@ public class PinActivity extends AppCompatActivity {
                                      java.util.List<String[]> stops,
                                      java.util.Map<String,String> vehMap,
                                      int duration) {
-        if (busTimelineSvInner == null) return;
-        // stops[4]=lat, stops[5]=lon, stops[2]=ord
-        // 각 GPS 버스마다: 가장 가까운 정류장(A)과 두 번째(B)를 찾아 t 계산
+        if (busTimelineOverlayFrame == null || busTimelineSvInner == null) return;
         android.graphics.Bitmap busBmp = getBusIcon();
         if (busBmp == null) return;
 
-        // 기존 애니메이터 모두 취소
+        // 기존 애니메이터 취소
         for (android.animation.ValueAnimator va : busAnimators.values()) va.cancel();
         busAnimators.clear();
 
@@ -11186,65 +11215,84 @@ public class PinActivity extends AppCompatActivity {
                 } catch (Exception ig) {}
             }
             if (ord1.isEmpty()) continue;
-            // t = 0이면 ord1 위치, t = dist1/(dist1+dist2)이면 사이
             float t = (dist1+dist2 > 0) ? (float)(dist2/(dist1+dist2)) : 0f;
 
-            // row Y 좌표 찾기
+            // row Y 좌표 (svInner 기준)
             android.view.View row1 = findRowByOrd(busTimelineSvInner, ord1);
             android.view.View row2 = ord2.isEmpty() ? null : findRowByOrd(busTimelineSvInner, ord2);
             if (row1 == null) continue;
 
-            // svInner 기준 Y 좌표 계산
-            float y1 = getRowCenterY(row1, busTimelineSvInner);
-            float y2 = row2 != null ? getRowCenterY(row2, busTimelineSvInner) : y1;
-            float targetY = y1 + (y2 - y1) * t;
-
-            // 버스 ImageView 생성 또는 재사용
-            final String busKey = "bus_" + busIdx;
-            android.widget.ImageView iv = busAnimMarkers.get(busKey);
-            if (iv == null || iv.getParent() != busTimelineSvInner) {
-                iv = new android.widget.ImageView(this);
-                iv.setImageBitmap(busBmp);
-                iv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-                // svInner에 절대 위치로 추가
-                LinearLayout.LayoutParams ivLp = new LinearLayout.LayoutParams(dpToPx(26), dpToPx(22));
-                iv.setLayoutParams(ivLp);
-                iv.setTranslationX(dpToPx(2)); // 타임라인 선 위에 맞춤
-                iv.setAlpha(0f);
-                busTimelineSvInner.addView(iv, 0);
-                busAnimMarkers.put(busKey, iv);
-            }
-
-            // 차량번호 표시
+            final int fBusIdx = busIdx;
+            final float fT = t;
+            final android.view.View fRow1 = row1, fRow2 = row2;
             final String vno = vehMap.getOrDefault(ord1, "");
             final String shortNo = vno.length() > 4 ? vno.substring(vno.length()-4) : vno;
 
-            final android.widget.ImageView fIv = iv;
-            final float fromY = iv.getTranslationY();
-            final float toY = targetY - dpToPx(11); // 중앙 정렬
+            row1.post(() -> {
+                // svInner 기준 Y 좌표
+                int[] r1Loc = new int[2], innerLoc = new int[2];
+                fRow1.getLocationOnScreen(r1Loc);
+                busTimelineSvInner.getLocationOnScreen(innerLoc);
+                float y1 = (r1Loc[1] - innerLoc[1]) + fRow1.getHeight() / 2f;
+                float y2 = y1;
+                if (fRow2 != null) {
+                    int[] r2Loc = new int[2];
+                    fRow2.getLocationOnScreen(r2Loc);
+                    y2 = (r2Loc[1] - innerLoc[1]) + fRow2.getHeight() / 2f;
+                }
+                // 스크롤 오프셋 반영한 overlayFrame 기준 Y
+                float scrollY = busTimelineSv != null ? busTimelineSv.getScrollY() : 0;
+                float targetY = y1 + (y2 - y1) * fT - scrollY - dpToPx(13);
+                // X: tlFrame 폭(40dp) 중앙
+                float targetX = dpToPx(12); // svInner padding 반영
 
-            // ValueAnimator로 부드럽게 이동
-            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(fromY, toY);
-            va.setDuration(duration);
-            va.setInterpolator(new android.view.animation.DecelerateInterpolator());
-            va.addUpdateListener(anim -> {
-                float val = (float) anim.getAnimatedValue();
-                fIv.setTranslationY(val);
-                fIv.setAlpha(1f);
+                // 기존 마커 재사용 또는 생성
+                final String busKey = "bus_" + fBusIdx;
+                android.widget.ImageView iv = busAnimMarkers.get(busKey);
+                if (iv == null || iv.getParent() != busTimelineOverlayFrame) {
+                    if (iv != null && iv.getParent() != null)
+                        ((android.view.ViewGroup)iv.getParent()).removeView(iv);
+                    iv = new android.widget.ImageView(PinActivity.this);
+                    iv.setImageBitmap(busBmp);
+                    iv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                    android.widget.FrameLayout.LayoutParams ivLp = new android.widget.FrameLayout.LayoutParams(
+                            dpToPx(26), dpToPx(22));
+                    iv.setLayoutParams(ivLp);
+                    iv.setAlpha(0f);
+                    busTimelineOverlayFrame.addView(iv);
+                    busAnimMarkers.put(busKey, iv);
+                }
+                final android.widget.ImageView fIv = iv;
+                final float fromY = fIv.getAlpha() > 0 ? fIv.getTranslationY() : targetY;
+                fIv.setTranslationX(targetX);
+
+                // ValueAnimator로 부드럽게 이동
+                android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(fromY, targetY);
+                va.setDuration(duration);
+                va.setInterpolator(new android.view.animation.DecelerateInterpolator());
+                final float svInnerTargetY = y1 + (y2 - y1) * fT - dpToPx(13); // svInner 절대 Y 저장
+                va.addUpdateListener(anim -> {
+                    float val = (float) anim.getAnimatedValue();
+                    fIv.setTranslationY(val);
+                    fIv.setAlpha(1f);
+                    fIv.setTag(svInnerTargetY); // 스크롤 보정용 저장
+                });
+                va.start();
+                if (busAnimators.containsKey(busKey)) busAnimators.get(busKey).cancel();
+                busAnimators.put(busKey, va);
             });
-            va.start();
-            busAnimators.put(busKey, va);
             busIdx++;
         }
 
         // 사용하지 않는 마커 숨기기
+        final int fBusTotal = busIdx;
         for (java.util.Map.Entry<String,android.widget.ImageView> e : busAnimMarkers.entrySet()) {
             int idx = 0; try { idx = Integer.parseInt(e.getKey().replace("bus_","")); } catch(Exception ig){}
-            if (idx >= busIdx) e.getValue().setAlpha(0f);
+            if (idx >= fBusTotal) e.getValue().setAlpha(0f);
         }
     }
 
-    private android.view.View findRowByOrd(LinearLayout parent, String ord) {
+        private android.view.View findRowByOrd(LinearLayout parent, String ord) {
         for (int i = 0; i < parent.getChildCount(); i++) {
             android.view.View child = parent.getChildAt(i);
             Object tag = child.getTag(android.R.id.text1);
