@@ -10945,9 +10945,12 @@ public class PinActivity extends AppCompatActivity {
                 // 주변정류소 API 호출
                 String nearUrl = BUS_BASE2 + "BusSttnInfoInqireService/getCrdntPrxmtSttnList"
                         + "?serviceKey=" + BUS_KEY
+                        + "&cityCode=" + BUS_CITY
                         + "&GPS_LATI=" + myLat + "&GPS_LONG=" + myLon
                         + "&numOfRows=20&pageNo=1&_type=xml";
                 String nearXml = httpGet(nearUrl);
+                android.util.Log.d("NearbyStop", "URL: " + nearUrl);
+                android.util.Log.d("NearbyStop", "XML: " + nearXml.substring(0, Math.min(500, nearXml.length())));
 
                 // 정류장 파싱
                 java.util.List<String[]> nearStopList = new java.util.ArrayList<>();
