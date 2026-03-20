@@ -10753,6 +10753,10 @@ public class PinActivity extends AppCompatActivity {
     /** 즐겨찾기 화면 자동갱신 시작 (30초마다) */
     /** 공통 지도 다이얼로그 표시 */
     private void openMapDialog(String title, String html) {
+        openMapDialog(title, html, null, null);
+    }
+
+    private void openMapDialog(String title, String html, String routeId, java.util.List<String[]> coordStops) {
         android.app.Dialog mapDlg = new android.app.Dialog(this,
                 android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
@@ -10776,11 +10780,12 @@ public class PinActivity extends AppCompatActivity {
         tvClose.setOnClickListener(v -> mapDlg.dismiss());
         titleBar2.addView(tvClose);
 
-        TextView tvTitle = new TextView(this);
+        final TextView tvTitle = new TextView(this);
         tvTitle.setText(title);
         tvTitle.setTextColor(Color.WHITE);
-        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
         tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvTitle.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         titleBar2.addView(tvTitle);
 
         // WebView
@@ -10800,6 +10805,61 @@ public class PinActivity extends AppCompatActivity {
         mapDlg.setContentView(frame);
         mapDlg.show();
         wv.post(() -> wv.loadDataWithBaseURL("https://unpkg.com", html, "text/html", "UTF-8", null));
+
+        // 실시간 갱신 (routeId 있을 때만 - 타임라인 버스 위치)
+        if (routeId != null && !routeId.isEmpty() && coordStops != null) {
+            // ordToCoord 맵 생성
+            final java.util.Map<String, double[]> ordToCoord2 = new java.util.HashMap<>();
+            for (String[] s : coordStops) {
+                if (s.length >= 6 && !s[4].isEmpty() && !s[5].isEmpty()) {
+                    try { ordToCoord2.put(s[2], new double[]{Double.parseDouble(s[4]), Double.parseDouble(s[5])}); }
+                    catch (Exception ig) {}
+                }
+            }
+            final String fRouteId = routeId;
+            final android.os.Handler mapHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            final Runnable[] mapRefresh = {null};
+            mapRefresh[0] = new Runnable() {
+                @Override public void run() {
+                    if (!mapDlg.isShowing()) return;
+                    new Thread(() -> {
+                        try {
+                            String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                    + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                    + "&routeId=" + fRouteId + "&numOfRows=50&pageNo=1&_type=xml");
+                            java.util.Set<String> newOrd = new java.util.HashSet<>();
+                            for (String item : lcXml.split("<item>")) {
+                                String ord = tag(item, "nodeord");
+                                if (!ord.isEmpty()) newOrd.add(ord);
+                            }
+                            // JS로 버스 마커 위치 업데이트
+                            StringBuilder jsUpdate = new StringBuilder("updateBuses([");
+                            boolean firstBus = true;
+                            for (String ord : newOrd) {
+                                double[] coord = ordToCoord2.get(ord);
+                                if (coord == null) continue;
+                                if (!firstBus) jsUpdate.append(",");
+                                jsUpdate.append("[").append(coord[0]).append(",").append(coord[1]).append("]");
+                                firstBus = false;
+                            }
+                            jsUpdate.append("]);");
+                            final String js = jsUpdate.toString();
+                            final int cnt = newOrd.size();
+                            runOnUiThread(() -> {
+                                if (mapDlg.isShowing()) {
+                                    wv.evaluateJavascript(js, null);
+                                    tvTitle.setText(title.split("  ")[0] + "  " + cnt + "대 운행중");
+                                }
+                            });
+                        } catch (Exception ignored) {}
+                        if (mapDlg.isShowing()) mapHandler.postDelayed(mapRefresh[0], 20000);
+                    }).start();
+                }
+            };
+            // 20초 후 첫 갱신 시작
+            mapHandler.postDelayed(mapRefresh[0], 20000);
+            mapDlg.setOnDismissListener(d -> mapHandler.removeCallbacks(mapRefresh[0]));
+        }
     }
 
     /** 버스 노선 실시간 지도 (Leaflet.js + OpenStreetMap) */
@@ -10906,9 +10966,19 @@ public class PinActivity extends AppCompatActivity {
             stopJs +
             busJs +
             "if(latlngs.length>0)map.fitBounds(L.polyline(latlngs).getBounds().pad(0.1));" +
+            // 버스 마커 레이어 그룹 (갱신용)
+            "var busLayer=L.layerGroup().addTo(map);" +
+            "function updateBuses(coords){" +
+            "  busLayer.clearLayers();" +
+            "  coords.forEach(function(c){" +
+            "    L.marker(c,{icon:L.divIcon({className:'',html:'<div class=\"bus-icon\">" + routeNo + "</div>'," +
+            "    iconSize:[38,28],iconAnchor:[19,14]})}).addTo(busLayer);" +
+            "  });" +
+            "}" +
             "</script></body></html>";
 
-        openMapDialog(routeNo + "번 실시간 버스 위치  " + busOrdSet.size() + "대 운행중", html);
+        final java.util.List<String[]> fCoordStops = coordStops;
+        openMapDialog(routeNo + "번 실시간 버스 위치  " + busOrdSet.size() + "대 운행중", html, routeId, fCoordStops);
     }
 
 
