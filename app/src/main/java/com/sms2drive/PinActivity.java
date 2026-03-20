@@ -19723,7 +19723,7 @@ public class PinActivity extends AppCompatActivity {
                         java.util.List<String[]> stops = new java.util.ArrayList<>();
                         for (String line : fc.getString(fcKey+"_stops","").split(";")) {
                             String[] p = line.split("\\|",-1);
-                            if (p.length==4) stops.add(p);
+                            if (p.length >= 4) stops.add(p);
                         }
                         if ("reverse".equals(fRDirKey)) java.util.Collections.reverse(stops);
                         // 즉시 표시 (운행대수 0, 버스위치 없음)
