@@ -11105,14 +11105,21 @@ public class PinActivity extends AppCompatActivity {
         // 백스택 처리
         if (!busBackStack.isEmpty() && "alarm".equals(busBackStack.peek()[0])) busBackStack.pop();
         busBackStack.push(new String[]{"alarm", routeId, routeNo, nodeId, nodeNm, nodeNo});
-        // arrivalRefresh 완전 중단 (Thread 내부에서 재등록 차단용 플래그)
+        // arrivalRefresh 완전 중단
         if (arrivalRefreshRunnable != null) {
             arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable);
             arrivalRefreshRunnable = null;
         }
-        arrivalRefreshNodeId = ""; // 재등록 차단
+        arrivalRefreshNodeId = "";
         if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
         if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+        // ★ 이전 저장된 하차 알림 설정 초기화 (화면 진입마다 초기 상태)
+        android.content.SharedPreferences.Editor clearEd = getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit();
+        android.content.SharedPreferences clearPrefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        for (java.util.Map.Entry<String, ?> e : clearPrefs.getAll().entrySet()) {
+            if (e.getKey().startsWith("alarm_alight_" + routeId + "_")) clearEd.remove(e.getKey());
+        }
+        clearEd.remove("alarm_alight_last_" + routeId).apply();
         // 헤더 태그를 alarm으로 변경 → renderArrivalRows 태그 체크 차단
         if (busFixedHeader != null) busFixedHeader.setTag("alarm_" + nodeId);
 
@@ -11474,6 +11481,7 @@ public class PinActivity extends AppCompatActivity {
         // ★ 저장은 알림시작 버튼 클릭 시에만 함 (여기서 저장 안 함)
         int busColor2 = android.graphics.Color.parseColor(colorHex);
         busResultContainer.removeAllViews();
+        busResultContainer.setWeightSum(1f);
 
         // stops 로드 - 승차 정류장부터 하차 정류장까지 전체
         android.content.SharedPreferences bc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
@@ -11492,10 +11500,12 @@ public class PinActivity extends AppCompatActivity {
             if (inRange && (s[0].equals(alightNodeId) || s[1].equals(alightNodeNm))) break;
         }
 
-        // 전체 FrameLayout (내용 + 하단 버튼)
+        // 전체 FrameLayout (내용 + 하단 버튼) - weight로 남은 공간 모두 차지
         android.widget.FrameLayout rootFrame = new android.widget.FrameLayout(this);
-        rootFrame.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
+        LinearLayout.LayoutParams rootLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0);
+        rootLp.weight = 1f;
+        rootFrame.setLayoutParams(rootLp);
 
         // 스크롤 영역
         ScrollView sv2 = new ScrollView(this);
