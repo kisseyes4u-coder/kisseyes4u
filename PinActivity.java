@@ -11460,20 +11460,20 @@ public class PinActivity extends AppCompatActivity {
                     try { cnt = Integer.parseInt(tag(lcXml,"totalCount")); } catch (Exception ig) {}
                     java.util.Set<String> ordSet = new java.util.HashSet<>();
                     java.util.Map<String,String> vehMap = new java.util.HashMap<>();
+                    // GPS 좌표 임시 저장 (stops 로드 후 nearest ord 계산용)
+                    java.util.List<double[]> busGpsList = new java.util.ArrayList<>();
+                    java.util.List<String> busVnoList = new java.util.ArrayList<>();
                     for (String item : lcXml.split("<item>")) {
                         String ord = tag(item,"nodeord"), vno = tag(item,"vehicleno");
-                        String gla=tag(item,"gpslati"), glo=tag(item,"gpslong");
+                        String gla = tag(item,"gpslati"), glo = tag(item,"gpslong");
                         if (ord.isEmpty()) continue;
-                        String useOrd = ord;
-                        if (!gla.isEmpty() && !glo.isEmpty() && !fStops.isEmpty()) {
-                            try {
-                                double gl=Double.parseDouble(gla), go=Double.parseDouble(glo);
-                                String nearOrd = gpsToNearestOrd(gl, go, fStops);
-                                if (!nearOrd.isEmpty()) useOrd = nearOrd;
-                            } catch(Exception ig){}
+                        ordSet.add(ord);
+                        if (!vno.isEmpty()) vehMap.put(ord, vno);
+                        // GPS 좌표 저장
+                        if (!gla.isEmpty() && !glo.isEmpty()) {
+                            try { busGpsList.add(new double[]{Double.parseDouble(gla), Double.parseDouble(glo)});
+                                  busVnoList.add(vno); } catch(Exception ig){}
                         }
-                        ordSet.add(useOrd);
-                        if (!vno.isEmpty()) vehMap.put(useOrd, vno);
                     }
 
                     // ③ 정류소 목록
@@ -11498,6 +11498,20 @@ public class PinActivity extends AppCompatActivity {
 
                     boolean isReverse = "reverse".equals(direction);
                     if (isReverse) java.util.Collections.reverse(stops);
+
+                    // GPS 좌표로 ordSet 재매핑 (stops 좌표 확보 후)
+                    if (!busGpsList.isEmpty() && !stops.isEmpty()) {
+                        ordSet.clear(); vehMap.clear();
+                        for (int bi = 0; bi < busGpsList.size(); bi++) {
+                            double[] gps = busGpsList.get(bi);
+                            String nearOrd = gpsToNearestOrd(gps[0], gps[1], stops);
+                            if (!nearOrd.isEmpty()) {
+                                ordSet.add(nearOrd);
+                                String bvno = bi < busVnoList.size() ? busVnoList.get(bi) : "";
+                                if (!bvno.isEmpty()) vehMap.put(nearOrd, bvno);
+                            }
+                        }
+                    }
 
                     final int fCnt = cnt;
                     final java.util.Set<String> fOrd = ordSet;
