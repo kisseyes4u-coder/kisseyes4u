@@ -10794,6 +10794,9 @@ public class PinActivity extends AppCompatActivity {
         android.webkit.WebView wv = new android.webkit.WebView(this);
         wv.getSettings().setJavaScriptEnabled(true);
         wv.getSettings().setDomStorageEnabled(true);
+        wv.getSettings().setAllowFileAccess(true);
+        wv.getSettings().setAllowFileAccessFromFileURLs(true);
+        wv.getSettings().setAllowUniversalAccessFromFileURLs(true);
         wv.getSettings().setLoadWithOverviewMode(true);
         wv.getSettings().setUseWideViewPort(true);
         android.widget.FrameLayout.LayoutParams wvLp = new android.widget.FrameLayout.LayoutParams(
@@ -10973,9 +10976,10 @@ public class PinActivity extends AppCompatActivity {
             "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/>" +
             "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>" +
             "<style>html,body,#map{width:100%;height:100%;margin:0;padding:0;}" +
-            ".bus-icon{background:#E74C3C;color:white;font-size:12px;font-weight:bold;" +
-            "padding:4px 7px;border-radius:6px;border:2px solid white;" +
-            "box-shadow:0 2px 6px rgba(0,0,0,0.4);white-space:nowrap;}" +
+            ".bus-label{background:rgba(9,132,227,0.85);color:white;font-size:11px;font-weight:bold;" +
+            "padding:2px 5px;border-radius:4px;border:1px solid white;text-align:center;" +
+            "box-shadow:0 1px 4px rgba(0,0,0,0.4);white-space:nowrap;margin-top:2px;}" +
+            ".bus-wrap{display:flex;flex-direction:column;align-items:center;}" +
             "</style></head><body>" +
             "<div id='map'></div><script>" +
             "var map=L.map('map').setView([" + centerLat + "," + centerLon + "],14);" +
@@ -10986,7 +10990,9 @@ public class PinActivity extends AppCompatActivity {
             allCoordsJs +
             stopJs +
             "var buses={};" +
-            "function makeBusIcon(){return L.divIcon({className:'',html:'<div class=\"bus-icon\">" + routeNo + "</div>',iconSize:[38,28],iconAnchor:[19,14]});}" +
+            "function makeBusIcon(){return L.divIcon({className:''," +
+            "html:'<div class=\"bus-wrap\"><img src=\"file:///android_asset/bluebus.png\" width=\"48\" height=\"36\" style=\"filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))\"/><div class=\"bus-label\">" + routeNo + "</div></div>'," +
+            "iconSize:[48,54],iconAnchor:[24,27]});}" +
             "function addBus(id,latlng){if(buses[id])buses[id].setLatLng(latlng);else buses[id]=L.marker(latlng,{icon:makeBusIcon()}).addTo(map);}" +
             "function interp(a,b,t){return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];}" +
             // updateBuses: [[toIdx, arrSec], ...] — toIdx=도착할정류장인덱스, arrSec=남은초
