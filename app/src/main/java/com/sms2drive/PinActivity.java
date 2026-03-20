@@ -10897,6 +10897,167 @@ public class PinActivity extends AppCompatActivity {
     }
 
     /** GPS 좌표 직접 수신 버전 */
+    /** 내 위치 기반 주변 정류장 지도 */
+    private void showNearbyStopsMap() {
+        // 위치 권한 확인
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this,
+                android.Manifest.permission.ACCESS_FINE_LOCATION)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            androidx.core.app.ActivityCompat.requestPermissions(this,
+                    new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, 1001);
+            android.widget.Toast.makeText(this, "위치 권한이 필요합니다", android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        android.widget.Toast.makeText(this, "현재 위치를 가져오는 중...", android.widget.Toast.LENGTH_SHORT).show();
+
+        new Thread(() -> {
+            try {
+                // 현재 위치 가져오기
+                android.location.LocationManager lm = (android.location.LocationManager)
+                        getSystemService(android.content.Context.LOCATION_SERVICE);
+                android.location.Location loc = null;
+                try {
+                    loc = lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER);
+                    if (loc == null) loc = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER);
+                } catch (SecurityException ig) {}
+
+                if (loc == null) {
+                    runOnUiThread(() -> android.widget.Toast.makeText(this,
+                            "위치를 가져올 수 없습니다. GPS를 켜주세요.", android.widget.Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                final double myLat = loc.getLatitude();
+                final double myLon = loc.getLongitude();
+
+                // 주변 정류장: stopDbList에서 내 위치 반경 500m 이내
+                java.util.List<double[]> nearStops = new java.util.ArrayList<>(); // [lat, lon, idx]
+                if (stopDbList != null) {
+                    for (int i = 0; i < stopDbList.size(); i++) {
+                        String[] s = stopDbList.get(i);
+                        if (s.length < 4) continue;
+                        // stopDbList: [nodeId, nodeNm, nodeNo, ...] 좌표는 없음
+                        // bus_cache stops에서 좌표 찾기는 느리므로 API 사용
+                    }
+                }
+
+                // 주변정류소 API 호출
+                String nearUrl = BUS_BASE2 + "BusSttnInfoInqireService/getCrdntPrxmtSttnList"
+                        + "?serviceKey=" + BUS_KEY
+                        + "&GPS_LATI=" + myLat + "&GPS_LONG=" + myLon
+                        + "&numOfRows=20&pageNo=1&_type=xml";
+                String nearXml = httpGet(nearUrl);
+
+                // 정류장 파싱
+                java.util.List<String[]> nearStopList = new java.util.ArrayList<>();
+                for (String item : nearXml.split("<item>")) {
+                    String nodeId = tag(item, "nodeid");
+                    String nodeNm = tag(item, "nodenm");
+                    String nodeLat = tag(item, "gpslati");
+                    String nodeLon = tag(item, "gpslong");
+                    String nodeNo  = tag(item, "nodeno");
+                    if (nodeId.isEmpty() || nodeLat.isEmpty()) continue;
+                    nearStopList.add(new String[]{nodeId, nodeNm, nodeLat, nodeLon, nodeNo});
+                }
+
+                if (nearStopList.isEmpty()) {
+                    runOnUiThread(() -> android.widget.Toast.makeText(this,
+                            "주변 정류장을 찾을 수 없습니다", android.widget.Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                final java.util.List<String[]> fNearStops = nearStopList;
+                runOnUiThread(() -> openNearbyStopsMapDialog(myLat, myLon, fNearStops));
+
+            } catch (Exception e) {
+                runOnUiThread(() -> android.widget.Toast.makeText(this,
+                        "오류: " + e.getMessage(), android.widget.Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    /** 주변 정류장 지도 다이얼로그 */
+    private void openNearbyStopsMapDialog(double myLat, double myLon,
+                                           java.util.List<String[]> nearStops) {
+        android.app.Dialog dlg = new android.app.Dialog(this,
+                android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dlg.setCanceledOnTouchOutside(false);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.parseColor("#F2F4F8"));
+
+        // 헤더
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        header.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8));
+
+        TextView tvBack = new TextView(this);
+        tvBack.setText("‹");
+        tvBack.setTextColor(Color.parseColor("#0984E3"));
+        tvBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
+        tvBack.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvBack.setPadding(0, 0, dpToPx(8), 0);
+        tvBack.setOnClickListener(v -> dlg.dismiss());
+        header.addView(tvBack);
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("📍 주변 정류장 (" + nearStops.size() + "개)");
+        tvTitle.setTextColor(Color.parseColor("#111111"));
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        header.addView(tvTitle);
+        root.addView(header);
+
+        // 지도 WebView
+        android.webkit.WebView wv = new android.webkit.WebView(this);
+        wv.getSettings().setJavaScriptEnabled(true);
+        wv.getSettings().setDomStorageEnabled(true);
+        LinearLayout.LayoutParams wvLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0);
+        wvLp.weight = 1f;
+        wv.setLayoutParams(wvLp);
+        root.addView(wv);
+
+        // 마커 JS 생성
+        StringBuilder markers = new StringBuilder();
+        for (String[] s : nearStops) {
+            try {
+                double lat = Double.parseDouble(s[2]);
+                double lon = Double.parseDouble(s[3]);
+                String nm = s[1].replace("'", "\\'");
+                String no = s[4];
+                markers.append("addStop(").append(lat).append(",").append(lon)
+                        .append(",'").append(nm).append("','").append(no).append("');");
+            } catch (Exception ig) {}
+        }
+
+        String html = "<!DOCTYPE html><html><head><meta charset='utf-8'/>"
+                + "<meta name='viewport' content='width=device-width,initial-scale=1'/>"
+                + "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/>"
+                + "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>"
+                + "<style>html,body,#map{width:100%;height:100%;margin:0;padding:0;}</style></head>"
+                + "<body><div id='map'></div><script>"
+                + "var map=L.map('map').setView([" + myLat + "," + myLon + "],16);"
+                + "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);"
+                // 내 위치 마커 (파란원)
+                + "L.circleMarker([" + myLat + "," + myLon + "],{radius:10,color:'#0984E3',fillColor:'#0984E3',fillOpacity:0.8}).addTo(map).bindPopup('📍 내 위치');"
+                // 정류장 마커 함수
+                + "function addStop(lat,lon,nm,no){"
+                + "var icon=L.divIcon({className:'',html:'<div style=\"background:#E74C3C;color:white;font-size:11px;font-weight:bold;padding:3px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.3);\">🚏</div>',iconAnchor:[10,10]});"
+                + "L.marker([lat,lon],{icon:icon}).addTo(map).bindPopup('<b>'+nm+'</b><br/>'+no);}"
+                + markers.toString()
+                + "</script></body></html>";
+
+        wv.loadDataWithBaseURL("https://openstreetmap.org", html, "text/html", "UTF-8", null);
+
+        dlg.setContentView(root);
+        dlg.show();
+    }
+
     private void showBusMapDialogWithGps(String routeId, String routeNo,
                                           java.util.List<String[]> stops,
                                           java.util.Set<String> busOrdSet,
@@ -13002,8 +13163,9 @@ public class PinActivity extends AppCompatActivity {
                 final java.util.List<String[]> fStops2 = stops;
                 final java.util.Set<String> fBusOrdSet2 = busOrdSet;
                 qCard.setOnClickListener(v2 -> showBusMapDialog(fRouteId2, fRouteNo2, fStops2, fBusOrdSet2));
+            } else if (qi == 3) {
+                qCard.setOnClickListener(v2 -> showNearbyStopsMap());
             }
-            quickMenu.addView(qCard);
         }
         container.addView(quickMenu);
 
@@ -13292,6 +13454,8 @@ public class PinActivity extends AppCompatActivity {
             tvName.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
             tvName.setShadowLayer(3f, 0f, 1f, 0x30000000);
             tvName.setTypeface(null,(isFirst||isLast)?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            tvName.setSingleLine(true);
+            tvName.setEllipsize(android.text.TextUtils.TruncateAt.END);
             stopInfo.addView(tvName);
             if (!s[3].isEmpty()) {
                 TextView tvNo = new TextView(this); tvNo.setText(s[3]);
