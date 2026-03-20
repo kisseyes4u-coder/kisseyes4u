@@ -13440,9 +13440,44 @@ public class PinActivity extends AppCompatActivity {
                 busSoonRoutesCache = allRoutes;
                 refreshSoonTV();
             } else if (busSoonTV != null && arrMap.isEmpty()) {
-                busSoonTV.setText("실시간 정보 불러오는 중...");
-                busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
-                busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                // 현재 시간이 운행 시간 외인지 확인
+                java.util.Calendar cal = java.util.Calendar.getInstance();
+                int nowMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE);
+                // allRoutes에서 첫 번째 노선의 운행시간 확인
+                boolean isOutOfService = false;
+                String nextDep = "";
+                for (String[] r : allRoutes) {
+                    String nd = getNextDeparture(r[0], true);
+                    if (nd.isEmpty()) nd = getNextDeparture(r[0], false);
+                    if (!nd.isEmpty()) { nextDep = nd; break; }
+                    // 캐시에서 운행시간 확인
+                    String rId = r[1];
+                    if (!rId.isEmpty()) {
+                        android.content.SharedPreferences bc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                        String et = bc.getString("route_" + rId + "_endTime", "");
+                        if (!et.isEmpty()) {
+                            try {
+                                int etH = Integer.parseInt(et.length() >= 4 ? et.substring(0,2) : "0");
+                                int etM = Integer.parseInt(et.length() >= 4 ? et.substring(2,4) : "0");
+                                int etMin = etH * 60 + etM;
+                                if (nowMin > etMin) { isOutOfService = true; break; }
+                            } catch (Exception ig) {}
+                        }
+                    }
+                }
+                if (isOutOfService && !nextDep.isEmpty()) {
+                    busSoonTV.setText("다음 출발: " + nextDep);
+                    busSoonTV.setTextColor(Color.parseColor("#555555"));
+                    busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                } else if (isOutOfService) {
+                    busSoonTV.setText("금일 운행 종료");
+                    busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
+                    busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                } else {
+                    busSoonTV.setText("실시간 정보 없음");
+                    busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
+                    busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                }
             }
         }
         container.removeAllViews();
