@@ -13800,9 +13800,17 @@ public class PinActivity extends AppCompatActivity {
             rightCol.addView(btnRow);
             row.addView(rightCol);
 
-            // 노선 카드 클릭 → 타임라인
+            // 노선 카드 클릭 → 타임라인 (스크롤 중 오터치 방지)
             row.setClickable(true); row.setFocusable(true);
+            final long[] lastTouchTime = {0};
+            row.setOnTouchListener((vt, ev) -> {
+                if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN)
+                    lastTouchTime[0] = System.currentTimeMillis();
+                return false;
+            });
             row.setOnClickListener(vr -> {
+                // DOWN→UP 시간이 300ms 이상이면 스크롤로 판단, 클릭 무시
+                if (System.currentTimeMillis() - lastTouchTime[0] > 300) return;
                 String foundRid = fRid;
                 String foundRtp = fRtp;
                 if ((foundRid == null || foundRid.isEmpty()) && routeDbList != null) {
