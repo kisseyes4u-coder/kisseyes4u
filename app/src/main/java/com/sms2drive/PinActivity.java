@@ -13166,6 +13166,7 @@ public class PinActivity extends AppCompatActivity {
             } else if (qi == 3) {
                 qCard.setOnClickListener(v2 -> showNearbyStopsMap());
             }
+            quickMenu.addView(qCard);
         }
         container.addView(quickMenu);
 
