@@ -17244,13 +17244,14 @@ public class PinActivity extends AppCompatActivity {
     private LinearLayout busFavSection;   // 검색 화면에서 참조용
 
     private void refreshBusFavorites(LinearLayout favSection, LinearLayout resultContainer) {
+        refreshBusFavorites(favSection, resultContainer, false);
+    }
+
+    private void refreshBusFavorites(LinearLayout favSection, LinearLayout resultContainer, boolean skipPrefetch) {
         busFavSection = favSection;
         favSection.removeAllViews();
-        // 화면 이동 없이 즐겨찾기 섹션만 갱신 (busSearchArea/busFixedHeader 건드리지 않음)
         android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-        // 키: fav_stop_routeId_nodeId (boolean=true인 것만)
         java.util.List<String> favKeys = new java.util.ArrayList<>();
-        // 키: fav_route_routeId_direction (노선 즐겨찾기)
         java.util.List<String> favRouteKeys = new java.util.ArrayList<>();
         for (java.util.Map.Entry<String, ?> e : prefs.getAll().entrySet()) {
             String k = e.getKey();
@@ -17265,6 +17266,68 @@ public class PinActivity extends AppCompatActivity {
             }
         }
         if (favKeys.isEmpty() && favRouteKeys.isEmpty()) return;
+
+        // ── 백그라운드: 도착정보 + 운행대수 프리페치 (최초 1회만) ──
+        if (!skipPrefetch) {
+            final java.util.List<String> fFavKeys = new java.util.ArrayList<>(favKeys);
+            final java.util.List<String> fFavRouteKeys = new java.util.ArrayList<>(favRouteKeys);
+            new Thread(() -> {
+                // ① 정류장+노선 즐겨찾기: 도착정보 API
+                java.util.Set<String> fetchedNodes = new java.util.HashSet<>();
+                for (String compositeKey : fFavKeys) {
+                    String routeNo2 = prefs.getString("fav_stop_route_" + compositeKey, "");
+                    if (routeNo2.isEmpty()) continue;
+                    String nodeId = compositeKey.contains("_")
+                            ? compositeKey.substring(compositeKey.indexOf("_") + 1)
+                            : compositeKey;
+                    if (fetchedNodes.contains(nodeId)) continue;
+                    fetchedNodes.add(nodeId);
+                    try {
+                        String arvlUrl = BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&nodeId=" + nodeId + "&numOfRows=50&pageNo=1&_type=xml";
+                        String arvlXml = httpGet(arvlUrl);
+                        java.util.Map<String, String[]> arrMap = new java.util.HashMap<>();
+                        java.util.Map<String, Integer> minSecMap = new java.util.HashMap<>();
+                        for (String item : arvlXml.split("<item>")) {
+                            if (!item.contains("<routeno>")) continue;
+                            String rno2 = tag(item, "routeno");
+                            String arrt2 = tag(item, "arrtime");
+                            String arrc2 = tag(item, "arrprevstationcnt");
+                            String nextnm2 = tag(item, "nodenm");
+                            String endnm2 = tag(item, "endnodenm");
+                            int sec2 = -1; try { sec2 = Integer.parseInt(arrt2); } catch (Exception ig) {}
+                            int prev2 = -1; try { prev2 = Integer.parseInt(arrc2); } catch (Exception ig) {}
+                            if (minSecMap.containsKey(rno2) && sec2 >= 0 && sec2 >= minSecMap.get(rno2)) continue;
+                            if (sec2 >= 0) minSecMap.put(rno2, sec2);
+                            String timeStr2, timeColor2;
+                            if (sec2 <= 0 || prev2 == 0) { timeStr2 = ""; timeColor2 = "#555555"; }
+                            else if (sec2 < 60) { timeStr2 = "곧 도착"; timeColor2 = "#E74C3C"; }
+                            else { timeStr2 = "약 " + (sec2/60) + "분"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
+                            String prevStr2 = prev2 == 1 ? "[바로 앞]" : prev2 > 1 ? "[" + prev2 + "정거장 앞]" : "";
+                            if (!timeStr2.isEmpty()) arrMap.put(rno2, new String[]{timeStr2, prevStr2, timeColor2, endnm2, nextnm2});
+                        }
+                        arrivalSessionCache.put(nodeId, new Object[]{System.currentTimeMillis(),
+                                new java.util.ArrayList<>(), arrMap});
+                    } catch (Exception ignored) {}
+                }
+                // ② 노선 즐겨찾기: 운행대수 API
+                for (String rKey2 : fFavRouteKeys) {
+                    String rId2 = prefs.getString("fav_route_id_" + rKey2, "");
+                    if (rId2.isEmpty()) continue;
+                    try {
+                        String lcXml2 = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&routeId=" + rId2 + "&numOfRows=50&pageNo=1&_type=xml");
+                        int cnt2 = 0; try { cnt2 = Integer.parseInt(tag(lcXml2, "totalCount")); } catch (Exception ig) {}
+                        getSharedPreferences("bus_cache", MODE_PRIVATE).edit()
+                                .putInt("route_" + rId2 + "_running", cnt2).apply();
+                    } catch (Exception ignored) {}
+                }
+                // 데이터 갱신 후 재렌더링 (skipPrefetch=true로 무한루프 방지)
+                runOnUiThread(() -> refreshBusFavorites(favSection, resultContainer, true));
+            }).start();
+        }
 
         // fav_order 순서대로 통합 렌더링 리스트 구성
         java.util.List<String> allOrdered = new java.util.ArrayList<>();
