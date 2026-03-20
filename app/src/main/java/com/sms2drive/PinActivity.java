@@ -14153,6 +14153,7 @@ public class PinActivity extends AppCompatActivity {
                                 + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
                                 + "&routeId=" + rId + "&numOfRows=50&pageNo=1&_type=xml";
                         String lcXml2 = httpGet(lcUrl);
+
                         // 정류장 캐시에서 nodeId의 좌표 찾기
                         android.content.SharedPreferences fc = getSharedPreferences("bus_cache", MODE_PRIVATE);
                         String stopsStr = fc.getString("route_" + rId + "_stops", "");
@@ -14164,23 +14165,30 @@ public class PinActivity extends AppCompatActivity {
                                 break;
                             }
                         }
-                        if (tLat == 0) continue;
-                        // 버스 GPS → 정류장까지 최소 거리 계산
+
+                        // GPS 수신 버스가 있는지 먼저 확인
+                        boolean hasGpsData = false;
                         int minDist = Integer.MAX_VALUE;
                         for (String item2 : lcXml2.split("<item>")) {
                             String gla = tag(item2, "gpslati"), glo = tag(item2, "gpslong");
                             if (gla.isEmpty() || glo.isEmpty()) continue;
-                            try {
-                                double bLat = Double.parseDouble(gla), bLon = Double.parseDouble(glo);
-                                double dlat = Math.toRadians(tLat-bLat), dlon = Math.toRadians(tLon-bLon);
-                                double a = Math.sin(dlat/2)*Math.sin(dlat/2)
-                                        + Math.cos(Math.toRadians(bLat))*Math.cos(Math.toRadians(tLat))
-                                        * Math.sin(dlon/2)*Math.sin(dlon/2);
-                                int dist = (int)(6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-                                if (dist < minDist) minDist = dist;
-                            } catch(Exception ig){}
+                            hasGpsData = true;
+                            // 정류장 좌표 있으면 거리 계산
+                            if (tLat != 0) {
+                                try {
+                                    double bLat = Double.parseDouble(gla), bLon = Double.parseDouble(glo);
+                                    double dlat = Math.toRadians(tLat-bLat), dlon = Math.toRadians(tLon-bLon);
+                                    double a = Math.sin(dlat/2)*Math.sin(dlat/2)
+                                            + Math.cos(Math.toRadians(bLat))*Math.cos(Math.toRadians(tLat))
+                                            * Math.sin(dlon/2)*Math.sin(dlon/2);
+                                    int dist = (int)(6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+                                    if (dist < minDist) minDist = dist;
+                                } catch(Exception ig){}
+                            }
                         }
+                        // 거리 계산 성공 시 거리 저장, 아니면 GPS 수신 표시용 0 저장
                         if (minDist < Integer.MAX_VALUE) gpsDistMap.put(rNo, minDist);
+                        else if (hasGpsData) gpsDistMap.put(rNo, -1); // GPS 있지만 좌표 없음 → -1로 표시
                     } catch(Exception ig){}
                 }
             } catch (Exception ignored) {}
@@ -14229,13 +14237,11 @@ public class PinActivity extends AppCompatActivity {
                     boolean usedGps = false;
                     if (gpsDistMap.containsKey(rno)) {
                         int distM = gpsDistMap.get(rno);
-                        int gpsSec = (int)(distM / 5.56);
-                        if (sec > 0) {
+                        if (distM > 0) { // -1은 GPS 있지만 좌표 없음 → 도착시간 계산 생략
+                            int gpsSec = (int)(distM / 5.56);
                             sec = gpsSec;
-                        } else {
-                            sec = gpsSec;
+                            usedGps = true;
                         }
-                        usedGps = true;
                     }
 
                     if (minSec.containsKey(rno) && sec >= 0 && sec >= minSec.get(rno)) continue;
