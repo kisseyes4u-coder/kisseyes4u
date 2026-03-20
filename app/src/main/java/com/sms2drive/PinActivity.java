@@ -20159,14 +20159,10 @@ public class PinActivity extends AppCompatActivity {
                 tvStopRouteNo.setSingleLine(true);
                 {
                     String txt = tvStopRouteNo.getText().toString();
-                    if (txt.length() > 8) {
-                        tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                    if (txt.length() > 6) {
                         tvStopRouteNo.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                    } else if (txt.length() > 5) {
-                        tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
                     }
                 }
-                tvStopRouteNo.setLayoutParams(new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                 stopNoRow.addView(tvStopRouteNo);
 
@@ -20212,7 +20208,7 @@ public class PinActivity extends AppCompatActivity {
                         tvArrTime.setText(arrTimeStr);
                         tvArrTime.setTextColor(Color.parseColor(arrTimeColor));
                     }
-                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
                     tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
                     tvArrTime.setGravity(Gravity.CENTER);
                     tvArrTime.setSingleLine(true);
