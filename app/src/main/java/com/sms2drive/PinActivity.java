@@ -20163,6 +20163,7 @@ public class PinActivity extends AppCompatActivity {
                         tvStopRouteNo.setEllipsize(android.text.TextUtils.TruncateAt.END);
                     }
                 }
+                tvStopRouteNo.setLayoutParams(new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                 stopNoRow.addView(tvStopRouteNo);
 
