@@ -11170,30 +11170,39 @@ public class PinActivity extends AppCompatActivity {
             android.widget.ImageView ivBusH = new android.widget.ImageView(this);
             android.graphics.Bitmap busBmpH = getBusIconColor(busColor);
             if (busBmpH != null) ivBusH.setImageBitmap(busBmpH);
-            ivBusH.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(20), dpToPx(20)));
+            android.graphics.drawable.GradientDrawable busHBg = new android.graphics.drawable.GradientDrawable();
+            busHBg.setColor(Color.parseColor("#F2F4F8")); busHBg.setCornerRadius(dpToPx(4));
+            ivBusH.setBackground(busHBg);
+            ivBusH.setPadding(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2));
+            ivBusH.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(30), dpToPx(30)));
             subBar.addView(ivBusH);
 
             TextView tvRno = new TextView(this);
             tvRno.setText(" " + routeNo);
             tvRno.setTextColor(Color.parseColor(badge[1]));
-            tvRno.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+            tvRno.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
             tvRno.setTypeface(null, android.graphics.Typeface.BOLD);
             subBar.addView(tvRno);
 
-            // stop.png 아이콘 (핀 이모티콘 대신)
+            // stop.png 아이콘
             android.widget.ImageView ivStopH = new android.widget.ImageView(this);
             android.graphics.Bitmap stopBmpH = getStopIconColor(android.graphics.Color.parseColor("#555555"));
             if (stopBmpH != null) ivStopH.setImageBitmap(stopBmpH);
             ivStopH.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-            LinearLayout.LayoutParams stopHLp = new LinearLayout.LayoutParams(dpToPx(16), dpToPx(16));
+            android.graphics.drawable.GradientDrawable stopHBg = new android.graphics.drawable.GradientDrawable();
+            stopHBg.setColor(Color.parseColor("#F2F4F8")); stopHBg.setCornerRadius(dpToPx(4));
+            ivStopH.setBackground(stopHBg);
+            ivStopH.setPadding(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2));
+            LinearLayout.LayoutParams stopHLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
             stopHLp.gravity = Gravity.CENTER_VERTICAL;
-            stopHLp.setMargins(dpToPx(8), 0, dpToPx(4), 0);
+            stopHLp.setMargins(dpToPx(10), 0, dpToPx(4), 0);
             ivStopH.setLayoutParams(stopHLp);
             subBar.addView(ivStopH);
             TextView tvPin = new TextView(this);
             tvPin.setText(nodeNm + (nodeNo.isEmpty() ? "" : "(" + nodeNo + ")"));
-            tvPin.setTextColor(Color.parseColor("#555555"));
-            tvPin.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvPin.setTextColor(Color.parseColor("#333333"));
+            tvPin.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+            tvPin.setTypeface(null, android.graphics.Typeface.BOLD);
             subBar.addView(tvPin);
             busFixedHeader.addView(subBar);
 
@@ -11504,7 +11513,7 @@ public class PinActivity extends AppCompatActivity {
         // ★ 저장은 알림시작 버튼 클릭 시에만 함 (여기서 저장 안 함)
         int busColor2 = android.graphics.Color.parseColor(colorHex);
         busResultContainer.removeAllViews();
-        busResultContainer.setWeightSum(1f);
+        busResultContainer.setOrientation(LinearLayout.VERTICAL);
 
         // stops 로드 - 승차 정류장부터 하차 정류장까지 전체
         android.content.SharedPreferences bc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
@@ -11523,26 +11532,18 @@ public class PinActivity extends AppCompatActivity {
             if (inRange && (s[0].equals(alightNodeId) || s[1].equals(alightNodeNm))) break;
         }
 
-        // 전체 FrameLayout (내용 + 하단 버튼) - weight로 남은 공간 모두 차지
-        android.widget.FrameLayout rootFrame = new android.widget.FrameLayout(this);
-        LinearLayout.LayoutParams rootLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0);
-        rootLp.weight = 1f;
-        rootFrame.setLayoutParams(rootLp);
-
-        // 스크롤 영역
+        // 스크롤 영역 (weight=1로 버튼 위 공간 모두 차지)
         ScrollView sv2 = new ScrollView(this);
-        android.widget.FrameLayout.LayoutParams svLp2 = new android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
-        svLp2.setMargins(0, 0, 0, dpToPx(72));
+        LinearLayout.LayoutParams svLp2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0);
+        svLp2.weight = 1f;
         sv2.setLayoutParams(svLp2);
 
         LinearLayout content2 = new LinearLayout(this);
         content2.setOrientation(LinearLayout.VERTICAL);
         content2.setPadding(dpToPx(16), dpToPx(12), dpToPx(16), dpToPx(16));
         sv2.addView(content2);
-        rootFrame.addView(sv2);
+        busResultContainer.addView(sv2);
 
         // "현재 위치를 찾고 있어요" 상태
         android.text.SpannableString ss2 = new android.text.SpannableString("현재 위치를 찾고 있어요");
@@ -11713,10 +11714,9 @@ public class PinActivity extends AppCompatActivity {
         alarmBtnBg.setColor(alreadySet ? Color.parseColor("#F05454") : android.graphics.Color.parseColor(colorHex));
         alarmBtnBg.setCornerRadius(dpToPx(30));
         tvAlarmBtn.setBackground(alarmBtnBg);
-        android.widget.FrameLayout.LayoutParams alarmBtnLp = new android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(56));
-        alarmBtnLp.gravity = Gravity.BOTTOM;
-        alarmBtnLp.setMargins(dpToPx(20), 0, dpToPx(20), dpToPx(12));
+        LinearLayout.LayoutParams alarmBtnLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(56));
+        alarmBtnLp.setMargins(dpToPx(20), dpToPx(8), dpToPx(20), dpToPx(12));
         tvAlarmBtn.setLayoutParams(alarmBtnLp);
         tvAlarmBtn.setOnClickListener(v -> {
             boolean nowSet = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
@@ -11742,8 +11742,7 @@ public class PinActivity extends AppCompatActivity {
                 tvAlarmBtn.setBackground(alarmBtnBg);
             }
         });
-        rootFrame.addView(tvAlarmBtn);
-        busResultContainer.addView(rootFrame);
+        busResultContainer.addView(tvAlarmBtn);
     }
 
     /** 승/하차 정류장 행 빌더 */
