@@ -11772,7 +11772,11 @@ public class PinActivity extends AppCompatActivity {
         tvRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
         topHeader.addView(tvRouteNo);
 
-        // GPS 수신 이미지 (노선번호 오른쪽)
+        View hSpace = new View(this);
+        hSpace.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+        topHeader.addView(hSpace);
+
+        // GPS 수신 이미지 (즐겨찾기 왼쪽)
         android.widget.ImageView ivGpsHeader = new android.widget.ImageView(this);
         int gpsRcv = 0;
         for (String ord : busOrdSet) { if (busGpsMap.containsKey(ord)) gpsRcv++; }
@@ -11784,15 +11788,11 @@ public class PinActivity extends AppCompatActivity {
             ivGpsHeader.setImageBitmap(gpsBm2);
         } catch (Exception ignored) {}
         ivGpsHeader.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-        LinearLayout.LayoutParams gpsHLp = new LinearLayout.LayoutParams(dpToPx(56), dpToPx(28));
-        gpsHLp.setMargins(dpToPx(10), 0, 0, 0);
+        LinearLayout.LayoutParams gpsHLp = new LinearLayout.LayoutParams(dpToPx(44), dpToPx(22));
+        gpsHLp.setMargins(0, 0, dpToPx(8), 0);
         gpsHLp.gravity = Gravity.CENTER_VERTICAL;
         ivGpsHeader.setLayoutParams(gpsHLp);
         topHeader.addView(ivGpsHeader);
-
-        View hSpace = new View(this);
-        hSpace.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
-        topHeader.addView(hSpace);
 
         // 노선 즐겨찾기 버튼
         boolean isRevDir = "reverse".equals(direction);
