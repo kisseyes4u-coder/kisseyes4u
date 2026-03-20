@@ -205,6 +205,7 @@ public class PinActivity extends AppCompatActivity {
     private TextView busTabStop = null; // 정류장 탭 버튼
     private android.view.View busTabMap = null; // GPS 탭 버튼
     private java.util.Map<String,double[]> busGpsMap = new java.util.HashMap<>(); // 버스 실시간 GPS
+    private int busGpsStrength = 0; // 전역 GPS 수신 강도 0~100 (모든 화면 공유)
     private java.util.Map<String,String>   busVehMapForMap = new java.util.HashMap<>(); // 버스 차량번호
     private Runnable busUpdateTabStyle = null; // 탭 스타일 업데이트
     private boolean[] busIsBusTab = {true}; // 현재 탭 상태
@@ -12153,20 +12154,21 @@ public class PinActivity extends AppCompatActivity {
                             ordSet.add(useOrd);
                             if (!vno.isEmpty()) vehMap.put(useOrd, vno);
                         }
-                        // GPS 맵 갱신
+                        // GPS 맵 갱신 + 전역 GPS 강도 업데이트
                         if (!newGpsMap.isEmpty()) busGpsMap = newGpsMap;
                         final boolean hasGps = !newGpsMap.isEmpty();
-                        final int fCnt=cnt;
+                        final int fCnt=cnt, fGpsRcv=newGpsMap.size();
                         final java.util.Set<String> fOrd=ordSet;
                         final java.util.Map<String,String> fVeh=vehMap;
                         runOnUiThread(() -> {
+                            if (cnt > 0) updateGpsStrength(cnt, fGpsRcv);
                             if (!isOnSubScreen) return;
                             if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
                             renderBusTimeline(fRId, fRNo, fDir, container,
                                     fSNm, fENm, fStF, fEtF, fInterval, fRTp,
                                     fCnt, fVeh, fOrd, fStops, fTurnOrd);
                         });
-                        // GPS 수신 중이면 3초, 아니면 20초 간격
+                        // GPS 수신 중이면 8초, 아니면 20초 간격
                         int delay = hasGps ? 8000 : 20000;
                         busRefreshHandler.postDelayed(this, delay);
                     } catch (Exception ignored) {
@@ -12734,12 +12736,11 @@ public class PinActivity extends AppCompatActivity {
         hSpace.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
         topHeader.addView(hSpace);
 
-        // GPS 수신 이미지 (즐겨찾기 왼쪽)
+        // GPS 수신 이미지 (전역 busGpsStrength 사용)
         android.widget.ImageView ivGpsHeader = new android.widget.ImageView(this);
-        int gpsRcv = 0;
-        for (String ord : busOrdSet) { if (busGpsMap.containsKey(ord)) gpsRcv++; }
-        int gpsSt = (fRunning > 0 && gpsRcv > 0) ? (int)((double)gpsRcv / fRunning * 100) : 0;
-        String gpsF = gpsSt >= 80 ? "gps4.png" : gpsSt >= 60 ? "gps3.png" : gpsSt >= 40 ? "gps2.png" : gpsSt > 0 ? "gps1.png" : "gps0.png";
+        ivGpsHeader.setTag("gps_tl_iv");
+        String gpsF = busGpsStrength >= 80 ? "gps4.png" : busGpsStrength >= 60 ? "gps3.png"
+                : busGpsStrength >= 40 ? "gps2.png" : busGpsStrength > 0 ? "gps1.png" : "gps0.png";
         try {
             android.graphics.Bitmap gpsBm2 = android.graphics.BitmapFactory
                     .decodeStream(getAssets().open(gpsF));
@@ -13645,17 +13646,18 @@ public class PinActivity extends AppCompatActivity {
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             titleBar.addView(tvTitle);
 
-            // GPS 수신 이미지 (nodeNm 오른쪽)
+            // GPS 수신 이미지 (전역 busGpsStrength 사용)
             android.widget.ImageView ivGpsArr = new android.widget.ImageView(this);
             ivGpsArr.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
             LinearLayout.LayoutParams gpsArrLp = new LinearLayout.LayoutParams(dpToPx(36), dpToPx(36));
             gpsArrLp.setMargins(dpToPx(8), 0, dpToPx(4), 0);
             gpsArrLp.gravity = Gravity.CENTER_VERTICAL;
             ivGpsArr.setLayoutParams(gpsArrLp);
-            // 초기값: gps1 (미수신)
             try {
+                String gpsInit = busGpsStrength >= 80 ? "gps4.png" : busGpsStrength >= 60 ? "gps3.png"
+                        : busGpsStrength >= 40 ? "gps2.png" : busGpsStrength > 0 ? "gps1.png" : "gps0.png";
                 android.graphics.Bitmap gpsBm = android.graphics.BitmapFactory
-                        .decodeStream(getAssets().open("gps0.png"));
+                        .decodeStream(getAssets().open(gpsInit));
                 ivGpsArr.setImageBitmap(gpsBm);
             } catch (Exception ignored) {}
             ivGpsArr.setTag("gps_arr_iv");
@@ -14193,22 +14195,11 @@ public class PinActivity extends AppCompatActivity {
                 }
             } catch (Exception ignored) {}
 
-            // GPS 수신 여부 최종 이미지 업데이트
+            // GPS 수신 여부 최종 이미지 업데이트 (전역 강도 갱신)
             final boolean hasGpsDist = !gpsDistMap.isEmpty();
+            final int fGpsTotal = allRoutes.size(), fGpsRcv2 = gpsDistMap.size();
             runOnUiThread(() -> {
-                if (busFixedHeader == null) return;
-                android.view.View gpsIv = busFixedHeader.findViewWithTag("gps_arr_iv");
-                if (gpsIv instanceof android.widget.ImageView) {
-                    int totalBus = allRoutes.size();
-                    int gpsCnt = gpsDistMap.size();
-                    int strength = totalBus > 0 ? (int)((double)gpsCnt/totalBus*100) : 0;
-                    String gpsFile = strength >= 80 ? "gps4.png" : strength >= 60 ? "gps3.png" : strength >= 40 ? "gps2.png" : strength > 0 ? "gps1.png" : "gps0.png";
-                    try {
-                        android.graphics.Bitmap bm = android.graphics.BitmapFactory
-                                .decodeStream(getAssets().open(gpsFile));
-                        ((android.widget.ImageView)gpsIv).setImageBitmap(bm);
-                    } catch(Exception ig){}
-                }
+                if (fGpsTotal > 0) updateGpsStrength(fGpsTotal, fGpsRcv2);
             });
 
             java.util.Map<String, String[]> arrMap = new java.util.HashMap<>();
@@ -19234,18 +19225,9 @@ public class PinActivity extends AppCompatActivity {
                         }
                     } catch (Exception ignored) {}
                 }
-                // GPS 탭 이미지 업데이트
+                // GPS 탭 이미지 업데이트 (전역 강도 갱신)
                 final int fTotal = totalFavBus, fGps = gpsRecvBus;
-                runOnUiThread(() -> {
-                    if (busTabMap instanceof android.widget.ImageView) {
-                        int st = fTotal > 0 ? (int)((double)fGps / fTotal * 100) : 0;
-                        String gf = st >= 80 ? "gps4.png" : st >= 60 ? "gps3.png" : st >= 40 ? "gps2.png" : st > 0 ? "gps1.png" : "gps0.png";
-                        try {
-                            android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeStream(getAssets().open(gf));
-                            ((android.widget.ImageView) busTabMap).setImageBitmap(bm);
-                        } catch (Exception ig) {}
-                    }
-                });
+                runOnUiThread(() -> { if (fTotal > 0) updateGpsStrength(fTotal, fGps); });
                 // 데이터 갱신 후 재렌더링 (skipPrefetch=true로 무한루프 방지)
                 runOnUiThread(() -> refreshBusFavorites(favSection, resultContainer, true));
             }).start();
@@ -20476,6 +20458,44 @@ public class PinActivity extends AppCompatActivity {
         while ((line = br.readLine()) != null) sb.append(line);
         br.close();
         return sb.toString();
+    }
+
+    /** GPS 수신 강도 업데이트 + 모든 화면 GPS 이미지 동시 갱신 */
+    private void updateGpsStrength(int total, int gpsReceived) {
+        if (total <= 0) return;
+        int newStrength = (int)((double)gpsReceived / total * 100);
+        // 기존보다 높으면 즉시 반영, 낮으면 서서히 감소 (튀는 현상 방지)
+        if (newStrength >= busGpsStrength || busGpsStrength - newStrength > 30) {
+            busGpsStrength = newStrength;
+        } else {
+            busGpsStrength = Math.max(0, busGpsStrength - 10);
+        }
+        applyGpsImage();
+    }
+
+    /** 현재 busGpsStrength 값으로 모든 GPS 이미지 뷰 업데이트 */
+    private void applyGpsImage() {
+        String gpsFile = busGpsStrength >= 80 ? "gps4.png"
+                : busGpsStrength >= 60 ? "gps3.png"
+                : busGpsStrength >= 40 ? "gps2.png"
+                : busGpsStrength > 0  ? "gps1.png" : "gps0.png";
+        try {
+            android.graphics.Bitmap bm = android.graphics.BitmapFactory
+                    .decodeStream(getAssets().open(gpsFile));
+            // 검색화면 GPS 탭
+            if (busTabMap instanceof android.widget.ImageView)
+                ((android.widget.ImageView) busTabMap).setImageBitmap(bm);
+            // 타임라인 헤더 GPS
+            if (busFixedHeader != null) {
+                android.view.View v = busFixedHeader.findViewWithTag("gps_tl_iv");
+                if (v instanceof android.widget.ImageView) ((android.widget.ImageView) v).setImageBitmap(bm);
+            }
+            // 도착화면 헤더 GPS
+            if (busFixedHeader != null) {
+                android.view.View v = busFixedHeader.findViewWithTag("gps_arr_iv");
+                if (v instanceof android.widget.ImageView) ((android.widget.ImageView) v).setImageBitmap(bm);
+            }
+        } catch (Exception ignored) {}
     }
 
     private String tag(String xml, String tagName) {
