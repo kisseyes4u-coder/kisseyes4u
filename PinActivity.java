@@ -11656,6 +11656,10 @@ public class PinActivity extends AppCompatActivity {
             java.util.Set<String> busOrdSet, java.util.List<String[]> stops, String turnOrd) {
         // ★★★ 절대 규칙: 검색화면이 열려있으면 타임라인 렌더링 완전 차단
         if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
+        // ★★★ 절대 규칙: 현재 백스택 top이 이 노선의 타임라인이 아니면 렌더링 차단
+        if (busBackStack.isEmpty()) return;
+        String[] top = busBackStack.peek();
+        if (!"timeline".equals(top[0]) || !routeId.equals(top[1])) return;
 
         container.removeAllViews();
         // ★ 절대 규칙: 타임라인 진입 시 검색화면 반드시 숨김
