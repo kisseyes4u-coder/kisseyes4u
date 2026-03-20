@@ -11789,7 +11789,7 @@ public class PinActivity extends AppCompatActivity {
             ivGpsHeader.setImageBitmap(gpsBm2);
         } catch (Exception ignored) {}
         ivGpsHeader.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-        LinearLayout.LayoutParams gpsHLp = new LinearLayout.LayoutParams(dpToPx(44), dpToPx(22));
+        LinearLayout.LayoutParams gpsHLp = new LinearLayout.LayoutParams(dpToPx(36), dpToPx(36));
         gpsHLp.setMargins(0, 0, dpToPx(8), 0);
         gpsHLp.gravity = Gravity.CENTER_VERTICAL;
         ivGpsHeader.setLayoutParams(gpsHLp);
@@ -12632,7 +12632,7 @@ public class PinActivity extends AppCompatActivity {
             // GPS 수신 이미지 (nodeNm 오른쪽)
             android.widget.ImageView ivGpsArr = new android.widget.ImageView(this);
             ivGpsArr.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-            LinearLayout.LayoutParams gpsArrLp = new LinearLayout.LayoutParams(dpToPx(44), dpToPx(22));
+            LinearLayout.LayoutParams gpsArrLp = new LinearLayout.LayoutParams(dpToPx(36), dpToPx(36));
             gpsArrLp.setMargins(dpToPx(6), 0, dpToPx(6), 0);
             gpsArrLp.gravity = Gravity.CENTER_VERTICAL;
             ivGpsArr.setLayoutParams(gpsArrLp);
