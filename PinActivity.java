@@ -10979,7 +10979,8 @@ public class PinActivity extends AppCompatActivity {
             ".bus-label{background:rgba(9,132,227,0.85);color:white;font-size:11px;font-weight:bold;" +
             "padding:2px 5px;border-radius:4px;border:1px solid white;text-align:center;" +
             "box-shadow:0 1px 4px rgba(0,0,0,0.4);white-space:nowrap;margin-top:2px;}" +
-            ".bus-wrap{display:flex;flex-direction:column;align-items:center;}" +
+            ".bus-wrap{display:flex;flex-direction:column;align-items:center;background:transparent!important;border:none!important;}" +
+            ".leaflet-div-icon{background:transparent!important;border:none!important;}" +
             "</style></head><body>" +
             "<div id='map'></div><script>" +
             "var map=L.map('map').setView([" + centerLat + "," + centerLon + "],14);" +
