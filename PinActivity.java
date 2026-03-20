@@ -13863,6 +13863,23 @@ public class PinActivity extends AppCompatActivity {
                     busFixedHeader.removeAllViews();
                     busResultContainer.removeAllViews();
                     busScreenLoadStops(foundRid, fRno, busResultContainer, "forward", foundRtp);
+                    // 타임라인 로드 후 현재 정류장(nodeId)으로 스크롤
+                    final String fScrollNodeId = nodeId;
+                    busResultContainer.postDelayed(() -> {
+                        if (busTimelineSv == null) return;
+                        android.view.View targetRow = findViewWithTag(busResultContainer, "stop_" + fScrollNodeId);
+                        if (targetRow != null) {
+                            int[] loc = new int[2];
+                            targetRow.getLocationOnScreen(loc);
+                            int[] svLoc = new int[2];
+                            busTimelineSv.getLocationOnScreen(svLoc);
+                            int rowY = busTimelineSv.getScrollY() + (loc[1] - svLoc[1]);
+                            int offset = busTimelineSv.getHeight() / 2 - targetRow.getHeight() / 2;
+                            int targetY = Math.max(0, rowY - offset);
+                            busTimelineSv.scrollTo(0, targetY);
+                            busTimelineRestoreScrollY = targetY;
+                        }
+                    }, 600);
                 } else {
                     android.widget.Toast.makeText(this, fRno + "번 노선 정보를 찾을 수 없습니다", android.widget.Toast.LENGTH_SHORT).show();
                 }
