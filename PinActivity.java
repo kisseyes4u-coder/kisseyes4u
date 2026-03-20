@@ -17738,6 +17738,7 @@ public class PinActivity extends AppCompatActivity {
                 LinearLayout rNoRow = new LinearLayout(this);
                 rNoRow.setOrientation(LinearLayout.HORIZONTAL);
                 rNoRow.setGravity(Gravity.CENTER_VERTICAL);
+                rNoRow.setWeightSum(2f);
                 LinearLayout.LayoutParams rNoRowLp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 rNoRowLp.setMargins(0, dpToPx(2), 0, 0);
@@ -17764,20 +17765,37 @@ public class PinActivity extends AppCompatActivity {
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                 rNoRow.addView(tvRNo);
 
-                // 운행중 대수 (bus_cache에서)
+                // spacer 왼쪽
+                android.view.View rSpacer1 = new android.view.View(this);
+                rSpacer1.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                rNoRow.addView(rSpacer1);
+
+                // 운행중 대수 (bus_cache에서) - 중앙 배치
                 int runningCnt = getSharedPreferences("bus_cache", MODE_PRIVATE)
                         .getInt("route_" + rId + "_running", -1);
                 if (runningCnt >= 0) {
                     TextView tvRunning = new TextView(this);
-                    tvRunning.setText("  " + runningCnt + "대 운행중");
-                    tvRunning.setTextColor(Color.parseColor("#E74C3C"));
+                    // "9대" 빨간색 + " 운행중" 검정색
+                    android.text.SpannableStringBuilder rssb = new android.text.SpannableStringBuilder();
+                    int rs1 = rssb.length(); rssb.append(runningCnt + "대");
+                    rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#E74C3C")), rs1, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    int rs2 = rssb.length(); rssb.append(" 운행중");
+                    rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#222222")), rs2, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    tvRunning.setText(rssb, android.widget.TextView.BufferType.SPANNABLE);
                     tvRunning.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                     tvRunning.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvRunning.setGravity(Gravity.CENTER);
                     tvRunning.setSingleLine(true);
                     tvRunning.setLayoutParams(new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                     rNoRow.addView(tvRunning);
                 }
+
+                // spacer 오른쪽
+                android.view.View rSpacer2 = new android.view.View(this);
+                rSpacer2.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                rNoRow.addView(rSpacer2);
+
                 rCard.addView(rNoRow);
 
                 // 방면 (메모 or 방향)
@@ -18204,6 +18222,7 @@ public class PinActivity extends AppCompatActivity {
                 LinearLayout stopNoRow = new LinearLayout(this);
                 stopNoRow.setOrientation(LinearLayout.HORIZONTAL);
                 stopNoRow.setGravity(Gravity.CENTER_VERTICAL);
+                stopNoRow.setWeightSum(2f);
                 LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 rNoLp2.setMargins(0, dpToPx(2), 0, 0);
@@ -18233,7 +18252,12 @@ public class PinActivity extends AppCompatActivity {
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                 stopNoRow.addView(tvStopRouteNo);
 
-                // 번호 오른쪽: 도착시간 (버스번호+정류장 즐겨찾기)
+                // spacer 왼쪽
+                android.view.View sSpacer1 = new android.view.View(this);
+                sSpacer1.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                stopNoRow.addView(sSpacer1);
+
+                // 번호 오른쪽: 도착시간 (버스번호+정류장 즐겨찾기) - 중앙 배치
                 if (!routeNo.isEmpty()) {
                     String fNodeId2 = compositeKey.contains("_")
                             ? compositeKey.substring(compositeKey.indexOf("_") + 1)
@@ -18247,15 +18271,22 @@ public class PinActivity extends AppCompatActivity {
                         if (ai2 != null && !ai2[0].isEmpty()) arrTimeStr = ai2[0];
                     }
                     TextView tvArrTime = new TextView(this);
-                    tvArrTime.setText(arrTimeStr.isEmpty() ? "  정보없음" : "  " + arrTimeStr);
+                    tvArrTime.setText(arrTimeStr.isEmpty() ? "정보없음" : arrTimeStr);
                     tvArrTime.setTextColor(Color.parseColor(arrTimeStr.isEmpty() ? "#AAAAAA" : "#E74C3C"));
                     tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
                     tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvArrTime.setGravity(Gravity.CENTER);
                     tvArrTime.setSingleLine(true);
                     tvArrTime.setLayoutParams(new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                     stopNoRow.addView(tvArrTime);
                 }
+
+                // spacer 오른쪽
+                android.view.View sSpacer2 = new android.view.View(this);
+                sSpacer2.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                stopNoRow.addView(sSpacer2);
+
                 card.addView(stopNoRow);
 
                 // 서브 텍스트
