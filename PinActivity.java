@@ -691,6 +691,12 @@ public class PinActivity extends AppCompatActivity {
             }
         }
 
+        // 위치 권한 (내 위치 기능용)
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            needed.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+
         if (!needed.isEmpty()) {
             ActivityCompat.requestPermissions(this,
                     needed.toArray(new String[0]), 1001);
@@ -10065,7 +10071,7 @@ public class PinActivity extends AppCompatActivity {
         busTabBus = new TextView(this);
         TextView tabBus = busTabBus;
         busIsBusTab[0] = true;
-        tabBus.setText("버스 번호 검색");
+        tabBus.setText("번호 검색");
         tabBus.setGravity(Gravity.CENTER);
         tabBus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
         tabBus.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -10106,6 +10112,13 @@ public class PinActivity extends AppCompatActivity {
                 b2.setColor(Color.parseColor("#5BA9F0")); b2.setCornerRadius(dpToPx(8));
                 tabStop.setBackground(b2); tabStop.setTextColor(Color.WHITE);
             }
+            // 내 위치 탭 항상 비활성 상태로 리셋 (번호/정류장 탭 선택 시)
+            if (tabMyLoc != null) {
+                android.graphics.drawable.GradientDrawable bml = new android.graphics.drawable.GradientDrawable();
+                bml.setColor(Color.WHITE); bml.setCornerRadius(dpToPx(8));
+                bml.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                tabMyLoc.setBackground(bml); tabMyLoc.setTextColor(Color.parseColor("#555555"));
+            }
         };
         if (busUpdateTabStyle != null) busUpdateTabStyle.run();
 
@@ -10118,21 +10131,37 @@ public class PinActivity extends AppCompatActivity {
         tabRow.addView(tabBus);
         tabRow.addView(tabStop);
 
-        // 📍 내 위치 버튼
+        // 내 위치 버튼 (탭과 동일한 스타일)
         TextView tabMyLoc = new TextView(this);
-        tabMyLoc.setText("📍 내 위치");
+        tabMyLoc.setText("내 위치");
         tabMyLoc.setGravity(Gravity.CENTER);
-        tabMyLoc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tabMyLoc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
         tabMyLoc.setTypeface(null, android.graphics.Typeface.BOLD);
-        tabMyLoc.setPadding(dpToPx(10), dpToPx(11), dpToPx(10), dpToPx(11));
+        tabMyLoc.setPadding(dpToPx(12), dpToPx(11), dpToPx(12), dpToPx(11));
         android.graphics.drawable.GradientDrawable myLocBg = new android.graphics.drawable.GradientDrawable();
-        myLocBg.setColor(Color.parseColor("#27AE60"));
+        myLocBg.setColor(Color.WHITE);
         myLocBg.setCornerRadius(dpToPx(8));
+        myLocBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
         tabMyLoc.setBackground(myLocBg);
-        tabMyLoc.setTextColor(Color.WHITE);
-        tabMyLoc.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        tabMyLoc.setOnClickListener(v -> findNearbyStops(busResultContainer));
+        tabMyLoc.setTextColor(Color.parseColor("#555555"));
+        tabMyLoc.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        tabMyLoc.setOnClickListener(v -> {
+            // 내 위치 선택 시 두 탭 비활성화
+            isBusTab[0] = false;
+            android.graphics.drawable.GradientDrawable ub1 = new android.graphics.drawable.GradientDrawable();
+            ub1.setColor(Color.WHITE); ub1.setCornerRadius(dpToPx(8));
+            ub1.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+            tabBus.setBackground(ub1); tabBus.setTextColor(Color.parseColor("#555555"));
+            android.graphics.drawable.GradientDrawable ub2 = new android.graphics.drawable.GradientDrawable();
+            ub2.setColor(Color.WHITE); ub2.setCornerRadius(dpToPx(8));
+            ub2.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+            tabStop.setBackground(ub2); tabStop.setTextColor(Color.parseColor("#555555"));
+            // 내 위치 탭 활성화
+            android.graphics.drawable.GradientDrawable selMyLoc = new android.graphics.drawable.GradientDrawable();
+            selMyLoc.setColor(Color.parseColor("#5BA9F0")); selMyLoc.setCornerRadius(dpToPx(8));
+            tabMyLoc.setBackground(selMyLoc); tabMyLoc.setTextColor(Color.WHITE);
+            findNearbyStops(busResultContainer);
+        });
         tabRow.addView(tabMyLoc);
 
         searchArea.addView(tabRow);
@@ -10696,10 +10725,7 @@ public class PinActivity extends AppCompatActivity {
                 != android.content.pm.PackageManager.PERMISSION_GRANTED
             && checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
                 != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{
-                    android.Manifest.permission.ACCESS_FINE_LOCATION,
-                    android.Manifest.permission.ACCESS_COARSE_LOCATION}, 9001);
-            android.widget.Toast.makeText(this, "위치 권한을 허용해 주세요", android.widget.Toast.LENGTH_SHORT).show();
+            showNearbyError(container, "위치 권한이 없습니다\n앱 설정에서 위치 권한을 허용해 주세요");
             return;
         }
 
