@@ -11177,7 +11177,7 @@ public class PinActivity extends AppCompatActivity {
                                     fCnt, fVeh, fOrd, fStops, fTurnOrd);
                         });
                         // GPS 수신 중이면 3초, 아니면 20초 간격
-                        int delay = hasGps ? 3000 : 20000;
+                        int delay = hasGps ? 8000 : 20000;
                         busRefreshHandler.postDelayed(this, delay);
                     } catch (Exception ignored) {
                         busRefreshHandler.postDelayed(this, 20000);
@@ -12588,7 +12588,7 @@ public class PinActivity extends AppCompatActivity {
                             fetchAndRenderArrival(arrivalRefreshNodeId, arrivalRefreshNodeNm,
                                     arrivalRefreshNodeNo, arrivalRefreshRouteNo, fArrContainer, true);
                             // GPS 수신 중이면 5초, 없으면 20초 (하지만 계속 재시도)
-                            int delay = fHasGps ? 5000 : 20000;
+                            int delay = fHasGps ? 10000 : 20000;
                             arrivalRefreshHandler.postDelayed(this, delay);
                         } catch (Exception ignored) {
                             arrivalRefreshHandler.postDelayed(this, 20000);
