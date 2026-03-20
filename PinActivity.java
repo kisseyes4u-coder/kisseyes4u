@@ -12640,7 +12640,7 @@ public class PinActivity extends AppCompatActivity {
                 return routeTypeBadge(ta)[0].compareTo(routeTypeBadge(tb2)[0]);
             });
         }
-        // filterRouteNo가 있으면 해당 노선을 맨 위로 올리기
+        // filterRouteNo가 있으면 해당 노선을 맨 위로 고정, 나머지는 도착순
         if (!filterRouteNo.isEmpty()) {
             java.util.List<String[]> pinned = new java.util.ArrayList<>();
             java.util.List<String[]> others = new java.util.ArrayList<>();
@@ -12648,6 +12648,13 @@ public class PinActivity extends AppCompatActivity {
                 if (r[0].equals(filterRouteNo)) pinned.add(r);
                 else others.add(r);
             }
+            // 나머지는 항상 도착순으로 재정렬
+            others.sort((a, b) -> {
+                String[] ai2 = arrMap.get(a[0]); String[] bi2 = arrMap.get(b[0]);
+                int ta2 = getSecFromTimeStr(ai2 != null ? ai2[0] : "");
+                int tb2 = getSecFromTimeStr(bi2 != null ? bi2[0] : "");
+                return Integer.compare(ta2, tb2);
+            });
             sortedRoutes = new java.util.ArrayList<>();
             sortedRoutes.addAll(pinned);
             sortedRoutes.addAll(others);
@@ -12693,6 +12700,10 @@ public class PinActivity extends AppCompatActivity {
             }
         }
         container.removeAllViews();
+        // filterRouteNo가 있으면 목록 맨 위로 스크롤
+        if (!filterRouteNo.isEmpty() && busTimelineSv != null) {
+            busTimelineSv.post(() -> busTimelineSv.scrollTo(0, 0));
+        }
         // fetchAndRenderArrival의 runOnUiThread 내부와 동일한 로직 호출
         // allRoutes와 arrMap을 final로 넘겨 렌더링
         final java.util.List<String[]> fR = allRoutes;
@@ -12732,12 +12743,15 @@ public class PinActivity extends AppCompatActivity {
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             // 배경 먼저 설정 (자식뷰 addView 전)
-            android.graphics.drawable.StateListDrawable sldEarly = new android.graphics.drawable.StateListDrawable();
-            sldEarly.addState(new int[]{android.R.attr.state_pressed}, new android.graphics.drawable.ColorDrawable(Color.parseColor("#E3F2FD")));
-            // 타임라인에서 진입한 노선(isPinned)은 연한 배경색, 나머지는 흰색
-            sldEarly.addState(new int[]{}, new android.graphics.drawable.ColorDrawable(
-                    isPinned ? Color.parseColor("#FFF8E1") : Color.WHITE));
-            row.setBackground(sldEarly);
+            if (isPinned) {
+                // 타임라인에서 진입한 노선 - 연한 노란색 고정 배경
+                row.setBackground(new android.graphics.drawable.ColorDrawable(Color.parseColor("#FFF8E1")));
+            } else {
+                android.graphics.drawable.StateListDrawable sldEarly = new android.graphics.drawable.StateListDrawable();
+                sldEarly.addState(new int[]{android.R.attr.state_pressed}, new android.graphics.drawable.ColorDrawable(Color.parseColor("#E3F2FD")));
+                sldEarly.addState(new int[]{}, new android.graphics.drawable.ColorDrawable(Color.WHITE));
+                row.setBackground(sldEarly);
+            }
 
             // ─ 왼쪽: 노선번호 + 서브텍스트 ─
             LinearLayout leftCol = new LinearLayout(this);
@@ -12945,11 +12959,11 @@ public class PinActivity extends AppCompatActivity {
                 }
             });
 
-            // 알림 버튼
+            // 승·하차 버튼
             final String alarmKey2 = "bus_alarm_" + fRid + "_" + nodeId;
             boolean isAlarmed2 = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(alarmKey2, false);
             TextView tvBell2 = new TextView(this);
-            tvBell2.setText("알림");
+            tvBell2.setText("승·하차");
             tvBell2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
             tvBell2.setTypeface(null, android.graphics.Typeface.BOLD);
             tvBell2.setGravity(Gravity.CENTER);
@@ -12961,7 +12975,7 @@ public class PinActivity extends AppCompatActivity {
             tvBell2.setBackground(bellBg2);
             tvBell2.setClickable(true);
             tvBell2.setFocusable(true);
-            tvBell2.setOnClickListener(vb -> android.widget.Toast.makeText(this, fRno + "번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
+            tvBell2.setOnClickListener(vb -> android.widget.Toast.makeText(this, fRno + "번 승·하차 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
 
             // 버튼 행 (즐겨찾기 + 알림)
             LinearLayout btnRow = new LinearLayout(this);
@@ -17608,9 +17622,9 @@ public class PinActivity extends AppCompatActivity {
                 });
                 iconBtnRow.addView(tvGear);
 
-                // 알림 버튼 (오른쪽)
+                // 승·하차 버튼 (오른쪽)
                 TextView tvBell = new TextView(this);
-                tvBell.setText("알림");
+                tvBell.setText("승·하차");
                 tvBell.setTextColor(Color.parseColor("#5BA9F0"));
                 tvBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
                 tvBell.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -17624,7 +17638,7 @@ public class PinActivity extends AppCompatActivity {
                 tvBell.setLayoutParams(new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                 tvBell.setOnClickListener(v2 -> android.widget.Toast.makeText(this,
-                        rNo + "번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
+                        rNo + "번 승·하차 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
                 iconBtnRow.addView(tvBell);
                 rCard.addView(iconBtnRow);
 
