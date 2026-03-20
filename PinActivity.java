@@ -11094,6 +11094,356 @@ public class PinActivity extends AppCompatActivity {
         return bestOrd;
     }
 
+    /** 승하차 알림 설정 화면 */
+    private void showBusAlarmScreen(String routeNo, String routeId, String nodeId, String nodeNm, String nodeNo) {
+        // 백스택에 alarm 저장
+        busBackStack.push(new String[]{"alarm", routeId, routeNo, nodeId, nodeNm, nodeNo});
+        if (arrivalRefreshRunnable != null) { arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable); arrivalRefreshRunnable = null; }
+        if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+
+        // 헤더 구성
+        if (busFixedHeader != null) {
+            busFixedHeader.removeAllViews();
+            busFixedHeader.setVisibility(android.view.View.VISIBLE);
+            busFixedHeader.setBackgroundColor(Color.parseColor("#F2F4F8"));
+            LinearLayout titleBar = new LinearLayout(this);
+            titleBar.setOrientation(LinearLayout.HORIZONTAL);
+            titleBar.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams tbLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            tbLp.setMargins(dpToPx(12), dpToPx(4), dpToPx(12), dpToPx(4));
+            titleBar.setLayoutParams(tbLp);
+            TextView tvBack = new TextView(this);
+            tvBack.setText("\u2039");
+            tvBack.setTextColor(Color.parseColor("#0984E3"));
+            tvBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
+            tvBack.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvBack.setPadding(0, 0, dpToPx(8), 0);
+            tvBack.setOnClickListener(v -> busNavigateBack());
+            titleBar.addView(tvBack);
+            TextView tvTitle = new TextView(this);
+            tvTitle.setText("승,하차 알림 설정");
+            tvTitle.setTextColor(Color.parseColor("#111111"));
+            tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
+            tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+            titleBar.addView(tvTitle);
+            busFixedHeader.addView(titleBar);
+
+            // 노선 + 정류장 서브헤더
+            LinearLayout subBar = new LinearLayout(this);
+            subBar.setOrientation(LinearLayout.HORIZONTAL);
+            subBar.setGravity(Gravity.CENTER_VERTICAL);
+            subBar.setPadding(dpToPx(16), dpToPx(6), dpToPx(16), dpToPx(8));
+            // 버스 아이콘
+            android.widget.ImageView ivBusIcon = new android.widget.ImageView(this);
+            android.graphics.Bitmap busBmp = getBusIcon();
+            if (busBmp != null) ivBusIcon.setImageBitmap(busBmp);
+            ivBusIcon.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(20), dpToPx(20)));
+            subBar.addView(ivBusIcon);
+            TextView tvRno = new TextView(this);
+            tvRno.setText(" " + routeNo);
+            tvRno.setTextColor(Color.parseColor("#0984E3"));
+            tvRno.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+            tvRno.setTypeface(null, android.graphics.Typeface.BOLD);
+            subBar.addView(tvRno);
+            TextView tvPin = new TextView(this);
+            tvPin.setText("  \uD83D\uDCCD" + nodeNm + (nodeNo.isEmpty() ? "" : "(" + nodeNo + ")"));
+            tvPin.setTextColor(Color.parseColor("#555555"));
+            tvPin.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            subBar.addView(tvPin);
+            busFixedHeader.addView(subBar);
+
+            // 구분선
+            android.view.View div = new android.view.View(this);
+            div.setBackgroundColor(Color.parseColor("#DDDDDD"));
+            div.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+            busFixedHeader.addView(div);
+        }
+
+        // 본문 구성
+        busResultContainer.removeAllViews();
+        ScrollView sv = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dpToPx(16), dpToPx(8), dpToPx(16), dpToPx(16));
+        sv.addView(content);
+        busResultContainer.addView(sv);
+
+        // ── 승차알림 섹션 ──────────────────────────────
+        TextView tvBoardSec = new TextView(this);
+        tvBoardSec.setText("승차알림");
+        tvBoardSec.setTextColor(Color.parseColor("#333333"));
+        tvBoardSec.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvBoardSec.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvBoardSec.setPadding(0, dpToPx(4), 0, dpToPx(8));
+        content.addView(tvBoardSec);
+
+        // 승차알림 카드 (현재 정류장 도착정보)
+        LinearLayout boardCard = new LinearLayout(this);
+        boardCard.setOrientation(LinearLayout.VERTICAL);
+        boardCard.setGravity(Gravity.CENTER);
+        boardCard.setMinimumHeight(dpToPx(80));
+        android.graphics.drawable.GradientDrawable boardBg = new android.graphics.drawable.GradientDrawable();
+        boardBg.setColor(Color.parseColor("#F8F9FA"));
+        boardBg.setCornerRadius(dpToPx(10));
+        boardBg.setStroke(dpToPx(1), Color.parseColor("#E0E0E0"));
+        boardCard.setBackground(boardBg);
+        boardCard.setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16));
+        LinearLayout.LayoutParams boardCardLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        boardCardLp.setMargins(0, 0, 0, dpToPx(16));
+        boardCard.setLayoutParams(boardCardLp);
+
+        // 승차알림 내용: 실시간 도착정보 조회
+        TextView tvBoardInfo = new TextView(this);
+        tvBoardInfo.setGravity(Gravity.CENTER);
+        tvBoardInfo.setTextColor(Color.parseColor("#AAAAAA"));
+        tvBoardInfo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tvBoardInfo.setText("도착 정보 없음");
+        boardCard.addView(tvBoardInfo);
+        content.addView(boardCard);
+
+        // 백그라운드에서 도착정보 조회
+        new Thread(() -> {
+            try {
+                String arvlUrl = BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
+                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                        + "&nodeId=" + nodeId + "&numOfRows=50&pageNo=1&_type=xml";
+                String arvlXml = httpGet(arvlUrl);
+                String boardText = "도착 정보 없음";
+                String boardColor = "#AAAAAA";
+                for (String item : arvlXml.split("<item>")) {
+                    if (!item.contains(routeNo)) continue;
+                    String arrt = tag(item, "arrtime");
+                    String arrc = tag(item, "arrprevstationcnt");
+                    int sec = -1;
+                    try { sec = Integer.parseInt(arrt); } catch(Exception ig){}
+                    int prev = -1;
+                    try { prev = Integer.parseInt(arrc); } catch(Exception ig){}
+                    if (sec > 0) {
+                        if (sec < 60) { boardText = "곧 도착"; boardColor = "#E74C3C"; }
+                        else { boardText = "약 " + (sec/60) + "분 후 도착"; boardColor = sec/60 <= 5 ? "#E74C3C" : "#333333"; }
+                        if (prev > 0) boardText += "\n[" + prev + " 정거장 앞]";
+                    }
+                    break;
+                }
+                final String fText = boardText, fColor = boardColor;
+                runOnUiThread(() -> {
+                    tvBoardInfo.setText(fText);
+                    tvBoardInfo.setTextColor(Color.parseColor(fColor));
+                    tvBoardInfo.setTypeface(null, android.graphics.Typeface.BOLD);
+                });
+            } catch (Exception ignored) {}
+        }).start();
+
+        // ── 하차알림 섹션 ──────────────────────────────
+        TextView tvAlightSec = new TextView(this);
+        tvAlightSec.setText("하차알림");
+        tvAlightSec.setTextColor(Color.parseColor("#333333"));
+        tvAlightSec.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvAlightSec.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvAlightSec.setPadding(0, dpToPx(4), 0, dpToPx(8));
+        content.addView(tvAlightSec);
+
+        // 하차알림 목록: bus_cache에서 이 정류장 이후 stops 가져오기
+        android.content.SharedPreferences bc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+        String stopsStr = bc.getString("route_" + routeId + "_stops", "");
+        java.util.List<String[]> allStops = new java.util.ArrayList<>();
+        for (String line : stopsStr.split(";")) {
+            String[] p = line.split("\\|", -1);
+            if (p.length >= 4) allStops.add(p);
+        }
+
+        // 현재 정류장 이후 stops 필터
+        boolean found = false;
+        java.util.List<String[]> afterStops = new java.util.ArrayList<>();
+        for (String[] s : allStops) {
+            if (!found && (s[0].equals(nodeId) || s[1].equals(nodeNm))) {
+                found = true;
+                continue; // 현재 정류장은 제외, 다음부터
+            }
+            if (found) afterStops.add(s);
+        }
+
+        // 최근 사용 하차 정류장 키
+        final String alightPrefKey = "alarm_alight_last_" + routeId;
+        String lastAlightId = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString(alightPrefKey, "");
+
+        if (afterStops.isEmpty()) {
+            TextView tvNoStop = new TextView(this);
+            tvNoStop.setText("이후 정류장 정보가 없습니다\n타임라인을 먼저 열어주세요");
+            tvNoStop.setTextColor(Color.parseColor("#AAAAAA"));
+            tvNoStop.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvNoStop.setGravity(Gravity.CENTER);
+            content.addView(tvNoStop);
+        } else {
+            // 타임라인 스타일 목록
+            LinearLayout timelineWrap = new LinearLayout(this);
+            timelineWrap.setOrientation(LinearLayout.VERTICAL);
+            android.graphics.drawable.GradientDrawable tlBg = new android.graphics.drawable.GradientDrawable();
+            tlBg.setColor(Color.WHITE);
+            tlBg.setCornerRadius(dpToPx(10));
+            tlBg.setStroke(dpToPx(1), Color.parseColor("#E0E0E0"));
+            timelineWrap.setBackground(tlBg);
+            content.addView(timelineWrap);
+
+            for (int i = 0; i < afterStops.size(); i++) {
+                String[] s = afterStops.get(i);
+                final String sId = s[0], sNm = s[1], sNo = s.length > 3 ? s[3] : "";
+                boolean isLast = (i == afterStops.size() - 1);
+                boolean isLastUsed = sId.equals(lastAlightId);
+                boolean isAlarmed = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                        .getBoolean("alarm_alight_" + routeId + "_" + sId, false);
+
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12));
+                if (isLastUsed) row.setBackgroundColor(Color.parseColor("#EBF5FB"));
+
+                // 타임라인 선 + 아이콘
+                LinearLayout tlCol = new LinearLayout(this);
+                tlCol.setOrientation(LinearLayout.VERTICAL);
+                tlCol.setGravity(Gravity.CENTER_HORIZONTAL);
+                tlCol.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(28), LinearLayout.LayoutParams.MATCH_PARENT));
+                // 위쪽 선
+                android.view.View lineTop = new android.view.View(this);
+                lineTop.setBackgroundColor(Color.parseColor("#CCCCCC"));
+                LinearLayout.LayoutParams ltLp = new LinearLayout.LayoutParams(dpToPx(2), dpToPx(12));
+                ltLp.gravity = Gravity.CENTER_HORIZONTAL;
+                lineTop.setLayoutParams(ltLp);
+                tlCol.addView(lineTop);
+                // 원
+                android.view.View circle = new android.view.View(this);
+                android.graphics.drawable.GradientDrawable cBg = new android.graphics.drawable.GradientDrawable();
+                cBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                cBg.setColor(Color.WHITE);
+                cBg.setStroke(dpToPx(2), Color.parseColor("#AAAAAA"));
+                circle.setBackground(cBg);
+                LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(dpToPx(14), dpToPx(14));
+                cLp.gravity = Gravity.CENTER_HORIZONTAL;
+                circle.setLayoutParams(cLp);
+                tlCol.addView(circle);
+                // 아래쪽 선
+                if (!isLast) {
+                    android.view.View lineBot = new android.view.View(this);
+                    lineBot.setBackgroundColor(Color.parseColor("#CCCCCC"));
+                    LinearLayout.LayoutParams lbLp = new LinearLayout.LayoutParams(dpToPx(2), dpToPx(12));
+                    lbLp.gravity = Gravity.CENTER_HORIZONTAL;
+                    lineBot.setLayoutParams(lbLp);
+                    tlCol.addView(lineBot);
+                }
+                row.addView(tlCol);
+
+                // 정류장 이름 + 번호
+                LinearLayout stopInfo = new LinearLayout(this);
+                stopInfo.setOrientation(LinearLayout.VERTICAL);
+                stopInfo.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                stopInfo.setPadding(dpToPx(8), 0, 0, 0);
+                TextView tvStopNm = new TextView(this);
+                tvStopNm.setText(sNm);
+                tvStopNm.setTextColor(Color.parseColor("#222222"));
+                tvStopNm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                tvStopNm.setTypeface(null, android.graphics.Typeface.BOLD);
+                stopInfo.addView(tvStopNm);
+                if (!sNo.isEmpty()) {
+                    TextView tvStopNo = new TextView(this);
+                    tvStopNo.setText(sNo);
+                    tvStopNo.setTextColor(Color.parseColor("#AAAAAA"));
+                    tvStopNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                    stopInfo.addView(tvStopNo);
+                }
+                if (isLastUsed) {
+                    TextView tvRecent = new TextView(this);
+                    tvRecent.setText("최근사용");
+                    tvRecent.setTextColor(Color.parseColor("#E74C3C"));
+                    tvRecent.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+                    tvRecent.setTypeface(null, android.graphics.Typeface.BOLD);
+                    android.graphics.drawable.GradientDrawable rBg = new android.graphics.drawable.GradientDrawable();
+                    rBg.setColor(Color.parseColor("#FDECEA"));
+                    rBg.setCornerRadius(dpToPx(4));
+                    rBg.setStroke(dpToPx(1), Color.parseColor("#E74C3C"));
+                    tvRecent.setBackground(rBg);
+                    tvRecent.setPadding(dpToPx(5), dpToPx(2), dpToPx(5), dpToPx(2));
+                    LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    rLp.setMargins(0, dpToPx(4), 0, 0);
+                    tvRecent.setLayoutParams(rLp);
+                    stopInfo.addView(tvRecent);
+                }
+                row.addView(stopInfo);
+
+                // 🔔 알림 버튼
+                android.widget.ImageView ivBell = new android.widget.ImageView(this);
+                android.graphics.drawable.GradientDrawable bellBg = new android.graphics.drawable.GradientDrawable();
+                bellBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                if (isAlarmed) {
+                    bellBg.setColor(Color.parseColor("#333333"));
+                } else {
+                    bellBg.setColor(Color.WHITE);
+                    bellBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                }
+                ivBell.setBackground(bellBg);
+                // 벨 이모지 대신 TextView 사용
+                TextView tvBellIcon = new TextView(this);
+                tvBellIcon.setText("🔔");
+                tvBellIcon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                tvBellIcon.setGravity(Gravity.CENTER);
+                android.graphics.drawable.GradientDrawable bellBg2 = new android.graphics.drawable.GradientDrawable();
+                bellBg2.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                if (isAlarmed) { bellBg2.setColor(Color.parseColor("#333333")); }
+                else { bellBg2.setColor(Color.WHITE); bellBg2.setStroke(dpToPx(1), Color.parseColor("#CCCCCC")); }
+                tvBellIcon.setBackground(bellBg2);
+                LinearLayout.LayoutParams bellLp = new LinearLayout.LayoutParams(dpToPx(44), dpToPx(44));
+                tvBellIcon.setLayoutParams(bellLp);
+                tvBellIcon.setOnClickListener(vb -> {
+                    boolean nowAlarmed = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                            .getBoolean("alarm_alight_" + routeId + "_" + sId, false);
+                    if (nowAlarmed) {
+                        // 알림 해제
+                        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                                .remove("alarm_alight_" + routeId + "_" + sId).apply();
+                        android.graphics.drawable.GradientDrawable offBg = new android.graphics.drawable.GradientDrawable();
+                        offBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                        offBg.setColor(Color.WHITE);
+                        offBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                        tvBellIcon.setBackground(offBg);
+                        android.widget.Toast.makeText(this, sNm + " 하차알림 해제", android.widget.Toast.LENGTH_SHORT).show();
+                    } else {
+                        // 알림 설정 - 기존 같은 노선 알림 모두 해제
+                        android.content.SharedPreferences.Editor ed = getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit();
+                        for (String[] ss : afterStops) {
+                            ed.remove("alarm_alight_" + routeId + "_" + ss[0]);
+                        }
+                        ed.putBoolean("alarm_alight_" + routeId + "_" + sId, true)
+                          .putString(alightPrefKey, sId)
+                          .apply();
+                        android.graphics.drawable.GradientDrawable onBg = new android.graphics.drawable.GradientDrawable();
+                        onBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                        onBg.setColor(Color.parseColor("#333333"));
+                        tvBellIcon.setBackground(onBg);
+                        // 다른 벨 아이콘들 초기화 (같은 노선)
+                        showBusAlarmScreen(routeNo, routeId, nodeId, nodeNm, nodeNo); // 화면 새로고침
+                        android.widget.Toast.makeText(this, sNm + " 하차알림 설정됨", android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                });
+                row.addView(tvBellIcon);
+                timelineWrap.addView(row);
+
+                // 구분선 (마지막 제외)
+                if (!isLast) {
+                    android.view.View rowDiv = new android.view.View(this);
+                    rowDiv.setBackgroundColor(Color.parseColor("#F0F0F0"));
+                    rowDiv.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+                    timelineWrap.addView(rowDiv);
+                }
+            }
+        }
+    }
+
     private void startFavAutoRefresh() {
         stopFavAutoRefresh();
         busFavRefreshRunnable = new Runnable() {
@@ -11267,6 +11617,13 @@ public class PinActivity extends AppCompatActivity {
                     if (busTimelineSv != null) busTimelineSv.scrollTo(0, restoreY);
                 }, 400);
             }
+        } else if ("alarm".equals(type)) {
+            // 승하차 화면 → 도착화면으로 복귀
+            String nId = prev[3], nNm = prev[4], nNo = prev[5] != null ? prev[5] : "";
+            String filter = prev[2]; // routeNo
+            if (busFixedHeader != null) busFixedHeader.removeAllViews();
+            if (busResultContainer != null) busResultContainer.removeAllViews();
+            busScreenLoadArrival(nId, nNm, nNo, filter, busResultContainer);
         } else if ("arrival".equals(type)) {
             String nodeId = prev[1], nodeNm = prev[2], nodeNo = prev[3], filter = prev[4];
             if (busFixedHeader != null) { busFixedHeader.removeAllViews(); }
@@ -13822,7 +14179,7 @@ public class PinActivity extends AppCompatActivity {
             tvBell2.setBackground(bellBg2);
             tvBell2.setClickable(true);
             tvBell2.setFocusable(true);
-            tvBell2.setOnClickListener(vb -> android.widget.Toast.makeText(this, fRno + "번 승·하차 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
+            tvBell2.setOnClickListener(vb -> showBusAlarmScreen(fRno, fRid, nodeId, nodeNm, nodeNo));
 
             // 버튼 행 (즐겨찾기 + 알림)
             LinearLayout btnRow = new LinearLayout(this);
