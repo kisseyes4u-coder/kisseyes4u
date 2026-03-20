@@ -11339,7 +11339,7 @@ public class PinActivity extends AppCompatActivity {
             java.util.List<String[]> stops = new java.util.ArrayList<>();
             for (String line : cache.getString(cKey + "_stops", "").split(";")) {
                 String[] parts = line.split("\\|", -1);
-                if (parts.length == 4) stops.add(parts);
+                if (parts.length >= 4) stops.add(parts);
             }
             boolean isReverse = "reverse".equals(direction);
             if (isReverse) java.util.Collections.reverse(stops);
@@ -11421,6 +11421,13 @@ public class PinActivity extends AppCompatActivity {
                             .putString(cKey+"_startTime", startTime).putString(cKey+"_endTime", endTime)
                             .putString(cKey+"_interval", interval).putString(cKey+"_rTp", rTp)
                             .putString(cKey+"_turnOrd", turnOrd).apply();
+
+                    // ① 완료 즉시 빈 타임라인 골격 UI 표시 (정류장/버스 없이)
+                    final String fSNm2=startNm, fENm2=endNm, fStF2=stF, fEtF2=etF, fIv2=interval, fRTp2=rTp, fTO2=turnOrd;
+                    runOnUiThread(() -> renderBusTimeline(routeId, routeNo, direction, container,
+                            fSNm2, fENm2, fStF2, fEtF2, fIv2, fRTp2,
+                            0, new java.util.HashMap<>(), new java.util.HashSet<>(),
+                            new java.util.ArrayList<>(), fTO2));
 
                     // ② 실시간
                     String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
