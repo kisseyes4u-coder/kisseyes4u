@@ -11464,6 +11464,7 @@ public class PinActivity extends AppCompatActivity {
                                 .append("|").append(lat2).append("|").append(lon2);
                     }
                     cache.edit().putString(cKey+"_stops", sb.toString()).apply();
+                    cache.edit().putString(cKey+"_no", routeNo).apply(); // 노선번호 저장
                     cache.edit().putInt(cKey+"_running", cnt).apply(); // 운행 대수 저장
 
                     boolean isReverse = "reverse".equals(direction);
@@ -12939,26 +12940,6 @@ public class PinActivity extends AppCompatActivity {
         // 백그라운드에서 실시간 API 호출 후 갱신
         final LinearLayout fContainer = container;
         new Thread(() -> fetchAndRenderArrival(nodeId, nodeNm, nodeNo, filterRouteNo, fContainer, true)).start();
-
-        // 도착화면 20초 자동 갱신 루틴 시작
-        if (busRefreshRunnable != null) busRefreshHandler.removeCallbacks(busRefreshRunnable);
-        final String fNodeId = nodeId, fNodeNm = nodeNm, fNodeNo = nodeNo, fFilter = filterRouteNo;
-        busRefreshRunnable = new Runnable() {
-            @Override public void run() {
-                if (!isOnSubScreen) return;
-                if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) {
-                    busRefreshHandler.postDelayed(this, 20000);
-                    return;
-                }
-                // 현재 화면이 도착화면인지 확인
-                if (busFixedHeader == null || !("arrival_" + fNodeId).equals(busFixedHeader.getTag())) return;
-                // 세션 캐시 무효화 후 재조회
-                arrivalSessionCache.remove(fNodeId);
-                new Thread(() -> fetchAndRenderArrival(fNodeId, fNodeNm, fNodeNo, fFilter, fContainer, false)).start();
-                busRefreshHandler.postDelayed(this, 20000);
-            }
-        };
-        busRefreshHandler.postDelayed(busRefreshRunnable, 20000);
     }
 
     /** 도착정보 API 호출 + 렌더링 (백그라운드에서 호출) */
@@ -13091,6 +13072,15 @@ public class PinActivity extends AppCompatActivity {
                     for (String[] rd : routeDbList) {
                         if (foundRouteIds.contains(rd[0]))
                             allRoutes.add(new String[]{rd[1], rd[0], rd[2], rd[3], rd.length>4?rd[4]:""});
+                    }
+                }
+                // routeDbList 없어도 routeId로 추가 (노선번호는 _stops 키명에서 추출 불가, routeNo 캐시에서 시도)
+                if (allRoutes.isEmpty() && !foundRouteIds.isEmpty()) {
+                    android.content.SharedPreferences bc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                    for (String rId : foundRouteIds) {
+                        String rNo = bc2.getString("route_" + rId + "_no", "");
+                        if (rNo.isEmpty()) rNo = bc2.getString(rId + "_no", "");
+                        allRoutes.add(new String[]{rNo, rId, "", "", ""});
                     }
                 }
             }
