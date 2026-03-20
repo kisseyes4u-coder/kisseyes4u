@@ -11599,10 +11599,10 @@ public class PinActivity extends AppCompatActivity {
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             row.setTag("stop_" + s[0]); // nodeId tag (스크롤 위치 찾기용)
-            // 즐겨찾기된 정류장은 연한 배경색 (#FFF8E1) 고정
             boolean isFavRow = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
                     .getBoolean("fav_stop_" + routeId + "_" + s[0], false);
-            row.setBackgroundColor(isFavRow ? Color.parseColor("#FFF8E1") : Color.TRANSPARENT);
+            // row 전체 배경은 투명 유지 (tlFrame 왼쪽 제외)
+            row.setBackgroundColor(Color.TRANSPARENT);
             final boolean fFirst2=isFirst, fLast2=isLast, fIsReturn=isReturn;
 
             // ── 타임라인 FrameLayout (세로줄 + 원 + 버스오버레이) ──
@@ -11714,6 +11714,15 @@ public class PinActivity extends AppCompatActivity {
             }
             row.addView(tlFrame);
 
+            // stopInfo + tvStar를 감싸는 contentArea (즐겨찾기 배경색 적용 영역)
+            LinearLayout contentArea = new LinearLayout(this);
+            contentArea.setOrientation(LinearLayout.HORIZONTAL);
+            contentArea.setGravity(Gravity.CENTER_VERTICAL);
+            contentArea.setWeightSum(1f);
+            contentArea.setLayoutParams(new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+            contentArea.setBackgroundColor(isFavRow ? Color.parseColor("#FFF8E1") : Color.TRANSPARENT);
+
 
             LinearLayout stopInfo = new LinearLayout(this);
             stopInfo.setOrientation(LinearLayout.VERTICAL); stopInfo.setGravity(Gravity.CENTER_VERTICAL);
@@ -11743,7 +11752,7 @@ public class PinActivity extends AppCompatActivity {
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 tagLp.setMargins(0,dpToPx(2),0,0); tvTag.setLayoutParams(tagLp); stopInfo.addView(tvTag);
             }
-            row.addView(stopInfo);
+            contentArea.addView(stopInfo);
 
             // 즐겨찾기 버튼
             final String favKey = "fav_stop_" + routeId + "_" + s[0];
@@ -11777,7 +11786,7 @@ public class PinActivity extends AppCompatActivity {
                     offBg.setCornerRadius(dpToPx(4)); offBg.setColor(Color.WHITE);
                     offBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
                     tvStar.setTextColor(Color.parseColor("#888888")); tvStar.setBackground(offBg);
-                    row.setBackgroundColor(Color.TRANSPARENT); // row 배경 제거
+                    contentArea.setBackgroundColor(Color.TRANSPARENT); // contentArea 배경 제거
                     android.widget.Toast.makeText(this, stopName + " 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
                     busFavDirty = true;
                 } else {
@@ -11886,7 +11895,7 @@ public class PinActivity extends AppCompatActivity {
                         onBg.setCornerRadius(dpToPx(4)); onBg.setColor(Color.parseColor("#F39C12"));
                         onBg.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
                         tvStar.setTextColor(Color.WHITE); tvStar.setBackground(onBg);
-                        row.setBackgroundColor(Color.parseColor("#FFF8E1")); // row 배경 강조
+                        contentArea.setBackgroundColor(Color.parseColor("#FFF8E1")); // contentArea 배경 강조
                         android.widget.Toast.makeText(this, stopName + " 즐겨찾기 추가",
                                 android.widget.Toast.LENGTH_SHORT).show();
                         favOrderAdd("S:" + favKey.substring("fav_stop_".length()));
@@ -11902,7 +11911,8 @@ public class PinActivity extends AppCompatActivity {
                     stopFavDlg.show();
                 }
             });
-            row.addView(tvStar);
+            contentArea.addView(tvStar);
+            row.addView(contentArea);
 
             final String nodeId=s[0], nodeNm=s[1], nodeNo2=s[3];
             // 회차 지점(nodeno 없음)은 실제 정류소가 아니므로 클릭 비활성화
