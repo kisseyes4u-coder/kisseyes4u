@@ -11546,10 +11546,10 @@ public class PinActivity extends AppCompatActivity {
             if (inRange && (s[0].equals(alightNodeId) || s[1].equals(alightNodeNm))) break;
         }
 
-        // 스크롤 영역 - busResultContainer 전체 사용 (버튼은 busBottomBar에 고정)
+        // 스크롤 영역 - busResultContainer에 추가 (버튼은 busBottomBar에 고정)
         ScrollView sv2 = new ScrollView(this);
         sv2.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         LinearLayout content2 = new LinearLayout(this);
         content2.setOrientation(LinearLayout.VERTICAL);
@@ -12209,24 +12209,15 @@ public class PinActivity extends AppCompatActivity {
                     (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
             if (immBack != null && busEtSearch != null)
                 immBack.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
-            // 결과 컨테이너 초기화
-            // 검색화면 완전 리셋 (즐겨찾기 제외)
-            if (busEtSearch != null) {
-                busEtSearch.setText("");
-                busEtSearch.setHint("버스 번호 입력");
-                busEtSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-            }
-            busIsBusTab[0] = true;
-            if (busUpdateTabStyle != null) busUpdateTabStyle.run();
-            // 키보드 숨김
-            android.view.inputmethod.InputMethodManager immBack2 =
-                    (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-            if (immBack2 != null && busEtSearch != null)
-                immBack2.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
-            // 결과 컨테이너 초기화
+            // 결과 컨테이너 초기화 + 레이아웃 복원
             if (busResultContainer != null) {
                 busResultContainer.removeAllViews();
                 busResultContainer.post(() -> busResultContainer.removeAllViews());
+            }
+            // busTimelineSv weight=1 복원 (알림화면에서 sv2 MATCH_PARENT로 망가질 수 있음)
+            if (busTimelineSv != null) {
+                LinearLayout.LayoutParams svLp = (LinearLayout.LayoutParams) busTimelineSv.getLayoutParams();
+                if (svLp != null) { svLp.height = 0; svLp.weight = 1f; busTimelineSv.setLayoutParams(svLp); }
             }
             // 즐겨찾기 변경됐을 때만 갱신
             if (busFavDirty && busFavSection != null && busResultContainer != null) {
