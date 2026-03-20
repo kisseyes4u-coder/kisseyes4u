@@ -11105,9 +11105,16 @@ public class PinActivity extends AppCompatActivity {
         // 백스택 처리
         if (!busBackStack.isEmpty() && "alarm".equals(busBackStack.peek()[0])) busBackStack.pop();
         busBackStack.push(new String[]{"alarm", routeId, routeNo, nodeId, nodeNm, nodeNo});
-        if (arrivalRefreshRunnable != null) { arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable); arrivalRefreshRunnable = null; }
+        // arrivalRefresh 완전 중단 (Thread 내부에서 재등록 차단용 플래그)
+        if (arrivalRefreshRunnable != null) {
+            arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable);
+            arrivalRefreshRunnable = null;
+        }
+        arrivalRefreshNodeId = ""; // 재등록 차단
         if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
         if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+        // 헤더 태그를 alarm으로 변경 → renderArrivalRows 태그 체크 차단
+        if (busFixedHeader != null) busFixedHeader.setTag("alarm_" + nodeId);
 
         // 노선 타입 색상
         android.content.SharedPreferences bc = getSharedPreferences("bus_cache", MODE_PRIVATE);
@@ -11213,17 +11220,18 @@ public class PinActivity extends AppCompatActivity {
             if (foundBoard) afterStops.add(s);
         }
 
-        // 현재 설정된 하차 정류장 (실제 알림이 켜진 것만)
+        // 현재 설정된 하차 정류장 - 실제 알림이 켜진 것만 선택 표시
         final String alightPrefKey = "alarm_alight_last_" + routeId;
-        String lastUsedId = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString(alightPrefKey, "");
-        // 실제로 알림이 켜져 있는지 확인
-        boolean lastUsedActive = !lastUsedId.isEmpty() &&
-                getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean("alarm_alight_" + routeId + "_" + lastUsedId, false);
-        String savedAlightId = alightNodeId != null ? alightNodeId : (lastUsedActive ? lastUsedId : "");
-        String savedAlightNm = alightNodeNm != null ? alightNodeNm : "";
-        if (savedAlightNm.isEmpty() && !savedAlightId.isEmpty()) {
-            for (String[] s : afterStops) {
-                if (s[0].equals(savedAlightId)) { savedAlightNm = s[1]; break; }
+        // alightNodeId가 파라미터로 넘어온 경우(상세화면에서 복귀)는 무시하고 항상 저장된 값 확인
+        String savedAlightId = "";
+        String savedAlightNm = "";
+        // 실제 알림이 켜진 정류장 찾기
+        for (String[] s : afterStops) {
+            if (getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                    .getBoolean("alarm_alight_" + routeId + "_" + s[0], false)) {
+                savedAlightId = s[0];
+                savedAlightNm = s[1];
+                break;
             }
         }
 
