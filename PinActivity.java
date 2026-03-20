@@ -377,6 +377,9 @@ public class PinActivity extends AppCompatActivity {
     private Runnable busRefreshRunnable = null;
     private android.os.Handler busFavRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable busFavRefreshRunnable = null;
+    private android.os.Handler arrivalRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable arrivalRefreshRunnable = null;
+    private String arrivalRefreshNodeId = "", arrivalRefreshNodeNm = "", arrivalRefreshNodeNo = "", arrivalRefreshRouteNo = "";
     private Runnable refreshRunnable;
     private Runnable blockedCheckRunnable;
     private int lastKnownBlockCount = 0;
@@ -11119,6 +11122,7 @@ public class PinActivity extends AppCompatActivity {
             String sNm, String eNm, String stF, String etF, String interval, String rTp,
             java.util.List<String[]> stops, String turnOrd) {
         if (busRefreshRunnable != null) busRefreshHandler.removeCallbacks(busRefreshRunnable);
+        if (arrivalRefreshRunnable != null) { arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable); arrivalRefreshRunnable = null; }
         final String fRId=routeId, fRNo=routeNo, fDir=direction;
         final String fSNm=sNm, fENm=eNm, fStF=stF, fEtF=etF, fInterval=interval, fRTp=rTp, fTurnOrd=turnOrd;
         final java.util.List<String[]> fStops = stops;
@@ -11195,6 +11199,7 @@ public class PinActivity extends AppCompatActivity {
                 busRefreshHandler.removeCallbacks(busRefreshRunnable);
                 busRefreshRunnable = null;
             }
+            if (arrivalRefreshRunnable != null) { arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable); arrivalRefreshRunnable = null; }
             if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
@@ -11273,6 +11278,7 @@ public class PinActivity extends AppCompatActivity {
                 busRefreshHandler.removeCallbacks(busRefreshRunnable);
                 busRefreshRunnable = null;
             }
+            if (arrivalRefreshRunnable != null) { arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable); arrivalRefreshRunnable = null; }
             if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
             if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
             if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
@@ -12539,6 +12545,28 @@ public class PinActivity extends AppCompatActivity {
             busRefreshHandler.removeCallbacks(busRefreshRunnable);
             busRefreshRunnable = null;
         }
+        // ① 도착화면 자동갱신 시작 (30초마다)
+        if (arrivalRefreshRunnable != null) arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable);
+        arrivalRefreshNodeId = nodeId; arrivalRefreshNodeNm = nodeNm;
+        arrivalRefreshNodeNo = nodeNo; arrivalRefreshRouteNo = filterRouteNo;
+        final LinearLayout fArrContainer = container;
+        arrivalRefreshRunnable = new Runnable() {
+            @Override public void run() {
+                if (!isOnSubScreen) return;
+                if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) {
+                    arrivalRefreshHandler.postDelayed(this, 30000); return;
+                }
+                if (!busBackStack.isEmpty() && "arrival".equals(busBackStack.peek()[0])
+                        && arrivalRefreshNodeId.equals(busBackStack.peek()[1])) {
+                    arrivalSessionCache.remove(arrivalRefreshNodeId);
+                    new Thread(() -> fetchAndRenderArrival(
+                            arrivalRefreshNodeId, arrivalRefreshNodeNm,
+                            arrivalRefreshNodeNo, arrivalRefreshRouteNo, fArrContainer, true)).start();
+                }
+                arrivalRefreshHandler.postDelayed(this, 30000);
+            }
+        };
+        arrivalRefreshHandler.postDelayed(arrivalRefreshRunnable, 30000); // 30초 후부터 자동갱신
         // ② 검색창·즐겨찾기 숨기기
         if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
         if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
