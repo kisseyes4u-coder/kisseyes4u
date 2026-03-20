@@ -11045,7 +11045,7 @@ public class PinActivity extends AppCompatActivity {
                 + "<style>html,body,#map{width:100%;height:100%;margin:0;padding:0;}</style></head>"
                 + "<body><div id='map'></div><script>"
                 + "var map=L.map('map').setView([" + myLat + "," + myLon + "],16);"
-                + "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);"
+                + "L.tileLayer('https://xdworld.vworld.kr/2d/Base/service/{z}/{x}/{y}.png',{maxZoom:19,attribution:'Vworld'}).addTo(map);"
                 // 내 위치 마커 (파란원)
                 + "L.circleMarker([" + myLat + "," + myLon + "],{radius:10,color:'#0984E3',fillColor:'#0984E3',fillOpacity:0.8}).addTo(map).bindPopup('📍 내 위치');"
                 // 정류장 마커 함수
@@ -11055,7 +11055,7 @@ public class PinActivity extends AppCompatActivity {
                 + markers.toString()
                 + "</script></body></html>";
 
-        wv.loadDataWithBaseURL("https://openstreetmap.org", html, "text/html", "UTF-8", null);
+        wv.loadDataWithBaseURL("https://map.vworld.kr", html, "text/html", "UTF-8", null);
 
         dlg.setContentView(root);
         dlg.show();
@@ -11193,7 +11193,7 @@ public class PinActivity extends AppCompatActivity {
             "</style></head><body>" +
             "<div id='map'></div><script>" +
             "var map=L.map('map').setView([" + centerLat + "," + centerLon + "],14);" +
-            "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'," +
+            "L.tileLayer('https://xdworld.vworld.kr/2d/Base/service/{z}/{x}/{y}.png'," +
             "{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);" +
             "var latlngs=" + latlngs + ";" +
             "L.polyline(latlngs,{color:'#0984E3',weight:4,opacity:0.8}).addTo(map);" +
