@@ -12945,7 +12945,61 @@ public class PinActivity extends AppCompatActivity {
         });
         topHeader.addView(tvRouteStar);
 
-        // ── 고정 헤더: topHeader + dirRow ──────────────
+        // 승하차 버튼 (즐겨찾기 옆)
+        TextView tvTlBell = new TextView(this);
+        tvTlBell.setText("승·하차");
+        tvTlBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        tvTlBell.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvTlBell.setGravity(Gravity.CENTER);
+        tvTlBell.setPadding(dpToPx(9), dpToPx(5), dpToPx(9), dpToPx(5));
+        android.graphics.drawable.GradientDrawable tlBellBg = new android.graphics.drawable.GradientDrawable();
+        tlBellBg.setCornerRadius(dpToPx(5));
+        tlBellBg.setColor(Color.WHITE);
+        tlBellBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
+        tvTlBell.setTextColor(Color.parseColor("#888888"));
+        tvTlBell.setBackground(tlBellBg);
+        LinearLayout.LayoutParams tlBellLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlBellLp.gravity = Gravity.CENTER_VERTICAL;
+        tlBellLp.setMargins(dpToPx(6), 0, 0, 0);
+        tvTlBell.setLayoutParams(tlBellLp);
+        final String fTlRouteId = routeId, fTlRouteNo = routeNo;
+        final java.util.List<String[]> fTlStops = stops;
+        tvTlBell.setOnClickListener(vb -> {
+            // 현재 스크롤 중앙에 보이는 정류소 찾기
+            String boardNodeId = "", boardNodeNm = "", boardNodeNo = "";
+            if (busTimelineSv != null && fTlStops != null && !fTlStops.isEmpty()) {
+                int svScrollY = busTimelineSv.getScrollY();
+                int svHeight = busTimelineSv.getHeight();
+                int centerY = svScrollY + svHeight / 2;
+                int minDist = Integer.MAX_VALUE;
+                // stop_ 태그 뷰 순회
+                for (String[] s : fTlStops) {
+                    android.view.View sv2 = findViewWithTag(busResultContainer, "stop_" + s[0]);
+                    if (sv2 == null) continue;
+                    int[] loc2 = new int[2]; sv2.getLocationOnScreen(loc2);
+                    int[] svLoc2 = new int[2]; busTimelineSv.getLocationOnScreen(svLoc2);
+                    int rowY2 = busTimelineSv.getScrollY() + (loc2[1] - svLoc2[1]);
+                    int dist = Math.abs(rowY2 - centerY);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        boardNodeId = s[0];
+                        boardNodeNm = s[1];
+                        boardNodeNo = s.length > 3 ? s[3] : "";
+                    }
+                }
+            }
+            // 못 찾으면 첫 번째 정류소
+            if (boardNodeId.isEmpty() && fTlStops != null && !fTlStops.isEmpty()) {
+                boardNodeId = fTlStops.get(0)[0];
+                boardNodeNm = fTlStops.get(0)[1];
+                boardNodeNo = fTlStops.get(0).length > 3 ? fTlStops.get(0)[3] : "";
+            }
+            if (!boardNodeId.isEmpty()) {
+                showBusAlarmScreen(fTlRouteNo, fTlRouteId, boardNodeId, boardNodeNm, boardNodeNo);
+            }
+        });
+        topHeader.addView(tvTlBell);
         LinearLayout fixedArea = (busFixedHeader != null) ? busFixedHeader : container;
         fixedArea.removeAllViews();
         fixedArea.setVisibility(android.view.View.VISIBLE);
