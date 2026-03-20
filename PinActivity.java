@@ -10803,6 +10803,15 @@ public class PinActivity extends AppCompatActivity {
         tvTitle.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         titleBar2.addView(tvTitle);
 
+        // GPS 수신 상태 표시
+        final TextView tvGps = new TextView(this);
+        tvGps.setText("📡✕");
+        tvGps.setTextColor(Color.parseColor("#FF7675"));
+        tvGps.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tvGps.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvGps.setPadding(dpToPx(6), 0, 0, 0);
+        titleBar2.addView(tvGps);
+
         // WebView
         android.webkit.WebView wv = new android.webkit.WebView(this);
         wv.getSettings().setJavaScriptEnabled(true);
@@ -10826,6 +10835,7 @@ public class PinActivity extends AppCompatActivity {
 
         // 실시간 갱신 (routeId 있을 때만 - 타임라인 버스 위치)
         if (routeId != null && !routeId.isEmpty() && coordStops != null) {
+            final TextView fTvGps = tvGps;
             // ordToCoord 맵 생성
             final java.util.Map<String, double[]> ordToCoord2 = new java.util.HashMap<>();
             for (String[] s : coordStops) {
@@ -10885,10 +10895,27 @@ public class PinActivity extends AppCompatActivity {
                             jsUpdate.append("]);");
                             final String js = jsUpdate.toString();
                             final int fCnt = cnt;
+                            final int gpsCount = newGpsMap.size(); // GPS 수신된 버스 수
                             runOnUiThread(() -> {
                                 if (mapDlg.isShowing()) {
                                     wv.evaluateJavascript(js, null);
                                     tvTitle.setText(title.split("  ")[0] + "  " + fCnt + "대 운행중");
+                                    // GPS 수신 상태 업데이트
+                                    if (gpsCount > 0 && fCnt > 0) {
+                                        int strength = (int)((double)gpsCount / fCnt * 100);
+                                        String bar;
+                                        if (strength >= 80) bar = "▂▄▆█";
+                                        else if (strength >= 60) bar = "▂▄▆░";
+                                        else if (strength >= 40) bar = "▂▄░░";
+                                        else bar = "▂░░░";
+                                        fTvGps.setText("📡" + bar);
+                                        fTvGps.setTextColor(strength >= 60
+                                                ? Color.parseColor("#55EFC4")
+                                                : Color.parseColor("#FDCB6E"));
+                                    } else {
+                                        fTvGps.setText("📡✕");
+                                        fTvGps.setTextColor(Color.parseColor("#FF7675"));
+                                    }
                                 }
                             });
                         } catch (Exception ignored) {}
