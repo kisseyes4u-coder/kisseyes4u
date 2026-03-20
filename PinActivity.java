@@ -11387,6 +11387,19 @@ public class PinActivity extends AppCompatActivity {
                             android.graphics.Paint dotP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                             dotP.setColor(Color.parseColor(badge[1]));
                             canvas.drawCircle(cx, h/2f, dpToPx(4), dotP);
+                        } else {
+                            // 타임라인과 동일한 아래 화살표
+                            android.graphics.Paint vP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                            vP.setColor(Color.parseColor("#0984E3"));
+                            vP.setStyle(android.graphics.Paint.Style.STROKE);
+                            vP.setStrokeWidth(dpToPx(2));
+                            vP.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                            float vSize=dpToPx(4), vy=h/2f;
+                            android.graphics.Path vPath = new android.graphics.Path();
+                            vPath.moveTo(cx-vSize, vy-vSize*0.5f);
+                            vPath.lineTo(cx, vy+vSize*0.5f);
+                            vPath.lineTo(cx+vSize, vy-vSize*0.5f);
+                            canvas.drawPath(vPath, vP);
                         }
                     }
                 };
@@ -11470,6 +11483,16 @@ public class PinActivity extends AppCompatActivity {
                 stopInfo.addView(tvAlightBtn);
                 row.addView(stopInfo);
                 content.addView(row);
+                // 구분선 (마지막 제외)
+                if (!fIsLast) {
+                    android.view.View rowDiv = new android.view.View(this);
+                    rowDiv.setBackgroundColor(Color.parseColor("#E8E8E8"));
+                    LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                    divLp.setMargins(dpToPx(40), 0, 0, 0); // 타임라인 선 너비만큼 여백
+                    rowDiv.setLayoutParams(divLp);
+                    content.addView(rowDiv);
+                }
             }
         }
     }
@@ -11599,6 +11622,19 @@ public class PinActivity extends AppCompatActivity {
                         android.graphics.Paint dotP3 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
                         dotP3.setColor(Color.parseColor(colorHex));
                         canvas.drawCircle(cx, h/2f, dpToPx(4), dotP3);
+                    } else {
+                        // 아래 화살표 (타임라인과 동일)
+                        android.graphics.Paint vP3 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        vP3.setColor(Color.parseColor(colorHex));
+                        vP3.setStyle(android.graphics.Paint.Style.STROKE);
+                        vP3.setStrokeWidth(dpToPx(2));
+                        vP3.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                        float vSize3=dpToPx(4), vy3=h/2f;
+                        android.graphics.Path vPath3 = new android.graphics.Path();
+                        vPath3.moveTo(cx-vSize3, vy3-vSize3*0.5f);
+                        vPath3.lineTo(cx, vy3+vSize3*0.5f);
+                        vPath3.lineTo(cx+vSize3, vy3-vSize3*0.5f);
+                        canvas.drawPath(vPath3, vP3);
                     }
                 }
             };
@@ -11651,7 +11687,16 @@ public class PinActivity extends AppCompatActivity {
             }
             row3.addView(si3);
             content2.addView(row3);
-        }
+            // 구분선 (마지막 제외)
+            if (!fIsLast3) {
+                android.view.View rowDiv3 = new android.view.View(this);
+                rowDiv3.setBackgroundColor(Color.parseColor("#E8E8E8"));
+                LinearLayout.LayoutParams div3Lp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                div3Lp.setMargins(dpToPx(40), 0, 0, 0);
+                rowDiv3.setLayoutParams(div3Lp);
+                content2.addView(rowDiv3);
+            }
 
         // 하단 버튼 (알림시작 / 알림종료)
         boolean alreadySet = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
