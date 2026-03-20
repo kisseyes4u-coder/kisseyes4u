@@ -10152,7 +10152,48 @@ public class PinActivity extends AppCompatActivity {
             android.graphics.drawable.GradientDrawable selMyLoc = new android.graphics.drawable.GradientDrawable();
             selMyLoc.setColor(Color.parseColor("#5BA9F0")); selMyLoc.setCornerRadius(dpToPx(8));
             tabMyLoc.setBackground(selMyLoc); tabMyLoc.setTextColor(Color.WHITE);
-            showNearbyMapDialog();
+            // 백스택에서 현재 타임라인 노선 찾기
+            String mapRouteId = "", mapRouteNo = "";
+            for (String[] entry : busBackStack) {
+                if ("timeline".equals(entry[0])) {
+                    mapRouteId = entry[1]; mapRouteNo = entry[2]; break;
+                }
+            }
+            if (mapRouteId.isEmpty()) {
+                android.widget.Toast.makeText(this, "먼저 버스 타임라인을 열어주세요", android.widget.Toast.LENGTH_SHORT).show();
+                // 지도 탭 비활성으로 되돌리기
+                android.graphics.drawable.GradientDrawable rb = new android.graphics.drawable.GradientDrawable();
+                rb.setColor(Color.WHITE); rb.setCornerRadius(dpToPx(8));
+                rb.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                tabMyLoc.setBackground(rb); tabMyLoc.setTextColor(Color.parseColor("#555555"));
+                return;
+            }
+            final String fMapRouteId = mapRouteId, fMapRouteNo = mapRouteNo;
+            // bus_cache에서 정류장 캐시 로드 후 지도 표시
+            android.content.SharedPreferences fc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
+            java.util.List<String[]> cachedStops = new java.util.ArrayList<>();
+            for (String line : fc2.getString("route_" + fMapRouteId + "_stops", "").split(";")) {
+                String[] p = line.split("\\|", -1);
+                if (p.length >= 4) cachedStops.add(p);
+            }
+            // 버스 현재 위치(ordSet) 실시간으로 가져오기
+            final java.util.List<String[]> fCachedStops = cachedStops;
+            new Thread(() -> {
+                try {
+                    String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                            + "&routeId=" + fMapRouteId + "&numOfRows=50&pageNo=1&_type=xml");
+                    java.util.Set<String> ordSet2 = new java.util.HashSet<>();
+                    for (String item : lcXml.split("<item>")) {
+                        String ord = tag(item, "nodeord");
+                        if (!ord.isEmpty()) ordSet2.add(ord);
+                    }
+                    final java.util.Set<String> fOrd = ordSet2;
+                    runOnUiThread(() -> showBusMapDialog(fMapRouteId, fMapRouteNo, fCachedStops, fOrd));
+                } catch (Exception e) {
+                    runOnUiThread(() -> showBusMapDialog(fMapRouteId, fMapRouteNo, fCachedStops, new java.util.HashSet<>()));
+                }
+            }).start();
         });
         tabRow.addView(tabMyLoc);
 
@@ -10710,84 +10751,6 @@ public class PinActivity extends AppCompatActivity {
     }
 
     /** 즐겨찾기 화면 자동갱신 시작 (30초마다) */
-    /** 내 위치 기반 주변 정류장 지도 (Leaflet.js) */
-    private void showNearbyMapDialog() {
-        // 위치 권한 확인
-        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED
-            && checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            android.widget.Toast.makeText(this, "위치 권한이 없습니다. 앱 설정에서 허용해 주세요",
-                    android.widget.Toast.LENGTH_SHORT).show();
-            return;
-        }
-        android.widget.Toast.makeText(this, "내 위치 확인 중...", android.widget.Toast.LENGTH_SHORT).show();
-        android.location.LocationManager lm = (android.location.LocationManager)
-                getSystemService(android.content.Context.LOCATION_SERVICE);
-        if (lm == null) return;
-
-        android.location.Location loc = null;
-        try {
-            loc = lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER);
-            if (loc == null) loc = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER);
-        } catch (Exception ignored) {}
-
-        if (loc != null) {
-            final double myLat = loc.getLatitude(), myLon = loc.getLongitude();
-            new Thread(() -> fetchAndShowNearbyMap(myLat, myLon)).start();
-        } else {
-            android.widget.Toast.makeText(this, "위치 정보를 가져올 수 없습니다", android.widget.Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void fetchAndShowNearbyMap(double myLat, double myLon) {
-        try {
-            String url = BUS_BASE2 + "BusSttnInfoInqireService/getCrdntPrxmtSttnList"
-                    + "?serviceKey=" + BUS_KEY + "&gpsLati=" + myLat + "&gpsLong=" + myLon
-                    + "&numOfRows=20&pageNo=1&_type=xml";
-            String xml = httpGet(url);
-
-            StringBuilder stopJs = new StringBuilder();
-            for (String item : xml.split("<item>")) {
-                if (!item.contains("<nodeid>")) continue;
-                String nm  = tag(item, "nodenm");
-                String la  = tag(item, "gpslati");
-                String lo  = tag(item, "gpslong");
-                String no  = tag(item, "nodeno");
-                if (la.isEmpty() || lo.isEmpty()) continue;
-                String routes = nodeNoToRoutes.get(no);
-                String tooltip = nm.replace("'","\\'") + (routes != null ? " [" + routes + "]" : "");
-                stopJs.append(String.format(
-                    "L.circleMarker([%s,%s],{radius:8,color:'#0984E3',fillColor:'#0984E3',fillOpacity:0.9,weight:2})" +
-                    ".bindTooltip('%s',{permanent:false,direction:'top'}).addTo(map);\n",
-                    la, lo, tooltip));
-            }
-
-            String html = "<!DOCTYPE html><html><head><meta charset='utf-8'/>" +
-                "<meta name='viewport' content='width=device-width,initial-scale=1'/>" +
-                "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/>" +
-                "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>" +
-                "<style>html,body,#map{width:100%;height:100%;margin:0;padding:0;}</style>" +
-                "</head><body><div id='map'></div><script>" +
-                "var map=L.map('map').setView([" + myLat + "," + myLon + "],16);" +
-                "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'," +
-                "{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);" +
-                // 내 위치 마커
-                "L.marker([" + myLat + "," + myLon + "],{icon:L.divIcon({className:''," +
-                "html:'<div style=\"background:#E74C3C;width:16px;height:16px;border-radius:50%;" +
-                "border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5)\"></div>'," +
-                "iconSize:[16,16],iconAnchor:[8,8]})}).bindTooltip('내 위치',{permanent:true,direction:'top'}).addTo(map);" +
-                stopJs +
-                "</script></body></html>";
-
-            final String fHtml = html;
-            runOnUiThread(() -> openMapDialog("주변 정류장 지도", fHtml));
-        } catch (Exception e) {
-            runOnUiThread(() -> android.widget.Toast.makeText(this,
-                    "지도 로드 실패: " + e.getMessage(), android.widget.Toast.LENGTH_SHORT).show());
-        }
-    }
-
     /** 공통 지도 다이얼로그 표시 */
     private void openMapDialog(String title, String html) {
         android.app.Dialog mapDlg = new android.app.Dialog(this,
