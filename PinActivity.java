@@ -379,7 +379,6 @@ public class PinActivity extends AppCompatActivity {
 
     private android.os.Handler busRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable busRefreshRunnable = null;
-                clearBusAnimOverlays();
     private android.os.Handler busFavRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable busFavRefreshRunnable = null;
     private Runnable refreshRunnable;
