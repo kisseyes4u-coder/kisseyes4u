@@ -10112,9 +10112,29 @@ public class PinActivity extends AppCompatActivity {
         LinearLayout.LayoutParams tabLp1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         tabLp1.setMargins(0, 0, dpToPx(6), 0);
         tabBus.setLayoutParams(tabLp1);
-        tabStop.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        LinearLayout.LayoutParams tabStopLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        tabStopLp.setMargins(0, 0, dpToPx(6), 0);
+        tabStop.setLayoutParams(tabStopLp);
         tabRow.addView(tabBus);
         tabRow.addView(tabStop);
+
+        // 📍 내 위치 버튼
+        TextView tabMyLoc = new TextView(this);
+        tabMyLoc.setText("📍 내 위치");
+        tabMyLoc.setGravity(Gravity.CENTER);
+        tabMyLoc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tabMyLoc.setTypeface(null, android.graphics.Typeface.BOLD);
+        tabMyLoc.setPadding(dpToPx(10), dpToPx(11), dpToPx(10), dpToPx(11));
+        android.graphics.drawable.GradientDrawable myLocBg = new android.graphics.drawable.GradientDrawable();
+        myLocBg.setColor(Color.parseColor("#27AE60"));
+        myLocBg.setCornerRadius(dpToPx(8));
+        tabMyLoc.setBackground(myLocBg);
+        tabMyLoc.setTextColor(Color.WHITE);
+        tabMyLoc.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        tabMyLoc.setOnClickListener(v -> findNearbyStops(busResultContainer));
+        tabRow.addView(tabMyLoc);
+
         searchArea.addView(tabRow);
 
         // 검색창 행
@@ -10669,6 +10689,238 @@ public class PinActivity extends AppCompatActivity {
     }
 
     /** 즐겨찾기 화면 자동갱신 시작 (30초마다) */
+    /** 📍 내 위치 기반 가장 가까운 정류장 조회 */
+    private void findNearbyStops(LinearLayout container) {
+        // 위치 권한 확인
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED
+            && checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION}, 9001);
+            android.widget.Toast.makeText(this, "위치 권한을 허용해 주세요", android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 로딩 표시
+        container.removeAllViews();
+        if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
+        TextView tvLoading = new TextView(this);
+        tvLoading.setText("📍 내 위치 확인 중...");
+        tvLoading.setTextColor(Color.parseColor("#0984E3"));
+        tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvLoading.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvLoading.setGravity(Gravity.CENTER);
+        tvLoading.setPadding(0, dpToPx(24), 0, 0);
+        container.addView(tvLoading);
+
+        android.location.LocationManager lm = (android.location.LocationManager)
+                getSystemService(android.content.Context.LOCATION_SERVICE);
+        if (lm == null) { showNearbyError(container, "위치 서비스를 사용할 수 없습니다"); return; }
+
+        // 마지막 위치 우선 사용
+        android.location.Location loc = null;
+        try {
+            loc = lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER);
+            if (loc == null) loc = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER);
+        } catch (Exception ignored) {}
+
+        if (loc != null) {
+            final double lat = loc.getLatitude(), lon = loc.getLongitude();
+            tvLoading.setText("📍 주변 정류장 검색 중...");
+            new Thread(() -> fetchNearbyStops(lat, lon, container)).start();
+        } else {
+            // 실시간 위치 요청
+            tvLoading.setText("📍 GPS 신호 수신 중...");
+            android.location.LocationListener ll = new android.location.LocationListener() {
+                @Override public void onLocationChanged(android.location.Location l) {
+                    lm.removeUpdates(this);
+                    double lat = l.getLatitude(), lon = l.getLongitude();
+                    runOnUiThread(() -> tvLoading.setText("📍 주변 정류장 검색 중..."));
+                    new Thread(() -> fetchNearbyStops(lat, lon, container)).start();
+                }
+                @Override public void onStatusChanged(String p, int s, android.os.Bundle e) {}
+                @Override public void onProviderEnabled(String p) {}
+                @Override public void onProviderDisabled(String p) {
+                    runOnUiThread(() -> showNearbyError(container, "GPS가 꺼져 있습니다. 설정에서 켜주세요"));
+                }
+            };
+            try {
+                lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 0, 0, ll);
+                // 10초 후 타임아웃
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    lm.removeUpdates(ll);
+                    if (tvLoading.getText().toString().contains("GPS")) {
+                        // NETWORK로 재시도
+                        try {
+                            android.location.Location netLoc = lm.getLastKnownLocation(
+                                    android.location.LocationManager.NETWORK_PROVIDER);
+                            if (netLoc != null) {
+                                tvLoading.setText("📍 주변 정류장 검색 중...");
+                                new Thread(() -> fetchNearbyStops(netLoc.getLatitude(), netLoc.getLongitude(), container)).start();
+                            } else {
+                                showNearbyError(container, "위치를 가져올 수 없습니다\nGPS를 켜고 야외에서 시도해 주세요");
+                            }
+                        } catch (Exception e) { showNearbyError(container, "위치 오류: " + e.getMessage()); }
+                    }
+                }, 10000);
+            } catch (Exception e) { showNearbyError(container, "위치 오류: " + e.getMessage()); }
+        }
+    }
+
+    /** 주변 정류장 API 조회 및 결과 렌더링 */
+    private void fetchNearbyStops(double lat, double lon, LinearLayout container) {
+        try {
+            // 국토부 API: 위치 기반 정류장 조회 (반경 500m)
+            String url = BUS_BASE2 + "BusSttnInfoInqireService/getCrdntPrxmtSttnList"
+                    + "?serviceKey=" + BUS_KEY
+                    + "&gpsLati=" + lat
+                    + "&gpsLong=" + lon
+                    + "&numOfRows=10&pageNo=1&_type=xml";
+            String xml = httpGet(url);
+
+            java.util.List<String[]> stops = new java.util.ArrayList<>();
+            for (String item : xml.split("<item>")) {
+                if (!item.contains("<nodeid>")) continue;
+                String nodeId = tag(item, "nodeid");
+                String nodeNm = tag(item, "nodenm");
+                String nodeNo = tag(item, "nodeno");
+                String sLat   = tag(item, "gpslati");
+                String sLon   = tag(item, "gpslong");
+                if (nodeId.isEmpty()) continue;
+                // 거리 계산 (미터)
+                double dist = 99999;
+                try {
+                    double sla = Double.parseDouble(sLat), slo = Double.parseDouble(sLon);
+                    double dlat = Math.toRadians(sla - lat), dlon = Math.toRadians(slo - lon);
+                    double a = Math.sin(dlat/2)*Math.sin(dlat/2)
+                            + Math.cos(Math.toRadians(lat))*Math.cos(Math.toRadians(sla))
+                            * Math.sin(dlon/2)*Math.sin(dlon/2);
+                    dist = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                } catch (Exception ignored) {}
+                stops.add(new String[]{nodeId, nodeNm, nodeNo, String.format("%.0f", dist)});
+            }
+
+            if (stops.isEmpty()) {
+                runOnUiThread(() -> showNearbyError(container, "주변 500m 내 정류장이 없습니다"));
+                return;
+            }
+
+            // 거리순 정렬
+            stops.sort((a, b) -> {
+                try { return Double.compare(Double.parseDouble(a[3]), Double.parseDouble(b[3])); }
+                catch (Exception e) { return 0; }
+            });
+
+            runOnUiThread(() -> renderNearbyStops(stops, lat, lon, container));
+
+        } catch (Exception e) {
+            runOnUiThread(() -> showNearbyError(container, "오류: " + e.getMessage()));
+        }
+    }
+
+    /** 주변 정류장 결과 렌더링 */
+    private void renderNearbyStops(java.util.List<String[]> stops, double myLat, double myLon, LinearLayout container) {
+        container.removeAllViews();
+
+        // 헤더
+        TextView tvHeader = new TextView(this);
+        tvHeader.setText("📍 내 위치 주변 정류장");
+        tvHeader.setTextColor(Color.parseColor("#0984E3"));
+        tvHeader.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvHeader.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvHeader.setPadding(0, dpToPx(4), 0, dpToPx(12));
+        container.addView(tvHeader);
+
+        for (String[] stop : stops) {
+            String nodeId = stop[0], nodeNm = stop[1], nodeNo = stop[2], distStr = stop[3];
+            int distM = 0; try { distM = (int) Double.parseDouble(distStr); } catch (Exception ig) {}
+            String distLabel = distM >= 1000 ? String.format("%.1fkm", distM/1000.0) : distM + "m";
+
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
+            card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+            card.setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12));
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            cardLp.setMargins(0, 0, 0, dpToPx(8));
+            card.setLayoutParams(cardLp);
+
+            // 정류장명 + 거리
+            LinearLayout topRow = new LinearLayout(this);
+            topRow.setOrientation(LinearLayout.HORIZONTAL);
+            topRow.setGravity(Gravity.CENTER_VERTICAL);
+            topRow.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            TextView tvNm = new TextView(this);
+            tvNm.setText("🚏 " + nodeNm);
+            tvNm.setTextColor(Color.parseColor("#1A1A2E"));
+            tvNm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+            tvNm.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvNm.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            topRow.addView(tvNm);
+
+            TextView tvDist = new TextView(this);
+            tvDist.setText(distLabel);
+            tvDist.setTextColor(Color.parseColor("#27AE60"));
+            tvDist.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvDist.setTypeface(null, android.graphics.Typeface.BOLD);
+            topRow.addView(tvDist);
+            card.addView(topRow);
+
+            // 정류소 번호
+            if (!nodeNo.isEmpty()) {
+                TextView tvNo = new TextView(this);
+                tvNo.setText("정류소 번호 " + nodeNo);
+                tvNo.setTextColor(Color.parseColor("#AAAAAA"));
+                tvNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                LinearLayout.LayoutParams noLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                noLp.setMargins(0, dpToPx(2), 0, dpToPx(6));
+                tvNo.setLayoutParams(noLp);
+                card.addView(tvNo);
+            }
+
+            // 노선 정보 (로컬 DB에서)
+            String routes = nodeNoToRoutes.get(nodeNo);
+            if (routes != null && !routes.isEmpty()) {
+                TextView tvRoutes = new TextView(this);
+                tvRoutes.setText("🚌 " + routes.replace(",", "  "));
+                tvRoutes.setTextColor(Color.parseColor("#0984E3"));
+                tvRoutes.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                LinearLayout.LayoutParams rtLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rtLp.setMargins(0, 0, 0, dpToPx(4));
+                tvRoutes.setLayoutParams(rtLp);
+                card.addView(tvRoutes);
+            }
+
+            // 카드 클릭 → 도착화면
+            final String fNodeId = nodeId, fNodeNm = nodeNm, fNodeNo = nodeNo;
+            card.setClickable(true); card.setFocusable(true);
+            android.graphics.drawable.StateListDrawable cardSld = new android.graphics.drawable.StateListDrawable();
+            cardSld.addState(new int[]{android.R.attr.state_pressed},
+                    new android.graphics.drawable.ColorDrawable(Color.parseColor("#E3F2FD")));
+            card.setOnClickListener(v -> busScreenLoadArrival(fNodeId, fNodeNm, fNodeNo, "", container));
+
+            container.addView(card);
+        }
+    }
+
+    private void showNearbyError(LinearLayout container, String msg) {
+        container.removeAllViews();
+        TextView tv = new TextView(this);
+        tv.setText(msg);
+        tv.setTextColor(Color.parseColor("#E74C3C"));
+        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tv.setGravity(Gravity.CENTER);
+        tv.setPadding(0, dpToPx(24), 0, 0);
+        container.addView(tv);
+    }
+
     private void startFavAutoRefresh() {
         stopFavAutoRefresh();
         busFavRefreshRunnable = new Runnable() {
