@@ -202,6 +202,7 @@ public class PinActivity extends AppCompatActivity {
     private android.widget.EditText busEtSearch = null;
     private TextView busTabBus = null;  // 버스번호 탭 버튼
     private TextView busTabStop = null; // 정류장 탭 버튼
+    private TextView busTabMyLoc = null; // 내 위치 탭 버튼
     private Runnable busUpdateTabStyle = null; // 탭 스타일 업데이트
     private boolean[] busIsBusTab = {true}; // 현재 탭 상태
     private TextView splashLoadingTv = null;
@@ -10113,11 +10114,11 @@ public class PinActivity extends AppCompatActivity {
                 tabStop.setBackground(b2); tabStop.setTextColor(Color.WHITE);
             }
             // 내 위치 탭 항상 비활성 상태로 리셋 (번호/정류장 탭 선택 시)
-            if (tabMyLoc != null) {
+            if (busTabMyLoc != null) {
                 android.graphics.drawable.GradientDrawable bml = new android.graphics.drawable.GradientDrawable();
                 bml.setColor(Color.WHITE); bml.setCornerRadius(dpToPx(8));
                 bml.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
-                tabMyLoc.setBackground(bml); tabMyLoc.setTextColor(Color.parseColor("#555555"));
+                busTabMyLoc.setBackground(bml); busTabMyLoc.setTextColor(Color.parseColor("#555555"));
             }
         };
         if (busUpdateTabStyle != null) busUpdateTabStyle.run();
@@ -10132,7 +10133,8 @@ public class PinActivity extends AppCompatActivity {
         tabRow.addView(tabStop);
 
         // 내 위치 버튼 (탭과 동일한 스타일)
-        TextView tabMyLoc = new TextView(this);
+        busTabMyLoc = new TextView(this);
+        TextView tabMyLoc = busTabMyLoc;
         tabMyLoc.setText("내 위치");
         tabMyLoc.setGravity(Gravity.CENTER);
         tabMyLoc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
