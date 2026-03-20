@@ -17339,8 +17339,8 @@ public class PinActivity extends AppCompatActivity {
                 rCard.setOrientation(LinearLayout.VERTICAL);
                 rCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
                 rCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-                rCard.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
-                LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0, dpToPx(110), 1f);
+                rCard.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
+                LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
                 rCardLp.setMargins(0, 0, colIdx % 2 == 0 ? dpToPx(6) : 0, 0);
                 rCard.setLayoutParams(rCardLp);
 
@@ -17356,8 +17356,10 @@ public class PinActivity extends AppCompatActivity {
                 LinearLayout iconBtnRow = new LinearLayout(this);
                 iconBtnRow.setOrientation(LinearLayout.HORIZONTAL);
                 iconBtnRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-                iconBtnRow.setLayoutParams(new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                LinearLayout.LayoutParams iconBtnRowLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                iconBtnRowLp.setMargins(0, 0, 0, dpToPx(4));
+                iconBtnRow.setLayoutParams(iconBtnRowLp);
 
                 // 버스 이미지 (설정 왼쪽)
                 android.widget.ImageView ivFavBus = new android.widget.ImageView(this);
@@ -17690,7 +17692,7 @@ public class PinActivity extends AppCompatActivity {
                 tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
                 LinearLayout.LayoutParams rNoLp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                rNoLp.setMargins(0, dpToPx(4), 0, 0);
+                rNoLp.setMargins(0, dpToPx(2), 0, 0);
                 tvRNo.setLayoutParams(rNoLp);
                 rCard.addView(tvRNo);
 
