@@ -18065,9 +18065,9 @@ public class PinActivity extends AppCompatActivity {
 
 
 
-                // 알림 버튼
+                // 승·하차 버튼
                 TextView tvStopBell = new TextView(this);
-                tvStopBell.setText("알림");
+                tvStopBell.setText("승·하차");
                 tvStopBell.setTextColor(Color.parseColor("#5BA9F0"));
                 tvStopBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
                 tvStopBell.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -18081,7 +18081,7 @@ public class PinActivity extends AppCompatActivity {
                 tvStopBell.setLayoutParams(new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                 tvStopBell.setOnClickListener(v2 -> android.widget.Toast.makeText(this,
-                        stopName + " 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
+                        stopName + " 승·하차 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
                 sIconBtnRow.addView(tvStopBell);
                 card.addView(sIconBtnRow);
 
