@@ -14513,9 +14513,16 @@ public class PinActivity extends AppCompatActivity {
                     busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
                     busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                 } else {
-                    busSoonTV.setText("곧 도착 없음");
-                    busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
-                    busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    // 곧 도착 없음 - refreshSoonTV와 동일한 스타일
+                    android.text.SpannableStringBuilder ssbNone2 = new android.text.SpannableStringBuilder();
+                    int s1 = ssbNone2.length(); ssbNone2.append("곧 도착");
+                    ssbNone2.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#E74C3C")), s1, ssbNone2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    ssbNone2.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), s1, ssbNone2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    int s2 = ssbNone2.length(); ssbNone2.append(" 없음");
+                    ssbNone2.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#222222")), s2, ssbNone2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    ssbNone2.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), s2, ssbNone2.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    busSoonTV.setText(ssbNone2, android.widget.TextView.BufferType.SPANNABLE);
+                    busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
                 }
             }
         }
