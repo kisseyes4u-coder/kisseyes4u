@@ -19865,7 +19865,7 @@ public class PinActivity extends AppCompatActivity {
                 if (stopBusBmp != null) {
                     android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
                     ivStopBus.setImageBitmap(stopBusBmp);
-                    int iconSize = dpToPx(32);
+                    int iconSize = dpToPx(24);
                     LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(iconSize, iconSize);
                     stopBusLp.setMargins(0, 0, dpToPx(6), 0);
                     stopBusLp.gravity = Gravity.CENTER_VERTICAL;
