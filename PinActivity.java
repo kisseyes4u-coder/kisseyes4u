@@ -165,6 +165,7 @@ public class PinActivity extends AppCompatActivity {
     // ── 버스 검색 화면 ─────────────────────────────────────
     private LinearLayout busSearchArea = null;
     private LinearLayout busFixedHeader = null;
+    private LinearLayout busBottomBar = null; // 하단 고정 버튼 영역
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     private java.util.List<String[]> routeDbList = null;
@@ -10281,7 +10282,15 @@ public class PinActivity extends AppCompatActivity {
 
         root.addView(sv);
 
-        // ── 오너 전용: 정류장 DB 업데이트 버튼 ────────────
+        // ── 하단 고정 버튼 영역 (알림시작 등) ──────────
+        LinearLayout bottomBar = new LinearLayout(this);
+        bottomBar.setOrientation(LinearLayout.VERTICAL);
+        bottomBar.setVisibility(android.view.View.GONE);
+        bottomBar.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        bottomBar.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        busBottomBar = bottomBar;
+        root.addView(bottomBar);
         if (isOwner) {
             LinearLayout ownerBar = new LinearLayout(this);
             ownerBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -11514,6 +11523,11 @@ public class PinActivity extends AppCompatActivity {
         int busColor2 = android.graphics.Color.parseColor(colorHex);
         busResultContainer.removeAllViews();
         busResultContainer.setOrientation(LinearLayout.VERTICAL);
+        // busBottomBar 초기화
+        if (busBottomBar != null) {
+            busBottomBar.removeAllViews();
+            busBottomBar.setVisibility(android.view.View.VISIBLE);
+        }
 
         // stops 로드 - 승차 정류장부터 하차 정류장까지 전체
         android.content.SharedPreferences bc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
@@ -11532,12 +11546,10 @@ public class PinActivity extends AppCompatActivity {
             if (inRange && (s[0].equals(alightNodeId) || s[1].equals(alightNodeNm))) break;
         }
 
-        // 스크롤 영역 (weight=1로 버튼 위 공간 모두 차지)
+        // 스크롤 영역 - busResultContainer 전체 사용 (버튼은 busBottomBar에 고정)
         ScrollView sv2 = new ScrollView(this);
-        LinearLayout.LayoutParams svLp2 = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0);
-        svLp2.weight = 1f;
-        sv2.setLayoutParams(svLp2);
+        sv2.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
 
         LinearLayout content2 = new LinearLayout(this);
         content2.setOrientation(LinearLayout.VERTICAL);
@@ -11722,27 +11734,25 @@ public class PinActivity extends AppCompatActivity {
             boolean nowSet = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
                     .getBoolean("alarm_alight_" + routeId + "_" + alightNodeId, false);
             if (nowSet) {
-                // 알림 종료
                 getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
                         .remove("alarm_alight_" + routeId + "_" + alightNodeId)
                         .remove("alarm_alight_last_" + routeId)
                         .apply();
+                if (busBottomBar != null) busBottomBar.setVisibility(android.view.View.GONE);
                 busNavigateBack();
             } else {
-                // 알림 시작 - 저장
                 getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
                         .putBoolean("alarm_alight_" + routeId + "_" + alightNodeId, true)
                         .putString("alarm_alight_last_" + routeId, alightNodeId)
                         .apply();
                 android.widget.Toast.makeText(this,
                         alightNodeNm + " 하차알림이 설정되었습니다", android.widget.Toast.LENGTH_SHORT).show();
-                // 버튼 알림종료로 변경
                 tvAlarmBtn.setText("알림종료");
                 alarmBtnBg.setColor(Color.parseColor("#F05454"));
                 tvAlarmBtn.setBackground(alarmBtnBg);
             }
         });
-        busResultContainer.addView(tvAlarmBtn);
+        if (busBottomBar != null) busBottomBar.addView(tvAlarmBtn);
     }
 
     /** 승/하차 정류장 행 빌더 */
@@ -11887,6 +11897,8 @@ public class PinActivity extends AppCompatActivity {
 
     /** 버스 화면 뒤로가기 - 백스택 기반 */
     private void busNavigateBack() {
+        // busBottomBar 항상 숨김 (알림시작 화면 벗어날 때)
+        if (busBottomBar != null) { busBottomBar.removeAllViews(); busBottomBar.setVisibility(android.view.View.GONE); }
         // 현재 화면을 스택에서 제거
         if (!busBackStack.isEmpty()) busBackStack.pop();
 
