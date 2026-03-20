@@ -11166,8 +11166,18 @@ public class PinActivity extends AppCompatActivity {
             tvRno.setTypeface(null, android.graphics.Typeface.BOLD);
             subBar.addView(tvRno);
 
+            // stop.png 아이콘 (핀 이모티콘 대신)
+            android.widget.ImageView ivStopH = new android.widget.ImageView(this);
+            android.graphics.Bitmap stopBmpH = getStopIconColor(android.graphics.Color.parseColor("#555555"));
+            if (stopBmpH != null) ivStopH.setImageBitmap(stopBmpH);
+            ivStopH.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            LinearLayout.LayoutParams stopHLp = new LinearLayout.LayoutParams(dpToPx(16), dpToPx(16));
+            stopHLp.gravity = Gravity.CENTER_VERTICAL;
+            stopHLp.setMargins(dpToPx(8), 0, dpToPx(4), 0);
+            ivStopH.setLayoutParams(stopHLp);
+            subBar.addView(ivStopH);
             TextView tvPin = new TextView(this);
-            tvPin.setText("  \uD83D\uDCCD" + nodeNm + (nodeNo.isEmpty() ? "" : "(" + nodeNo + ")"));
+            tvPin.setText(nodeNm + (nodeNo.isEmpty() ? "" : "(" + nodeNo + ")"));
             tvPin.setTextColor(Color.parseColor("#555555"));
             tvPin.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
             subBar.addView(tvPin);
@@ -11203,10 +11213,13 @@ public class PinActivity extends AppCompatActivity {
             if (foundBoard) afterStops.add(s);
         }
 
-        // 현재 설정된 하차 정류장
+        // 현재 설정된 하차 정류장 (실제 알림이 켜진 것만)
         final String alightPrefKey = "alarm_alight_last_" + routeId;
-        String savedAlightId = alightNodeId != null ? alightNodeId :
-                getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString(alightPrefKey, "");
+        String lastUsedId = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString(alightPrefKey, "");
+        // 실제로 알림이 켜져 있는지 확인
+        boolean lastUsedActive = !lastUsedId.isEmpty() &&
+                getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean("alarm_alight_" + routeId + "_" + lastUsedId, false);
+        String savedAlightId = alightNodeId != null ? alightNodeId : (lastUsedActive ? lastUsedId : "");
         String savedAlightNm = alightNodeNm != null ? alightNodeNm : "";
         if (savedAlightNm.isEmpty() && !savedAlightId.isEmpty()) {
             for (String[] s : afterStops) {
@@ -11288,7 +11301,7 @@ public class PinActivity extends AppCompatActivity {
         tvAlightSec.setPadding(0, 0, 0, dpToPx(8));
         content.addView(tvAlightSec);
 
-        // 정류장 목록 (타임라인 스타일)
+        // 정류장 목록 - 타임라인과 동일한 방식
         if (afterStops.isEmpty()) {
             TextView tvNo = new TextView(this);
             tvNo.setText("이후 정류장 정보가 없습니다\n타임라인을 먼저 열어주세요");
@@ -11300,72 +11313,99 @@ public class PinActivity extends AppCompatActivity {
             for (int i = 0; i < afterStops.size(); i++) {
                 String[] s = afterStops.get(i);
                 final String sId = s[0], sNm = s[1], sNo = s.length > 3 ? s[3] : "";
-                boolean isLast = (i == afterStops.size() - 1);
+                final boolean fIsFirst = (i == 0);
+                final boolean fIsLast  = (i == afterStops.size() - 1);
                 boolean isSelected = sId.equals(savedAlightId);
                 boolean isLastUsed = sId.equals(
                         getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString(alightPrefKey, ""))
                         && !isSelected;
 
+                // 정류소 행
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setGravity(Gravity.CENTER_VERTICAL);
-                int rowPad = dpToPx(8);
-                row.setPadding(0, rowPad, 0, rowPad);
+                row.setGravity(Gravity.TOP);
+                row.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                row.setBackgroundColor(Color.TRANSPARENT);
 
-                // ── 타임라인 컬럼 (stop.png 사용) ──
+                // ── 타임라인 FrameLayout (세로줄 + 원) ── 타임라인과 동일
                 android.widget.FrameLayout tlFrame = new android.widget.FrameLayout(this);
                 tlFrame.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
 
-                // 위쪽 선
-                android.view.View lineTop2 = new android.view.View(this);
-                lineTop2.setBackgroundColor(Color.parseColor("#CCCCCC"));
-                android.widget.FrameLayout.LayoutParams ltLp2 = new android.widget.FrameLayout.LayoutParams(dpToPx(2), dpToPx(20));
-                ltLp2.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-                lineTop2.setLayoutParams(ltLp2);
-                tlFrame.addView(lineTop2);
+                // 세로줄
+                android.view.View lineView2 = new android.view.View(this) {
+                    @Override protected void onDraw(android.graphics.Canvas canvas) {
+                        super.onDraw(canvas);
+                        int w=getWidth(), h=getHeight(); float cx=w/2f;
+                        android.graphics.Paint lP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        lP.setColor(Color.parseColor("#AED6F1")); lP.setStrokeWidth(dpToPx(2));
+                        if (!fIsFirst) canvas.drawLine(cx, 0, cx, h, lP);
+                        else           canvas.drawLine(cx, h/2f, cx, h, lP);
+                        if (fIsLast) {
+                            android.graphics.Paint cp = new android.graphics.Paint();
+                            cp.setColor(Color.parseColor("#F2F4F8"));
+                            canvas.drawRect(cx-dpToPx(2), h/2f, cx+dpToPx(2), h, cp);
+                        }
+                    }
+                };
+                lineView2.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+                tlFrame.addView(lineView2);
 
-                // 아래쪽 선 (마지막 제외)
-                if (!isLast) {
-                    android.view.View lineBotV = new android.view.View(this);
-                    lineBotV.setBackgroundColor(Color.parseColor("#CCCCCC"));
-                    android.widget.FrameLayout.LayoutParams lbLp2 = new android.widget.FrameLayout.LayoutParams(dpToPx(2), dpToPx(20));
-                    lbLp2.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-                    lineBotV.setLayoutParams(lbLp2);
-                    tlFrame.addView(lineBotV);
-                }
-
-                // stop.png 아이콘 (선택된 정류장은 노선 색상, 아니면 회색)
-                android.widget.ImageView ivStop = new android.widget.ImageView(this);
-                android.graphics.Bitmap stopBmp = isSelected
-                        ? getStopIconColor(busColor)
-                        : getStopIconColor(0xFFAAAAAA);
-                if (stopBmp != null) ivStop.setImageBitmap(stopBmp);
-                ivStop.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-                android.widget.FrameLayout.LayoutParams stopLp = new android.widget.FrameLayout.LayoutParams(dpToPx(22), dpToPx(22));
-                stopLp.gravity = Gravity.CENTER;
-                ivStop.setLayoutParams(stopLp);
-                tlFrame.addView(ivStop);
+                // 원 (stop.png 대신 타임라인과 동일한 원)
+                android.view.View circleView2 = new android.view.View(this) {
+                    @Override protected void onDraw(android.graphics.Canvas canvas) {
+                        super.onDraw(canvas);
+                        int w=getWidth(), h=getHeight(); float cx=w/2f, cr=dpToPx(9);
+                        android.graphics.Paint bgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        bgP.setColor(Color.parseColor("#F2F4F8"));
+                        canvas.drawRect(cx-cr-dpToPx(2), h/2f-cr-dpToPx(1), cx+cr+dpToPx(2), h/2f+cr+dpToPx(1), bgP);
+                        android.graphics.Paint cP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        cP.setStyle(android.graphics.Paint.Style.STROKE); cP.setStrokeWidth(dpToPx(1));
+                        cP.setColor(Color.parseColor(isSelected ? badge[1] : "#0984E3"));
+                        canvas.drawCircle(cx, h/2f, cr, cP);
+                        android.graphics.Paint wP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        wP.setColor(Color.WHITE);
+                        canvas.drawCircle(cx, h/2f, cr-dpToPx(1), wP);
+                        if (isSelected) {
+                            android.graphics.Paint dotP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                            dotP.setColor(Color.parseColor(badge[1]));
+                            canvas.drawCircle(cx, h/2f, dpToPx(4), dotP);
+                        }
+                    }
+                };
+                circleView2.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(48)));
+                tlFrame.addView(circleView2);
                 row.addView(tlFrame);
 
-                // 정류장 이름 + 번호
+                // 정류장 정보 + 하차 버튼
                 LinearLayout stopInfo = new LinearLayout(this);
-                stopInfo.setOrientation(LinearLayout.VERTICAL);
+                stopInfo.setOrientation(LinearLayout.HORIZONTAL);
+                stopInfo.setGravity(Gravity.CENTER_VERTICAL);
+                stopInfo.setMinimumHeight(dpToPx(48));
                 stopInfo.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-                stopInfo.setPadding(dpToPx(8), 0, 0, 0);
+                stopInfo.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
 
-                TextView tvStopNm2 = new TextView(this);
-                tvStopNm2.setText(sNm);
-                tvStopNm2.setTextColor(isSelected ? Color.parseColor(badge[1]) : Color.parseColor("#333333"));
-                tvStopNm2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
-                if (isSelected) tvStopNm2.setTypeface(null, android.graphics.Typeface.BOLD);
-                stopInfo.addView(tvStopNm2);
+                // 이름+번호 열
+                LinearLayout nameCol = new LinearLayout(this);
+                nameCol.setOrientation(LinearLayout.VERTICAL);
+                nameCol.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+                TextView tvSNm = new TextView(this);
+                tvSNm.setText(sNm);
+                tvSNm.setTextColor(isSelected ? Color.parseColor(badge[1]) : Color.parseColor("#333333"));
+                tvSNm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                if (isSelected) tvSNm.setTypeface(null, android.graphics.Typeface.BOLD);
+                nameCol.addView(tvSNm);
 
                 if (!sNo.isEmpty()) {
-                    TextView tvStopNo2 = new TextView(this);
-                    tvStopNo2.setText(sNo);
-                    tvStopNo2.setTextColor(Color.parseColor("#AAAAAA"));
-                    tvStopNo2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-                    stopInfo.addView(tvStopNo2);
+                    TextView tvSNo = new TextView(this);
+                    tvSNo.setText(sNo);
+                    tvSNo.setTextColor(Color.parseColor("#AAAAAA"));
+                    tvSNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                    nameCol.addView(tvSNo);
                 }
                 if (isLastUsed) {
                     TextView tvRecent2 = new TextView(this);
@@ -11382,11 +11422,11 @@ public class PinActivity extends AppCompatActivity {
                             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                     rLp2.setMargins(0, dpToPx(3), 0, 0);
                     tvRecent2.setLayoutParams(rLp2);
-                    stopInfo.addView(tvRecent2);
+                    nameCol.addView(tvRecent2);
                 }
-                row.addView(stopInfo);
+                stopInfo.addView(nameCol);
 
-                // 하차 버튼 (승·하차 스타일)
+                // 하차 버튼
                 final String fSId = sId, fSNm = sNm;
                 TextView tvAlightBtn = new TextView(this);
                 tvAlightBtn.setText("하차");
@@ -11410,20 +11450,11 @@ public class PinActivity extends AppCompatActivity {
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 alightBtnLp.gravity = Gravity.CENTER_VERTICAL;
                 tvAlightBtn.setLayoutParams(alightBtnLp);
-                tvAlightBtn.setOnClickListener(vb -> {
-                    // 하차 버튼 클릭 → 하차 알림 상세 화면
-                    showAlightAlarmDetail(routeNo, routeId, nodeId, nodeNm, nodeNo, fSId, fSNm, badge[1]);
-                });
-                row.addView(tvAlightBtn);
+                tvAlightBtn.setOnClickListener(vb ->
+                    showAlightAlarmDetail(routeNo, routeId, nodeId, nodeNm, nodeNo, fSId, fSNm, badge[1]));
+                stopInfo.addView(tvAlightBtn);
+                row.addView(stopInfo);
                 content.addView(row);
-
-                if (!isLast) {
-                    android.view.View rowDiv2 = new android.view.View(this);
-                    rowDiv2.setBackgroundColor(Color.parseColor("#F0F0F0"));
-                    rowDiv2.setLayoutParams(new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
-                    content.addView(rowDiv2);
-                }
             }
         }
     }
