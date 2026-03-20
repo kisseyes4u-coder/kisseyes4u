@@ -11068,37 +11068,43 @@ public class PinActivity extends AppCompatActivity {
             "L.polyline(latlngs,{color:'#0984E3',weight:4,opacity:0.8}).addTo(map);" +
             allCoordsJs +
             stopJs +
-            "var buses={};" +
+            "var buses={};var busFrom={};var busTo={};var busLabels={};" +
             "function makeBusIcon(label){" +
             "  var lbl=label&&label.length>0?label:'--';" +
             "  return L.divIcon({className:''," +
-            "  html:'<div class=\"bus-wrap\"><img src=\"file:///android_asset/bluebus.png\" width=\"48\" height=\"36\" style=\"filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))\"/><div class=\"bus-label\">'+lbl+'</div></div>'," +
+            "  html:'<div class=\"bus-wrap\"><img src=\"file:///android_asset/bluebus.png\" width=\"48\" height=\"36\" style=\"filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))\"/><div class=\"bus-label\">'+ lbl +'</div></div>'," +
             "  iconSize:[48,54],iconAnchor:[24,27]});}" +
-            "function addBus(id,latlng,label){" +
-            "  var lbl=label||'';" +
-            "  if(buses[id]){buses[id].setLatLng(latlng);buses[id].setIcon(makeBusIcon(lbl));}" +
-            "  else{buses[id]=L.marker(latlng,{icon:makeBusIcon(lbl)}).addTo(map);}" +
-            "}" +
             "function interp(a,b,t){return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];}" +
-            // updateBuses: [[toIdx, arrSec], ...] — toIdx=도착할정류장인덱스, arrSec=남은초
-            "var animTargets=[];var animTimer=null;var animStart=0;" +
-            "function updateBuses(busData){" +
-            "  animTargets=busData;animStart=Date.now();" +
+            "var animTimer=null;var animStart=0;var animDur=20;" +
+            "function startAnim(){" +
             "  if(animTimer)clearInterval(animTimer);" +
+            "  animStart=Date.now();" +
             "  animTimer=setInterval(function(){" +
-            "    var elapsed=(Date.now()-animStart)/1000;" +
-            "    animTargets.forEach(function(b,i){" +
-            "      var toIdx=b[0],arrSec=b[1],lbl=b[2]||'',lat=b[3],lon=b[4];" +
-            "      if(lat&&lat>0&&lon&&lon>0){" +
-            "        addBus(i,[lat,lon],lbl);" +
-            "      } else {" +
-            "        if(toIdx<1||toIdx>=allCoords.length)return;" +
-            "        var fromIdx=toIdx-1;" +
-            "        var t=Math.min(elapsed/Math.max(arrSec,1),1);" +
-            "        addBus(i,interp(allCoords[fromIdx],allCoords[toIdx],t),lbl);" +
-            "      }" +
+            "    var t=Math.min((Date.now()-animStart)/1000/animDur,1);" +
+            "    var e=t<0.5?2*t*t:(4-2*t)*t-1;" +
+            "    Object.keys(busTo).forEach(function(id){" +
+            "      var f=busFrom[id],to=busTo[id];" +
+            "      if(!f||!to)return;" +
+            "      var pos=interp(f,to,e);" +
+            "      if(buses[id])buses[id].setLatLng(pos);" +
+            "      else buses[id]=L.marker(pos,{icon:makeBusIcon(busLabels[id]||'--')}).addTo(map);" +
             "    });" +
             "  },500);" +
+            "}" +
+            "function updateBuses(busData){" +
+            "  busData.forEach(function(b,i){" +
+            "    var toIdx=b[0],lbl=b[2]||'',lat=b[3],lon=b[4];" +
+            "    var newPos=null;" +
+            "    if(lat&&lat>0&&lon&&lon>0){newPos=[lat,lon];}" +
+            "    else if(toIdx>=1&&toIdx<allCoords.length){newPos=allCoords[toIdx];}" +
+            "    if(!newPos)return;" +
+            "    busLabels[i]=lbl;" +
+            "    busFrom[i]=buses[i]?[buses[i].getLatLng().lat,buses[i].getLatLng().lng]:newPos;" +
+            "    busTo[i]=newPos;" +
+            "    if(!buses[i])buses[i]=L.marker(newPos,{icon:makeBusIcon(lbl)}).addTo(map);" +
+            "    else buses[i].setIcon(makeBusIcon(lbl));" +
+            "  });" +
+            "  startAnim();" +
             "}" +
             "if(latlngs.length>0)map.fitBounds(L.polyline(latlngs).getBounds().pad(0.1));" +
             busJs +
