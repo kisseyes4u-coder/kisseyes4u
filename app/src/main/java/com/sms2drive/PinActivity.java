@@ -19196,6 +19196,26 @@ public class PinActivity extends AppCompatActivity {
                 }
                 // ② 노선 즐겨찾기: 운행대수 + GPS 수신 체크
                 int totalFavBus = 0, gpsRecvBus = 0;
+
+                // ② - A: 정류소 즐겨찾기 노선도 LC API GPS 체크
+                java.util.Set<String> checkedRouteIds = new java.util.HashSet<>();
+                for (String compositeKey : fFavKeys) {
+                    String routeId2 = prefs.getString("fav_stop_routeid_" + compositeKey, "");
+                    if (routeId2.isEmpty() || checkedRouteIds.contains(routeId2)) continue;
+                    checkedRouteIds.add(routeId2);
+                    try {
+                        String lcXml3 = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&routeId=" + routeId2 + "&numOfRows=50&pageNo=1&_type=xml");
+                        int cnt3 = 0; try { cnt3 = Integer.parseInt(tag(lcXml3, "totalCount")); } catch (Exception ig) {}
+                        totalFavBus += cnt3;
+                        for (String item3 : lcXml3.split("<item>")) {
+                            if (!tag(item3, "gpslati").isEmpty() && !tag(item3, "gpslong").isEmpty()) gpsRecvBus++;
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // ② - B: 노선 즐겨찾기: 운행대수 + GPS 수신 체크
                 for (String rKey2 : fFavRouteKeys) {
                     String rId2 = prefs.getString("fav_route_id_" + rKey2, "");
                     if (rId2.isEmpty()) continue;
