@@ -12967,7 +12967,7 @@ public class PinActivity extends AppCompatActivity {
             tvBell2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
             tvBell2.setTypeface(null, android.graphics.Typeface.BOLD);
             tvBell2.setGravity(Gravity.CENTER);
-            tvBell2.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
+            tvBell2.setPadding(dpToPx(5), dpToPx(4), dpToPx(5), dpToPx(4));
             android.graphics.drawable.GradientDrawable bellBg2 = new android.graphics.drawable.GradientDrawable();
             bellBg2.setCornerRadius(dpToPx(6));
             if (isAlarmed2) { bellBg2.setColor(Color.parseColor("#5BA9F0")); bellBg2.setStroke(dpToPx(1), Color.parseColor("#5BA9F0")); tvBell2.setTextColor(Color.WHITE); }
@@ -17629,7 +17629,7 @@ public class PinActivity extends AppCompatActivity {
                 tvBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
                 tvBell.setTypeface(null, android.graphics.Typeface.BOLD);
                 tvBell.setGravity(Gravity.CENTER);
-                tvBell.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
+                tvBell.setPadding(dpToPx(5), dpToPx(4), dpToPx(5), dpToPx(4));
                 android.graphics.drawable.GradientDrawable bellBg = new android.graphics.drawable.GradientDrawable();
                 bellBg.setColor(Color.parseColor("#EBF5FB"));
                 bellBg.setCornerRadius(dpToPx(6));
@@ -18072,7 +18072,7 @@ public class PinActivity extends AppCompatActivity {
                 tvStopBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
                 tvStopBell.setTypeface(null, android.graphics.Typeface.BOLD);
                 tvStopBell.setGravity(Gravity.CENTER);
-                tvStopBell.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
+                tvStopBell.setPadding(dpToPx(5), dpToPx(4), dpToPx(5), dpToPx(4));
                 android.graphics.drawable.GradientDrawable stopBellBg = new android.graphics.drawable.GradientDrawable();
                 stopBellBg.setColor(Color.parseColor("#EBF5FB"));
                 stopBellBg.setCornerRadius(dpToPx(6));
