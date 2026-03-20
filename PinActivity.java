@@ -17308,6 +17308,12 @@ public class PinActivity extends AppCompatActivity {
         if (!skipPrefetch) {
             final java.util.List<String> fFavKeys = new java.util.ArrayList<>(favKeys);
             final java.util.List<String> fFavRouteKeys = new java.util.ArrayList<>(favRouteKeys);
+            // busTimesMap 비어있으면 로드 시도
+            if (busTimesMap.isEmpty()) {
+                String btCached = loadBusTimes();
+                if (btCached.isEmpty()) btCached = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString("bustimes_txt_cache", "");
+                if (!btCached.isEmpty()) loadBusTimesFromJson(btCached);
+            }
             // UI 스레드에서 미리 출발시간 수집 (busTimesMap은 메인 스레드에서만 안전)
             final java.util.Map<String, String> nextDepartureMap = new java.util.HashMap<>();
             for (String compositeKey : fFavKeys) {
@@ -17367,7 +17373,36 @@ public class PinActivity extends AppCompatActivity {
                         }
                         arrivalSessionCache.put(nodeId, new Object[]{System.currentTimeMillis(),
                                 new java.util.ArrayList<>(), arrMap});
-                    } catch (Exception ignored) {}
+                        // API에 없는 노선도 nextDepartureMap에서 보완
+                        // compositeKey에서 routeNo 찾아서 arrMap에 없으면 추가
+                        for (String ck : fFavKeys) {
+                            String rno3 = prefs.getString("fav_stop_route_" + ck, "");
+                            String nid3 = ck.contains("_") ? ck.substring(ck.indexOf("_") + 1) : ck;
+                            if (!nid3.equals(nodeId) || rno3.isEmpty()) continue;
+                            if (!arrMap.containsKey(rno3)) {
+                                String nd3 = nextDepartureMap.get(rno3);
+                                if (nd3 != null && !nd3.isEmpty()) {
+                                    arrMap.put(rno3, new String[]{nd3, "", "#555555", "", ""});
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {
+                        // API 실패해도 nextDepartureMap으로 최소한의 캐시 구성
+                        java.util.Map<String, String[]> fallbackMap = new java.util.HashMap<>();
+                        for (String ck : fFavKeys) {
+                            String rno3 = prefs.getString("fav_stop_route_" + ck, "");
+                            String nid3 = ck.contains("_") ? ck.substring(ck.indexOf("_") + 1) : ck;
+                            if (!nid3.equals(nodeId) || rno3.isEmpty()) continue;
+                            String nd3 = nextDepartureMap.get(rno3);
+                            if (nd3 != null && !nd3.isEmpty()) {
+                                fallbackMap.put(rno3, new String[]{nd3, "", "#555555", "", ""});
+                            }
+                        }
+                        if (!fallbackMap.isEmpty()) {
+                            arrivalSessionCache.put(nodeId, new Object[]{System.currentTimeMillis(),
+                                    new java.util.ArrayList<>(), fallbackMap});
+                        }
+                    }
                 }
                 // ② 노선 즐겨찾기: 운행대수 API
                 for (String rKey2 : fFavRouteKeys) {
