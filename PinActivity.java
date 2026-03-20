@@ -11088,9 +11088,11 @@ public class PinActivity extends AppCompatActivity {
     /** 정류소 카드 렌더링 공통 */
     private void renderStopCards(java.util.List<String[]> stops, String keyword, LinearLayout container) {
         for (String[] s : stops) {
-            LinearLayout card = makeBusCard(s[1],
-                    s[2].isEmpty() ? "" : s[2],
-                    "", "#0984E3");
+            // 방면 계산 (bus_cache에서 다음 정류소 최빈값)
+            String dir4s = getDirectionForNode(s[0]);
+            String subLabel = s[2].isEmpty() ? dir4s
+                    : (dir4s.isEmpty() ? s[2] : s[2] + "  |  " + dir4s);
+            LinearLayout card = makeBusCard(s[1], subLabel, "", "#0984E3");
             card.setOnClickListener(v -> {
                 android.view.inputmethod.InputMethodManager imm2 =
                     (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
@@ -12362,38 +12364,15 @@ public class PinActivity extends AppCompatActivity {
                 // 로컬 캐시 없으면 실시간 API 결과만 사용 (fallback)
                 boolean localDataFound = !allRoutes.isEmpty();
 
-                // ── 방면 계산: 각 노선에서 nodeId 다음 정류소 수집 → 최빈값 ──
-                if (busDirectionTV != null && !allRoutes.isEmpty()) {
-                    java.util.Map<String, Integer> nextStopCount = new java.util.HashMap<>();
-                    android.content.SharedPreferences bc5 = getSharedPreferences("bus_cache", MODE_PRIVATE);
-                    for (String[] rt : allRoutes) {
-                        String rid5 = rt.length > 1 ? rt[1] : "";
-                        if (rid5.isEmpty()) continue;
-                        String stopsStr5 = bc5.getString("route_" + rid5 + "_stops", "");
-                        if (stopsStr5.isEmpty()) continue;
-                        String[] items5 = stopsStr5.split(";");
-                        for (int si5 = 0; si5 < items5.length - 1; si5++) {
-                            String[] sp5 = items5[si5].split("\\|");
-                            if (sp5.length > 0 && sp5[0].equals(nodeId)) {
-                                String[] spN = items5[si5 + 1].split("\\|");
-                                if (spN.length > 1 && !spN[1].isEmpty()) {
-                                    String nm5 = spN[1];
-                                    nextStopCount.put(nm5, nextStopCount.getOrDefault(nm5, 0) + 1);
-                                }
-                                break;
-                            }
+                // ── 방면 계산: getDirectionForNode 사용 ──
+                if (busDirectionTV != null) {
+                    final String nodeId4dir = nodeId;
+                    new Thread(() -> {
+                        String dir4a = getDirectionForNode(nodeId4dir);
+                        if (!dir4a.isEmpty()) {
+                            runOnUiThread(() -> { if (busDirectionTV != null) busDirectionTV.setText(dir4a); });
                         }
-                    }
-                    if (!nextStopCount.isEmpty()) {
-                        // 가장 많이 나온 다음 정류소
-                        String topNext = "";
-                        int topCnt = 0;
-                        for (java.util.Map.Entry<String, Integer> e5 : nextStopCount.entrySet()) {
-                            if (e5.getValue() > topCnt) { topCnt = e5.getValue(); topNext = e5.getKey(); }
-                        }
-                        final String dirFinal = topNext + " 방면";
-                        runOnUiThread(() -> { if (busDirectionTV != null) busDirectionTV.setText(dirFinal); });
-                    }
+                    }).start();
                 }
 
                 // ── STEP 2: 실시간 도착정보 API ──────────────────────────────
@@ -18075,6 +18054,38 @@ public class PinActivity extends AppCompatActivity {
             gridRow.addView(emptyFav);
         }
         if (colIdx > 0) favSection.addView(grid);
+    }
+
+    /** nodeId 기준 다음 정류소 최빈값 → 방면 문자열 반환 */
+    private String getDirectionForNode(String nodeId) {
+        android.content.SharedPreferences bc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+        java.util.Map<String, Integer> countMap = new java.util.HashMap<>();
+        // bus_cache에서 route_*_stops 키 순회
+        java.util.Map<String, ?> allKeys = bc.getAll();
+        for (java.util.Map.Entry<String, ?> e : allKeys.entrySet()) {
+            String k = e.getKey();
+            if (!k.endsWith("_stops")) continue;
+            String stopsStr = (String) e.getValue();
+            if (stopsStr == null || stopsStr.isEmpty()) continue;
+            String[] items = stopsStr.split(";");
+            for (int i = 0; i < items.length - 1; i++) {
+                String[] sp = items[i].split("\|");
+                if (sp.length > 0 && sp[0].equals(nodeId)) {
+                    String[] spN = items[i + 1].split("\|");
+                    if (spN.length > 1 && !spN[1].isEmpty()) {
+                        String nm = spN[1];
+                        countMap.put(nm, countMap.containsKey(nm) ? countMap.get(nm) + 1 : 1);
+                    }
+                    break;
+                }
+            }
+        }
+        if (countMap.isEmpty()) return "";
+        String top = ""; int topCnt = 0;
+        for (java.util.Map.Entry<String, Integer> e : countMap.entrySet()) {
+            if (e.getValue() > topCnt) { topCnt = e.getValue(); top = e.getKey(); }
+        }
+        return top.isEmpty() ? "" : top + " 방면";
     }
 
     /** fav_order에 항목 추가 (중복 방지) + 타임스탬프 저장 */
