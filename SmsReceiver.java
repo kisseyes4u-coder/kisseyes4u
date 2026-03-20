@@ -300,6 +300,37 @@ public class SmsReceiver extends BroadcastReceiver {
                     continue;
                 }
 
+                // ★ 농협+날짜+계좌 한 줄 형식: "농협03/20 20:23 351-****-5510-13"
+                if (t.startsWith("농협") && t.matches("농협\\d{2}/\\d{2}\\s+\\d{2}:\\d{2}.*")) {
+                    java.util.regex.Matcher dm3 = java.util.regex.Pattern
+                            .compile("(\\d{2}/\\d{2}\\s+\\d{2}:\\d{2})").matcher(t);
+                    if (dm3.find()) out2 = convertDateTimeToKorean(dm3.group(1));
+                    java.util.regex.Matcher am3 = java.util.regex.Pattern
+                            .compile("(351-[\\S]+)").matcher(t);
+                    if (am3.find()) out3 = addAccountName(am3.group(1));
+                    continue;
+                }
+
+                // ★ 자동출금+가게명 한 줄: "자동출금8,170원((주)씨엠비)"
+                if (t.contains("자동출금") || t.contains("자동입금")) {
+                    // 금액 추출
+                    java.util.regex.Matcher om2 = java.util.regex.Pattern
+                            .compile("(자동(출금|입금)\\s*[\\d,]+원)").matcher(t);
+                    if (om2.find()) {
+                        out1 = om2.group(1).replaceAll("(출금|입금)(\\d)", "$1 $2");
+                        // 금액 뒤 나머지를 가게명으로
+                        String afterAmt = t.substring(om2.end()).trim();
+                        if (!afterAmt.isEmpty() && out4.isEmpty()) {
+                            // 괄호 처리: ((주)씨엠비) → (주)씨엠비
+                            afterAmt = afterAmt.replaceAll("^\\(\\(", "(").replaceAll("\\)\\)$", ")");
+                            out4 = afterAmt;
+                        }
+                    } else {
+                        out1 = t;
+                    }
+                    continue;
+                }
+
                 // 출금/입금 줄: "농협 출금30,000원" / "농협 입금50,000원"
                 if ((t.contains("출금") || t.contains("입금")) && !t.contains("잔액")) {
                     out1 = t.replaceAll("(출금|입금)(\\d)", "$1 $2");
