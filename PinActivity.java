@@ -11985,18 +11985,17 @@ public class PinActivity extends AppCompatActivity {
             titleBar.setOrientation(LinearLayout.HORIZONTAL);
             titleBar.setGravity(Gravity.CENTER_VERTICAL);
             titleBar.setBackgroundColor(Color.parseColor("#F2F4F8"));
-            titleBar.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
             LinearLayout.LayoutParams titleBarLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            titleBarLp.setMargins(0, dpToPx(4), 0, 0);
+            titleBarLp.setMargins(dpToPx(12), dpToPx(4), dpToPx(12), 0);
             titleBar.setLayoutParams(titleBarLp);
 
             TextView tvBack = new TextView(this);
             tvBack.setText("\u2039");
-            tvBack.setTextColor(Color.parseColor("#333333"));
-            tvBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(26));
+            tvBack.setTextColor(Color.parseColor("#0984E3"));
+            tvBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
             tvBack.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvBack.setPadding(0, 0, dpToPx(10), 0);
+            tvBack.setPadding(0, 0, dpToPx(8), 0);
             tvBack.setOnClickListener(v -> busNavigateBack());
             titleBar.addView(tvBack);
 
@@ -12024,7 +12023,7 @@ public class PinActivity extends AppCompatActivity {
             else               { hFavBg.setColor(Color.WHITE); hFavBg.setStroke(dpToPx(1),Color.parseColor("#AAAAAA")); tvStopOnlyFav.setTextColor(Color.parseColor("#888888")); }
             tvStopOnlyFav.setBackground(hFavBg);
             LinearLayout.LayoutParams hFavLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            hFavLp.gravity = Gravity.CENTER_VERTICAL; hFavLp.setMargins(dpToPx(4),0,dpToPx(4),0);
+            hFavLp.gravity = Gravity.CENTER_VERTICAL; hFavLp.setMargins(dpToPx(4),0,0,0);
             tvStopOnlyFav.setLayoutParams(hFavLp);
             tvStopOnlyFav.setOnClickListener(vf -> {
                 boolean cur = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(stopOnlyFavKey, false);
