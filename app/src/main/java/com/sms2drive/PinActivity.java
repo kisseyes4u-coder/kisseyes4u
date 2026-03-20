@@ -13573,24 +13573,26 @@ public class PinActivity extends AppCompatActivity {
                     new Thread(() -> {
                         try {
                             boolean hasGps = false;
-                            android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-                            java.util.Map<String, ?> allPrefs = prefs.getAll();
-                            for (java.util.Map.Entry<String, ?> entry : allPrefs.entrySet()) {
-                                String key = entry.getKey();
-                                if (!key.startsWith("fav_route_") || key.contains("_no_") || key.contains("_dir_") || key.contains("_id_") || key.contains("_dirkey_") || key.contains("_memo_")) continue;
-                                String routeId2 = prefs.getString(key.replace("fav_route_", "fav_route_id_"), "");
-                                if (routeId2.isEmpty()) continue;
-                                try {
-                                    String lcUrl = BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
-                                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                                            + "&routeId=" + routeId2 + "&numOfRows=50&pageNo=1&_type=xml";
-                                    String lcXml2 = httpGet(lcUrl);
-                                    for (String item : lcXml2.split("<item>")) {
-                                        String gla = tag(item, "gpslati"), glo = tag(item, "gpslong");
-                                        if (!gla.isEmpty() && !glo.isEmpty()) { hasGps = true; break; }
-                                    }
-                                } catch (Exception ig) {}
-                                if (hasGps) break;
+                            // 현재 도착화면의 노선들 GPS 확인 (arrival_cache에서 노선 목록 조회)
+                            android.content.SharedPreferences ac = getSharedPreferences("arrival_cache", MODE_PRIVATE);
+                            String cachedRoutes = ac.getString("routes_" + arrivalRefreshNodeId, "");
+                            if (!cachedRoutes.isEmpty()) {
+                                for (String line : cachedRoutes.split(";")) {
+                                    String[] p = line.split("\\|", -1);
+                                    if (p.length < 2) continue;
+                                    String rId = p[1]; // routeId
+                                    if (rId.isEmpty()) continue;
+                                    try {
+                                        String lcXml2 = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                                + "&routeId=" + rId + "&numOfRows=50&pageNo=1&_type=xml");
+                                        for (String item : lcXml2.split("<item>")) {
+                                            String gla = tag(item, "gpslati"), glo = tag(item, "gpslong");
+                                            if (!gla.isEmpty() && !glo.isEmpty()) { hasGps = true; break; }
+                                        }
+                                    } catch (Exception ig) {}
+                                    if (hasGps) break;
+                                }
                             }
                             final boolean fHasGps = hasGps;
                             // 갱신 전 다시 도착화면인지 확인
