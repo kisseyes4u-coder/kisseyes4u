@@ -12628,6 +12628,22 @@ public class PinActivity extends AppCompatActivity {
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             titleBar.addView(tvTitle);
 
+            // GPS 수신 이미지 (nodeNm 오른쪽)
+            android.widget.ImageView ivGpsArr = new android.widget.ImageView(this);
+            ivGpsArr.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            LinearLayout.LayoutParams gpsArrLp = new LinearLayout.LayoutParams(dpToPx(44), dpToPx(22));
+            gpsArrLp.setMargins(dpToPx(6), 0, dpToPx(6), 0);
+            gpsArrLp.gravity = Gravity.CENTER_VERTICAL;
+            ivGpsArr.setLayoutParams(gpsArrLp);
+            // 초기값: gps1 (미수신)
+            try {
+                android.graphics.Bitmap gpsBm = android.graphics.BitmapFactory
+                        .decodeStream(getAssets().open("gps1.png"));
+                ivGpsArr.setImageBitmap(gpsBm);
+            } catch (Exception ignored) {}
+            ivGpsArr.setTag("gps_arr_iv");
+            titleBar.addView(ivGpsArr);
+
             // 정류소 즐겨찾기 버튼 (기존 스타일)
             final String stopOnlyFavKey = "fav_stop_" + nodeId;
             boolean stopOnlyFaved = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(stopOnlyFavKey, false);
@@ -13131,7 +13147,27 @@ public class PinActivity extends AppCompatActivity {
                         if (minDist < Integer.MAX_VALUE) gpsDistMap.put(rNo, minDist);
                     } catch(Exception ig){}
                 }
-            } catch(Exception ig){}
+            } catch (Exception ignored) {}
+
+            // GPS 수신 여부 최종 이미지 업데이트
+            final boolean hasGpsDist = !gpsDistMap.isEmpty();
+            runOnUiThread(() -> {
+                if (busFixedHeader == null) return;
+                android.view.View gpsIv = busFixedHeader.findViewWithTag("gps_arr_iv");
+                if (gpsIv instanceof android.widget.ImageView) {
+                    int totalBus = allRoutes.size();
+                    int gpsCnt = gpsDistMap.size();
+                    int strength = totalBus > 0 ? (int)((double)gpsCnt/totalBus*100) : 0;
+                    String gpsFile = strength >= 80 ? "gps4.png"
+                                   : strength >= 40 ? "gps3.png"
+                                   : strength > 0   ? "gps2.png" : "gps1.png";
+                    try {
+                        android.graphics.Bitmap bm = android.graphics.BitmapFactory
+                                .decodeStream(getAssets().open(gpsFile));
+                        ((android.widget.ImageView)gpsIv).setImageBitmap(bm);
+                    } catch(Exception ig){}
+                }
+            });
 
             java.util.Map<String, String[]> arrMap = new java.util.HashMap<>();
             try {
@@ -13155,20 +13191,34 @@ public class PinActivity extends AppCompatActivity {
                     int prev = -1;
                     try { prev = Integer.parseInt(arrc); } catch (Exception ig) {}
 
-                    // GPS 거리 기반 도착시간 보정
+                    // GPS 거리 기반 도착시간 (GPS 우선)
+                    boolean usedGps = false;
                     if (gpsDistMap.containsKey(rno)) {
                         int distM = gpsDistMap.get(rno);
-                        // 버스 평균속도 20km/h(시내 정체 고려) = 5.56m/s
+                        // 버스 평균속도 20km/h(시내 정체) = 5.56m/s
                         int gpsSec = (int)(distM / 5.56);
                         if (sec > 0) {
-                            // API arrtime과 GPS 계산값 중 신뢰도 높은 값 사용
-                            // 차이가 30초 이상이면 GPS 우선 (더 실시간)
-                            if (Math.abs(sec - gpsSec) > 30) sec = gpsSec;
-                            else sec = (sec + gpsSec) / 2; // 근접하면 평균
+                            // GPS 값 우선 사용, arrtime은 보조
+                            sec = gpsSec;
                         } else {
-                            sec = gpsSec; // arrtime 없으면 GPS만
+                            sec = gpsSec;
                         }
+                        usedGps = true;
                     }
+                    // GPS 이미지 업데이트 (헤더에서 찾아서)
+                    final boolean fUsedGps = usedGps;
+                    runOnUiThread(() -> {
+                        if (busFixedHeader == null) return;
+                        android.view.View gpsIv = busFixedHeader.findViewWithTag("gps_arr_iv");
+                        if (gpsIv instanceof android.widget.ImageView) {
+                            String gpsFile = fUsedGps ? "gps4.png" : "gps1.png";
+                            try {
+                                android.graphics.Bitmap bm = android.graphics.BitmapFactory
+                                        .decodeStream(getAssets().open(gpsFile));
+                                ((android.widget.ImageView)gpsIv).setImageBitmap(bm);
+                            } catch(Exception ig){}
+                        }
+                    });
 
                     if (minSec.containsKey(rno) && sec >= 0 && sec >= minSec.get(rno)) continue;
                     if (sec >= 0) minSec.put(rno, sec);
