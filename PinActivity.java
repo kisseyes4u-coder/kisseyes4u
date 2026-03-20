@@ -17360,7 +17360,7 @@ public class PinActivity extends AppCompatActivity {
                                 // 출발지 대기중 → 미리 수집한 출발시간 사용
                                 String nd2 = nextDepartureMap.get(rno2);
                                 if (nd2 != null && !nd2.isEmpty()) {
-                                    timeStr2 = nd2; timeColor2 = "#555555";
+                                    timeStr2 = nd2; timeColor2 = "#888888";
                                 } else {
                                     timeStr2 = "출발지 대기중"; timeColor2 = "#888888";
                                 }
@@ -17382,7 +17382,7 @@ public class PinActivity extends AppCompatActivity {
                             if (!arrMap.containsKey(rno3)) {
                                 String nd3 = nextDepartureMap.get(rno3);
                                 if (nd3 != null && !nd3.isEmpty()) {
-                                    arrMap.put(rno3, new String[]{nd3, "", "#555555", "", ""});
+                                    arrMap.put(rno3, new String[]{nd3, "", "#888888", "", ""});
                                 }
                             }
                         }
@@ -17395,7 +17395,7 @@ public class PinActivity extends AppCompatActivity {
                             if (!nid3.equals(nodeId) || rno3.isEmpty()) continue;
                             String nd3 = nextDepartureMap.get(rno3);
                             if (nd3 != null && !nd3.isEmpty()) {
-                                fallbackMap.put(rno3, new String[]{nd3, "", "#555555", "", ""});
+                                fallbackMap.put(rno3, new String[]{nd3, "", "#888888", "", ""});
                             }
                         }
                         if (!fallbackMap.isEmpty()) {
