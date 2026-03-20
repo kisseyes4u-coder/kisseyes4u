@@ -18155,7 +18155,8 @@ public class PinActivity extends AppCompatActivity {
         if (minSec >= 300) {
             busSoonTV.setText("곧 도착 없음");
             busSoonTV.setTextColor(android.graphics.Color.parseColor("#AAAAAA"));
-            busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
+            busSoonTV.setTypeface(null, android.graphics.Typeface.BOLD);
             return;
         }
         String timeLabel = minSec == 0 ? "곧 도착 " : (minSec / 60) + "분 후 ";
@@ -18184,7 +18185,7 @@ public class PinActivity extends AppCompatActivity {
         for (String rn : allBuses) {
             String rtp = getRtp(rn);
             String[] bdg = routeTypeBadge(rtp);
-            int bs = ssb.length(); ssb.append(rn + "번 ");
+            int bs = ssb.length(); ssb.append(rn + " ");
             ssb.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor(bdg[1])), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(17), true), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
