@@ -12362,6 +12362,20 @@ public class PinActivity extends AppCompatActivity {
                 // 로컬 캐시 없으면 실시간 API 결과만 사용 (fallback)
                 boolean localDataFound = !allRoutes.isEmpty();
 
+                // ── 방면 정보 업데이트: allRoutes의 etnm(종점명) 수집 ──────────
+                if (!allRoutes.isEmpty() && busDirectionTV != null) {
+                    java.util.LinkedHashSet<String> dirSet2 = new java.util.LinkedHashSet<>();
+                    for (String[] rt : allRoutes) {
+                        if (rt.length > 3 && !rt[3].isEmpty()) dirSet2.add(rt[3] + "방면");
+                    }
+                    if (!dirSet2.isEmpty()) {
+                        final String dirText = android.text.TextUtils.join("  ", dirSet2);
+                        runOnUiThread(() -> {
+                            if (busDirectionTV != null) busDirectionTV.setText(dirText);
+                        });
+                    }
+                }
+
                 // ── STEP 2: 실시간 도착정보 API ──────────────────────────────
                 java.util.Map<String, String[]> arrMap = new java.util.HashMap<>();
                 try {
@@ -12410,6 +12424,18 @@ public class PinActivity extends AppCompatActivity {
                         }
                         String prevStr = prev == 0 ? "[출발지 대기중]" : prev == 1 ? "[바로 앞 정거장]" : prev > 0 ? "[" + prev + " 정거장 앞]" : "";
                         arrMap.put(rno, new String[]{timeStr, prevStr, timeColor, endnm, nextnm});
+                        // 방면 실시간 업데이트 (arrMap에서 endnm 수집)
+                        if (busDirectionTV != null && !endnm.isEmpty()) {
+                            final String endnmFinal = endnm + "방면";
+                            runOnUiThread(() -> {
+                                if (busDirectionTV != null) {
+                                    String cur2 = busDirectionTV.getText().toString();
+                                    if (!cur2.contains(endnm)) {
+                                        busDirectionTV.setText(cur2.isEmpty() ? endnmFinal : cur2 + "  " + endnmFinal);
+                                    }
+                                }
+                            });
+                        }
 
                         // 로컬 캐시 없으면 API 노선도 목록에 추가
                         if (!localDataFound) {
