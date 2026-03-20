@@ -19194,7 +19194,8 @@ public class PinActivity extends AppCompatActivity {
                         }
                     }
                 }
-                // ② 노선 즐겨찾기: 운행대수 API
+                // ② 노선 즐겨찾기: 운행대수 + GPS 수신 체크
+                int totalFavBus = 0, gpsRecvBus = 0;
                 for (String rKey2 : fFavRouteKeys) {
                     String rId2 = prefs.getString("fav_route_id_" + rKey2, "");
                     if (rId2.isEmpty()) continue;
@@ -19205,8 +19206,26 @@ public class PinActivity extends AppCompatActivity {
                         int cnt2 = 0; try { cnt2 = Integer.parseInt(tag(lcXml2, "totalCount")); } catch (Exception ig) {}
                         getSharedPreferences("bus_cache", MODE_PRIVATE).edit()
                                 .putInt("route_" + rId2 + "_running", cnt2).apply();
+                        totalFavBus += cnt2;
+                        for (String item2 : lcXml2.split("<item>")) {
+                            if (!tag(item2, "gpslati").isEmpty() && !tag(item2, "gpslong").isEmpty()) {
+                                gpsRecvBus++;
+                            }
+                        }
                     } catch (Exception ignored) {}
                 }
+                // GPS 탭 이미지 업데이트
+                final int fTotal = totalFavBus, fGps = gpsRecvBus;
+                runOnUiThread(() -> {
+                    if (busTabMap instanceof android.widget.ImageView) {
+                        int st = fTotal > 0 ? (int)((double)fGps / fTotal * 100) : 0;
+                        String gf = st >= 80 ? "gps4.png" : st >= 60 ? "gps3.png" : st >= 40 ? "gps2.png" : st > 0 ? "gps1.png" : "gps0.png";
+                        try {
+                            android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeStream(getAssets().open(gf));
+                            ((android.widget.ImageView) busTabMap).setImageBitmap(bm);
+                        } catch (Exception ig) {}
+                    }
+                });
                 // 데이터 갱신 후 재렌더링 (skipPrefetch=true로 무한루프 방지)
                 runOnUiThread(() -> refreshBusFavorites(favSection, resultContainer, true));
             }).start();
