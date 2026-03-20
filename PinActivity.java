@@ -18145,19 +18145,20 @@ public class PinActivity extends AppCompatActivity {
                     card.addView(tvStopSub);
                 }
 
-                // 카드 탭 → 노선 있으면 타임라인, 없으면 정류소 도착화면
+                // 카드 탭 → 노선 있으면 타임라인 중앙 스크롤 후 도착화면 진입
                 card.setOnClickListener(v2 -> {
                     if (!fRouteId.isEmpty()) {
                         // nodeId 추출 (compositeKey = routeId_nodeId)
                         String fNodeId = fCompositeKey.contains("_")
                                 ? fCompositeKey.substring(fCompositeKey.indexOf("_") + 1)
                                 : fCompositeKey;
+                        String fNodeNm = fStopName;
+                        String fNodeNo = prefs.getString("fav_stop_no_" + fCompositeKey, "");
                         busScreenLoadStops(fRouteId, fRouteNo, busResultContainer, "forward", "");
-                        // ① 렌더링 완료 후 해당 정류장을 화면 중앙으로 스크롤
+                        // 렌더링 완료 후 해당 정류장 중앙 스크롤
                         busResultContainer.postDelayed(() -> {
                             if (busTimelineSv == null) return;
-                            String targetTag = "stop_" + fNodeId;
-                            android.view.View targetRow = findViewWithTag(busResultContainer, targetTag);
+                            android.view.View targetRow = findViewWithTag(busResultContainer, "stop_" + fNodeId);
                             if (targetRow != null) {
                                 int[] loc = new int[2];
                                 targetRow.getLocationOnScreen(loc);
@@ -18167,17 +18168,12 @@ public class PinActivity extends AppCompatActivity {
                                 int offset = busTimelineSv.getHeight() / 2 - targetRow.getHeight() / 2;
                                 busTimelineSv.scrollTo(0, Math.max(0, rowY - offset));
                             }
+                            // 스크롤 직후 도착화면 직접 진입 (routeNo 전달 → 708번 맨 위 고정)
+                            busScreenLoadArrival(fNodeId, fNodeNm, fNodeNo, fRouteNo, busResultContainer);
                         }, 400);
-                        // ② 스크롤 완료 후 클릭 → 도착화면 진입 (routeNo 전달)
-                        busResultContainer.postDelayed(() -> {
-                            if (busTimelineSv == null) return;
-                            String targetTag = "stop_" + fNodeId;
-                            android.view.View targetRow = findViewWithTag(busResultContainer, targetTag);
-                            if (targetRow != null) targetRow.performClick();
-                        }, 700);
                     } else {
                         // 정류소만 즐겨찾기 → 도착화면으로 이동
-                        String nId = fCompositeKey; // compositeKey = nodeId
+                        String nId = fCompositeKey;
                         String nNm = fStopName;
                         String nNo = prefs.getString("fav_stop_no_" + nId, "");
                         if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
