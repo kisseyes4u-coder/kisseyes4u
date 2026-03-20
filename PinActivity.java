@@ -13081,6 +13081,58 @@ public class PinActivity extends AppCompatActivity {
             }
 
             // ── STEP 2: 실시간 도착정보 API ──────────────────────────────
+            // GPS 거리 기반 도착시간 보정용: routeNo → GPS 거리(m)
+            java.util.Map<String, Integer> gpsDistMap = new java.util.HashMap<>();
+            try {
+                // 현재 정류장 좌표 (stopDbList에서 찾기)
+                double stopLat = 0, stopLon = 0;
+                for (String[] sd : stopDbList != null ? stopDbList : new java.util.ArrayList<String[]>()) {
+                    if (sd.length >= 3 && sd[0].equals(nodeId)) {
+                        // stopDbList에 좌표 없음 → getCrdntPrxmtSttnList에서 이미 받은 busGpsMap 활용
+                        break;
+                    }
+                }
+                // allRoutes의 각 노선에 대해 LC API로 버스 GPS 조회
+                for (String[] route : allRoutes) {
+                    String rId = route[1], rNo = route[0];
+                    if (rId.isEmpty()) continue;
+                    try {
+                        String lcUrl = BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&routeId=" + rId + "&numOfRows=50&pageNo=1&_type=xml";
+                        String lcXml2 = httpGet(lcUrl);
+                        // 정류장 캐시에서 nodeId의 좌표 찾기
+                        android.content.SharedPreferences fc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                        String stopsStr = fc.getString("route_" + rId + "_stops", "");
+                        double tLat = 0, tLon = 0;
+                        for (String sl : stopsStr.split(";")) {
+                            String[] sp = sl.split("\\|", -1);
+                            if (sp.length >= 6 && sp[0].equals(nodeId)) {
+                                try { tLat = Double.parseDouble(sp[4]); tLon = Double.parseDouble(sp[5]); } catch(Exception ig){}
+                                break;
+                            }
+                        }
+                        if (tLat == 0) continue;
+                        // 버스 GPS → 정류장까지 최소 거리 계산
+                        int minDist = Integer.MAX_VALUE;
+                        for (String item2 : lcXml2.split("<item>")) {
+                            String gla = tag(item2, "gpslati"), glo = tag(item2, "gpslong");
+                            if (gla.isEmpty() || glo.isEmpty()) continue;
+                            try {
+                                double bLat = Double.parseDouble(gla), bLon = Double.parseDouble(glo);
+                                double dlat = Math.toRadians(tLat-bLat), dlon = Math.toRadians(tLon-bLon);
+                                double a = Math.sin(dlat/2)*Math.sin(dlat/2)
+                                        + Math.cos(Math.toRadians(bLat))*Math.cos(Math.toRadians(tLat))
+                                        * Math.sin(dlon/2)*Math.sin(dlon/2);
+                                int dist = (int)(6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+                                if (dist < minDist) minDist = dist;
+                            } catch(Exception ig){}
+                        }
+                        if (minDist < Integer.MAX_VALUE) gpsDistMap.put(rNo, minDist);
+                    } catch(Exception ig){}
+                }
+            } catch(Exception ig){}
+
             java.util.Map<String, String[]> arrMap = new java.util.HashMap<>();
             try {
                 String arvlUrl = BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
@@ -13102,6 +13154,21 @@ public class PinActivity extends AppCompatActivity {
                     try { sec = Integer.parseInt(arrt); } catch (Exception ig) {}
                     int prev = -1;
                     try { prev = Integer.parseInt(arrc); } catch (Exception ig) {}
+
+                    // GPS 거리 기반 도착시간 보정
+                    if (gpsDistMap.containsKey(rno)) {
+                        int distM = gpsDistMap.get(rno);
+                        // 버스 평균속도 20km/h(시내 정체 고려) = 5.56m/s
+                        int gpsSec = (int)(distM / 5.56);
+                        if (sec > 0) {
+                            // API arrtime과 GPS 계산값 중 신뢰도 높은 값 사용
+                            // 차이가 30초 이상이면 GPS 우선 (더 실시간)
+                            if (Math.abs(sec - gpsSec) > 30) sec = gpsSec;
+                            else sec = (sec + gpsSec) / 2; // 근접하면 평균
+                        } else {
+                            sec = gpsSec; // arrtime 없으면 GPS만
+                        }
+                    }
 
                     if (minSec.containsKey(rno) && sec >= 0 && sec >= minSec.get(rno)) continue;
                     if (sec >= 0) minSec.put(rno, sec);
