@@ -11599,6 +11599,10 @@ public class PinActivity extends AppCompatActivity {
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             row.setTag("stop_" + s[0]); // nodeId tag (스크롤 위치 찾기용)
+            // 즐겨찾기된 정류장은 연한 배경색 (#FFF8E1) 고정
+            boolean isFavRow = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                    .getBoolean("fav_stop_" + routeId + "_" + s[0], false);
+            row.setBackgroundColor(isFavRow ? Color.parseColor("#FFF8E1") : Color.TRANSPARENT);
             final boolean fFirst2=isFirst, fLast2=isLast, fIsReturn=isReturn;
 
             // ── 타임라인 FrameLayout (세로줄 + 원 + 버스오버레이) ──
@@ -11773,6 +11777,7 @@ public class PinActivity extends AppCompatActivity {
                     offBg.setCornerRadius(dpToPx(4)); offBg.setColor(Color.WHITE);
                     offBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
                     tvStar.setTextColor(Color.parseColor("#888888")); tvStar.setBackground(offBg);
+                    row.setBackgroundColor(Color.TRANSPARENT); // row 배경 제거
                     android.widget.Toast.makeText(this, stopName + " 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
                     busFavDirty = true;
                 } else {
@@ -11881,6 +11886,7 @@ public class PinActivity extends AppCompatActivity {
                         onBg.setCornerRadius(dpToPx(4)); onBg.setColor(Color.parseColor("#F39C12"));
                         onBg.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
                         tvStar.setTextColor(Color.WHITE); tvStar.setBackground(onBg);
+                        row.setBackgroundColor(Color.parseColor("#FFF8E1")); // row 배경 강조
                         android.widget.Toast.makeText(this, stopName + " 즐겨찾기 추가",
                                 android.widget.Toast.LENGTH_SHORT).show();
                         favOrderAdd("S:" + favKey.substring("fav_stop_".length()));
@@ -18147,10 +18153,9 @@ public class PinActivity extends AppCompatActivity {
                                 ? fCompositeKey.substring(fCompositeKey.indexOf("_") + 1)
                                 : fCompositeKey;
                         busScreenLoadStops(fRouteId, fRouteNo, busResultContainer, "forward", "");
-                        // 렌더링 완료 후 해당 정류장을 화면 중앙으로 스크롤 + 충남대처럼 클릭 효과
+                        // ① 렌더링 완료 후 해당 정류장을 화면 중앙으로 스크롤
                         busResultContainer.postDelayed(() -> {
                             if (busTimelineSv == null) return;
-                            // "stop_" + nodeId tag로 row 찾기
                             String targetTag = "stop_" + fNodeId;
                             android.view.View targetRow = findViewWithTag(busResultContainer, targetTag);
                             if (targetRow != null) {
@@ -18160,11 +18165,16 @@ public class PinActivity extends AppCompatActivity {
                                 busTimelineSv.getLocationOnScreen(svLoc);
                                 int rowY = busTimelineSv.getScrollY() + (loc[1] - svLoc[1]);
                                 int offset = busTimelineSv.getHeight() / 2 - targetRow.getHeight() / 2;
-                                busTimelineSv.smoothScrollTo(0, Math.max(0, rowY - offset));
-                                // 클릭 효과: 해당 정류장을 누른 것과 동일하게 도착화면 열기 (routeNo 전달)
-                                targetRow.performClick();
+                                busTimelineSv.scrollTo(0, Math.max(0, rowY - offset));
                             }
-                        }, 600);
+                        }, 400);
+                        // ② 스크롤 완료 후 클릭 → 도착화면 진입 (routeNo 전달)
+                        busResultContainer.postDelayed(() -> {
+                            if (busTimelineSv == null) return;
+                            String targetTag = "stop_" + fNodeId;
+                            android.view.View targetRow = findViewWithTag(busResultContainer, targetTag);
+                            if (targetRow != null) targetRow.performClick();
+                        }, 700);
                     } else {
                         // 정류소만 즐겨찾기 → 도착화면으로 이동
                         String nId = fCompositeKey; // compositeKey = nodeId
