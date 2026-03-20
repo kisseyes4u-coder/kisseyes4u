@@ -17308,6 +17308,18 @@ public class PinActivity extends AppCompatActivity {
         if (!skipPrefetch) {
             final java.util.List<String> fFavKeys = new java.util.ArrayList<>(favKeys);
             final java.util.List<String> fFavRouteKeys = new java.util.ArrayList<>(favRouteKeys);
+            // UI 스레드에서 미리 출발시간 수집 (busTimesMap은 메인 스레드에서만 안전)
+            final java.util.Map<String, String> nextDepartureMap = new java.util.HashMap<>();
+            for (String compositeKey : fFavKeys) {
+                String routeNo2 = prefs.getString("fav_stop_route_" + compositeKey, "");
+                if (routeNo2.isEmpty()) continue;
+                String nd = getNextDeparture(routeNo2, true);
+                if (nd.isEmpty()) nd = getNextDeparture(routeNo2, false);
+                if (!nd.isEmpty()) {
+                    // "20시 41분 출발" → "20:41 출발"
+                    nextDepartureMap.put(routeNo2, nd.replaceAll("(\\d+)시 (\\d+)분 출발", "$1:$2 출발"));
+                }
+            }
             new Thread(() -> {
                 // ① 정류장+노선 즐겨찾기: 도착정보 API
                 java.util.Set<String> fetchedNodes = new java.util.HashSet<>();
@@ -17339,13 +17351,10 @@ public class PinActivity extends AppCompatActivity {
                             if (sec2 >= 0) minSecMap.put(rno2, sec2);
                             String timeStr2, timeColor2;
                             if (prev2 == 0) {
-                                // 출발지 대기중 → 배차시간표에서 다음 출발시간 표시
-                                String nd2 = getNextDeparture(rno2, true);
-                                if (nd2.isEmpty()) nd2 = getNextDeparture(rno2, false);
-                                if (!nd2.isEmpty()) {
-                                    // "20시 41분 출발" → "20:41 출발" 형식 변환
-                                    String fmt2 = nd2.replaceAll("(\\d+)시 (\\d+)분 출발", "$1:$2 출발");
-                                    timeStr2 = fmt2; timeColor2 = "#555555";
+                                // 출발지 대기중 → 미리 수집한 출발시간 사용
+                                String nd2 = nextDepartureMap.get(rno2);
+                                if (nd2 != null && !nd2.isEmpty()) {
+                                    timeStr2 = nd2; timeColor2 = "#555555";
                                 } else {
                                     timeStr2 = "출발지 대기중"; timeColor2 = "#888888";
                                 }
@@ -18335,16 +18344,15 @@ public class PinActivity extends AppCompatActivity {
                     }
                     TextView tvArrTime = new TextView(this);
                     if (arrTimeStr.isEmpty()) {
-                        // 출발지 대기중 - 회색
-                        tvArrTime.setText("출발지 대기중");
+                        // 데이터 없음 - 회색
+                        tvArrTime.setText("정보 없음");
                         tvArrTime.setTextColor(Color.parseColor("#AAAAAA"));
                     } else {
                         // 약 X분, 곧 도착 등 - 기존 색깔(시간대별)
                         tvArrTime.setText(arrTimeStr);
                         tvArrTime.setTextColor(Color.parseColor(arrTimeColor));
                     }
-                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP,
-                            tvArrTime.getText().length() > 5 ? fs(14) : fs(16));
+                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
                     tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
                     tvArrTime.setGravity(Gravity.CENTER);
                     tvArrTime.setSingleLine(true);
