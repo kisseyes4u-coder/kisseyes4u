@@ -43,6 +43,11 @@
             android:foregroundServiceType="dataSync"/>
 
         <service
+            android:name=".BusAlarmService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
+
+        <service
             android:name=".SmsAccessibilityService"
             android:exported="true"
             android:label="경로당 잔액알림"

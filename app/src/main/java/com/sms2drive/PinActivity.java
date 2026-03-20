@@ -165,10 +165,31 @@ public class PinActivity extends AppCompatActivity {
     // ── 버스 검색 화면 ─────────────────────────────────────
     private LinearLayout busSearchArea = null;
     private LinearLayout busFixedHeader = null;
+    private LinearLayout busBottomBar = null; // 하단 고정 버튼 영역
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     // 인메모리 버스 DB (앱 시작 시 1회 로드, 이후 즉시 검색)
     private java.util.List<String[]> routeDbList = null;
     private java.util.List<String[]> stopDbList  = null; // 미사용 (세션 캐시로 대체)
+    // 버스 화면 백스택: ["type", params...] type=timeline/arrival/search
+    private final java.util.Deque<String[]> busBackStack = new java.util.ArrayDeque<>();
+    private boolean busFavDirty = false;
+    private TextView busSoonTV = null; // 도착화면 X분후 버스 표시
+    private TextView busDirectionTV = null; // 도착화면 방면 표시
+    private TextView busSortTV = null;      // 정렬 버튼
+    private int busSortMode = 0;             // 0=도착순 1=번호순 2=유형순
+    private java.util.TreeMap<Integer, java.util.List<String>> busSoonCache = null;
+    private java.util.List<String[]> busSoonRoutesCache = null; // 즐겨찾기 변경 시 true → 검색화면 복귀 시 갱신
+    private ScrollView busTimelineSv = null;  // 타임라인 ScrollView
+    private int busTurnRowY = -1;             // 회차 정류소 Y 좌표
+    private String busPendingScrollDir = null;  // 방향전환 후 자동 스크롤 ("forward"/"reverse")
+    private int busTimelineRestoreScrollY = -1; // 타임라인 복원 시 스크롤 위치
+    // nodeno(표시번호) → 노선번호 목록 (예: "46820" → "211,212,601,708")
+    private java.util.Map<String, String> nodeNoToRoutes = new java.util.HashMap<>();
+    // 도착정보 세션 캐시: nodeId → [렌더링용 데이터 스냅샷, 캐시시각]
+    private final java.util.Map<String, Object[]> arrivalSessionCache = new java.util.HashMap<>();
+    // 배차시간표: 노선번호 → {src, dst, s:[출발시간들], d:[종점출발시간들]}
+    private java.util.Map<String, String[]> busTimesMap = new java.util.HashMap<>();
+    // busTimesMap value: [src, dst, "0540,0605,...", "0540,0606,..."]
     // 정류장 검색 세션 캐시 (keyword → 결과 리스트, 앱 실행 중 유지)
     @SuppressWarnings("serial")
     private final java.util.Map<String, java.util.List<String[]>> stopSearchCache =
@@ -180,6 +201,13 @@ public class PinActivity extends AppCompatActivity {
     private LinearLayout busResultContainer = null;
     private LinearLayout busFavSection2 = null;
     private android.widget.EditText busEtSearch = null;
+    private TextView busTabBus = null;  // 버스번호 탭 버튼
+    private TextView busTabStop = null; // 정류장 탭 버튼
+    private android.view.View busTabMap = null; // GPS 탭 버튼
+    private java.util.Map<String,double[]> busGpsMap = new java.util.HashMap<>(); // 버스 실시간 GPS
+    private java.util.Map<String,String>   busVehMapForMap = new java.util.HashMap<>(); // 버스 차량번호
+    private Runnable busUpdateTabStyle = null; // 탭 스타일 업데이트
+    private boolean[] busIsBusTab = {true}; // 현재 탭 상태
     private TextView splashLoadingTv = null;
     private android.widget.ProgressBar splashProgressBar = null;
     private TextView splashProgressTv = null;
@@ -202,35 +230,88 @@ public class PinActivity extends AppCompatActivity {
 
     /** assets/bus.png - 흰 배경 + 진한 보라 아이콘 (즐겨찾기 카드용) */
     private android.graphics.Bitmap getBusIconPurple() {
-        if (busIconPurpleBitmap == null) {
-            try {
-                android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
-                        getAssets().open("bus.png"));
-                if (raw != null) {
-                    int w = raw.getWidth(), h = raw.getHeight();
-                    android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
-                    int[] pixels = new int[w * h];
-                    raw.getPixels(pixels, 0, w, 0, 0, w, h);
-                    for (int i = 0; i < pixels.length; i++) {
-                        int r2 = (pixels[i] >> 16) & 0xFF;
-                        int g2 = (pixels[i] >> 8)  & 0xFF;
-                        int b2 =  pixels[i]         & 0xFF;
-                        int brightness = (r2 + g2 + b2) / 3;
-                        if (brightness > 128) {
-                            pixels[i] = 0xFF6C3FA0; // 진한 보라
-                        } else {
-                            pixels[i] = 0xFFFFFFFF; // 흰색 배경
-                        }
+        return getBusIconColor(0xFF6C3FA0);
+    }
+    /** assets/bus.png를 지정된 색상으로 렌더링 */
+    private android.graphics.Bitmap getBusIconColor(int argbColor) {
+        try {
+            android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                    getAssets().open("bus.png"));
+            if (raw != null) {
+                int w = raw.getWidth(), h = raw.getHeight();
+                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                int[] pixels = new int[w * h];
+                raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                for (int i = 0; i < pixels.length; i++) {
+                    int r2 = (pixels[i] >> 16) & 0xFF;
+                    int g2 = (pixels[i] >> 8)  & 0xFF;
+                    int b2 =  pixels[i]         & 0xFF;
+                    int brightness = (r2 + g2 + b2) / 3;
+                    if (brightness > 128) {
+                        pixels[i] = argbColor;
+                    } else {
+                        pixels[i] = 0xFFFFFFFF;
                     }
-                    result.setPixels(pixels, 0, w, 0, 0, w, h);
-                    busIconPurpleBitmap = result;
-                    raw.recycle();
                 }
-            } catch (Exception ignored) {}
-        }
-        return busIconPurpleBitmap;
+                result.setPixels(pixels, 0, w, 0, 0, w, h);
+                raw.recycle();
+                return result;
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
+    /** assets/stop.png(정류소 전용) 또는 pngwing_com.png(노선+정류소) 색상 렌더링 */
+    /** assets/stop.png - getBusIconColor와 완전 동일, 파일명만 다름 */
+    private android.graphics.Bitmap getStopIconColor(int argbColor) {
+        try {
+            android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                    getAssets().open("stop.png"));
+            if (raw != null) {
+                int w = raw.getWidth(), h = raw.getHeight();
+                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                int[] pixels = new int[w * h];
+                raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                for (int i = 0; i < pixels.length; i++) {
+                    int r2 = (pixels[i] >> 16) & 0xFF;
+                    int g2 = (pixels[i] >> 8)  & 0xFF;
+                    int b2 =  pixels[i]         & 0xFF;
+                    int brightness = (r2 + g2 + b2) / 3;
+                    if (brightness > 128) { pixels[i] = argbColor; }
+                    else                  { pixels[i] = 0xFFFFFFFF; }
+                }
+                result.setPixels(pixels, 0, w, 0, 0, w, h);
+                raw.recycle();
+                return result;
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+    /** assets/pngwing_com.png - getBusIconColor와 완전 동일, 파일명만 다름 */
+    private android.graphics.Bitmap getStopRouteIconColor(int argbColor) {
+        try {
+            android.graphics.Bitmap raw = android.graphics.BitmapFactory.decodeStream(
+                    getAssets().open("pngwing_com.png"));
+            if (raw != null) {
+                int w = raw.getWidth(), h = raw.getHeight();
+                android.graphics.Bitmap result = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                int[] pixels = new int[w * h];
+                raw.getPixels(pixels, 0, w, 0, 0, w, h);
+                for (int i = 0; i < pixels.length; i++) {
+                    int r2 = (pixels[i] >> 16) & 0xFF;
+                    int g2 = (pixels[i] >> 8)  & 0xFF;
+                    int b2 =  pixels[i]         & 0xFF;
+                    int brightness = (r2 + g2 + b2) / 3;
+                    if (brightness > 128) { pixels[i] = argbColor; }
+                    else                  { pixels[i] = 0xFFFFFFFF; }
+                }
+                result.setPixels(pixels, 0, w, 0, 0, w, h);
+                raw.recycle();
+                return result;
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
     /** assets/bus.png 로드 - 검정 배경 투명화 + 흰색 픽셀 → 빨간색 (타임라인 버스 위치용) */
     private android.graphics.Bitmap getBusIcon() {
         if (busIconBitmap == null) {
@@ -295,6 +376,11 @@ public class PinActivity extends AppCompatActivity {
 
     private android.os.Handler busRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable busRefreshRunnable = null;
+    private android.os.Handler busFavRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable busFavRefreshRunnable = null;
+    private android.os.Handler arrivalRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable arrivalRefreshRunnable = null;
+    private String arrivalRefreshNodeId = "", arrivalRefreshNodeNm = "", arrivalRefreshNodeNo = "", arrivalRefreshRouteNo = "";
     private Runnable refreshRunnable;
     private Runnable blockedCheckRunnable;
     private int lastKnownBlockCount = 0;
@@ -368,13 +454,9 @@ public class PinActivity extends AppCompatActivity {
                                 else userMenuBuilder.build(false);
                             }
                         } else if (isOnSubScreen) {
-                            // 버스 타임라인 화면(검색창 숨겨진 상태)이면 검색 화면으로
+                            // 버스 화면이면 백스택 기반 뒤로가기
                             if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.GONE) {
-                                busSearchArea.setVisibility(android.view.View.VISIBLE);
-                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                                if (busResultContainer != null) busResultContainer.removeAllViews();
+                                busNavigateBack();
                             } else {
                                 isOnSubScreen = false;
                                 if (isOwner) ownerMenuBuilder.build();
@@ -615,6 +697,8 @@ public class PinActivity extends AppCompatActivity {
                 needed.add(Manifest.permission.POST_NOTIFICATIONS);
             }
         }
+
+
 
         if (!needed.isEmpty()) {
             ActivityCompat.requestPermissions(this,
@@ -2677,12 +2761,53 @@ public class PinActivity extends AppCompatActivity {
     /** Drive에서 dj_stops.json 다운로드 (없으면 패스) */
     private void loadStopDbFromDriveIfNeeded(Runnable onDone) {
         android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
-        String cached = p.getString("stop_json_cache", "");
-        if (!cached.isEmpty()) {
-            if (stopDbList == null) loadStopJsonToMemory(cached);
+        // 내부 파일 우선 확인
+        String internalStop = loadStopDb();
+        if (!internalStop.isEmpty() && internalStop.contains("\"routes\":")) {
+            if (stopDbList == null || nodeNoToRoutes.isEmpty()) loadStopJsonToMemory(internalStop);
             if (onDone != null) onDone.run();
             return;
         }
+
+        // 배차시간표 로드 - 내부 파일 우선, 없으면 SharedPreferences, 없으면 Drive
+        if (busTimesMap.isEmpty()) {
+            String btCached = loadBusTimes(); // 내부 파일에서 읽기
+            if (btCached.isEmpty()) btCached = p.getString("bustimes_txt_cache", "");
+            // 유효성 검사: v4 형식 확인 (|| 구분자 포함 여부)
+            boolean cacheValid = !btCached.isEmpty() && btCached.contains("||");
+            if (cacheValid) {
+                loadBusTimesFromJson(btCached);
+            } else {
+                // 구버전 캐시 삭제 후 Drive에서 새로 받기
+                p.edit().remove("bustimes_txt_cache").apply();
+                saveBusTimes(""); // 내부 파일도 초기화
+                new Thread(() -> {
+                    try {
+                        DriveReadHelper dr = new DriveReadHelper(this);
+                        dr.readFile(BUS_TIME_FILE, new DriveReadHelper.ReadCallback() {
+                            @Override public void onSuccess(String txt) {
+                                if (!txt.isEmpty()) {
+                                    p.edit().putString("bustimes_txt_cache", txt).apply();
+                                    saveBusTimes(txt); // 내부 파일에도 저장
+                                    loadBusTimesFromJson(txt);
+                                }
+                            }
+                            @Override public void onFailure(String e) {}
+                        });
+                    } catch (Exception ignored) {}
+                }).start();
+            }
+        }
+
+        String cached = p.getString("stop_json_cache", "");
+        // routes 필드가 있는 새 버전 캐시인지 확인
+        boolean isNewVersion = cached.contains("\"routes\":");
+        if (!cached.isEmpty() && isNewVersion) {
+            if (stopDbList == null || nodeNoToRoutes.isEmpty()) loadStopJsonToMemory(cached);
+            if (onDone != null) onDone.run();
+            return;
+        }
+        // 캐시 없거나 구버전(routes 없음) → Drive에서 새로 다운로드
         if (splashLoadingTv != null) splashLoadingTv.setText("정류장 데이터 로딩 중...");
         try {
             DriveReadHelper reader = new DriveReadHelper(this);
@@ -2690,6 +2815,7 @@ public class PinActivity extends AppCompatActivity {
                 @Override public void onSuccess(String content) {
                     if (!content.isEmpty()) {
                         p.edit().putString("stop_json_cache", content).apply();
+                        saveStopDb(content); // 내부 파일에도 저장
                         loadStopJsonToMemory(content);
                     }
                     if (onDone != null) runOnUiThread(onDone);
@@ -3859,6 +3985,21 @@ public class PinActivity extends AppCompatActivity {
         tvStopStatus.setLayoutParams(stLp);
         busManageCard.addView(tvStopStatus);
 
+        // ── 진단: routes 포함 여부 확인 ──────────────────────────────
+        TextView tvRoutesCheck = new TextView(this);
+        String cachedJson = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).getString("stop_json_cache", "");
+        boolean hasRoutes = cachedJson.contains("\"routes\":\"2") || cachedJson.contains("\"routes\":\"1") || cachedJson.contains("\"routes\":\"6") || cachedJson.contains("\"routes\":\"7");
+        int routeDbSize = routeDbList != null ? routeDbList.size() : 0;
+        tvRoutesCheck.setText("routes 포함: " + (hasRoutes ? "✅ 있음" : "❌ 없음 → DB 재빌드 필요")
+                + "\n노선DB: " + routeDbSize + "개");
+        tvRoutesCheck.setTextColor(Color.parseColor(hasRoutes ? "#27AE60" : "#E74C3C"));
+        tvRoutesCheck.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        LinearLayout.LayoutParams rcLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rcLp.setMargins(0, dpToPx(4), 0, dpToPx(4));
+        tvRoutesCheck.setLayoutParams(rcLp);
+        busManageCard.addView(tvRoutesCheck);
+
         TextView btnBusManage = new TextView(this);
         btnBusManage.setText(hasStopDb2 ? "🚏 정류장 DB 업데이트" : "🚏 정류장 DB 생성 (최초 1회)");
         btnBusManage.setTextColor(Color.WHITE);
@@ -3936,6 +4077,88 @@ public class PinActivity extends AppCompatActivity {
             }, pct -> { dlgPb.setProgress(pct); tvDlgPct.setText(pct + "%"); });
         }));
         busManageCard.addView(btnBusManage);
+
+        // ── 배차시간표 업로드 버튼 ──────────────────────────────────
+        boolean hasBusTimes = !busTimesMap.isEmpty();
+        TextView tvBusTimesStatus = new TextView(this);
+        tvBusTimesStatus.setText("🕐 배차시간표: " + (hasBusTimes ? busTimesMap.size() + "개 노선 ✓" : "없음"));
+        tvBusTimesStatus.setTextColor(Color.parseColor(hasBusTimes ? "#27AE60" : "#E74C3C"));
+        tvBusTimesStatus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        LinearLayout.LayoutParams btStLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btStLp.setMargins(0, dpToPx(8), 0, dpToPx(4));
+        tvBusTimesStatus.setLayoutParams(btStLp);
+        busManageCard.addView(tvBusTimesStatus);
+
+        TextView btnBusTimes = new TextView(this);
+        btnBusTimes.setText("🕐 배차시간표 업로드");
+        btnBusTimes.setTextColor(Color.WHITE);
+        btnBusTimes.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        btnBusTimes.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnBusTimes.setGravity(Gravity.CENTER);
+        btnBusTimes.setPadding(0, dpToPx(12), 0, dpToPx(12));
+        android.graphics.drawable.GradientDrawable btnBtBg = new android.graphics.drawable.GradientDrawable();
+        btnBtBg.setColor(Color.parseColor("#00B894"));
+        btnBtBg.setCornerRadius(dpToPx(10));
+        btnBusTimes.setBackground(btnBtBg);
+        LinearLayout.LayoutParams btnBtLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnBtLp.setMargins(0, 0, 0, dpToPx(8));
+        btnBusTimes.setLayoutParams(btnBtLp);
+        btnBusTimes.setOnClickListener(v -> showConfirmDialog("🕐", "배차시간표 업데이트",
+                "traffic.daejeon.go.kr에서 최신 배차시간표를\n자동으로 다운로드하여 Drive에 업로드합니다.\n잠시 시간이 걸릴 수 있습니다.", () -> {
+                    btnBusTimes.setEnabled(false);
+                    btnBtBg.setColor(Color.parseColor("#AAAAAA"));
+                    new Thread(() -> {
+                        try {
+                            // 1) traffic.daejeon.go.kr에서 엑셀 다운로드
+                            runOnUiThread(() -> android.widget.Toast.makeText(this,
+                                    "배차시간표 다운로드 중...", android.widget.Toast.LENGTH_SHORT).show());
+                            String xlsUrl = "https://traffic.daejeon.go.kr/web-notice/api/v1/notice/getNoticeFileName/bustime/1";
+                            java.net.URL url = new java.net.URL(xlsUrl);
+                            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                            conn.setConnectTimeout(15000);
+                            conn.setReadTimeout(30000);
+                            conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+                            byte[] xlsBytes = readBytes(conn.getInputStream());
+                            conn.disconnect();
+
+                            // 2) 엑셀 파싱 → TXT 생성 (9필드: rno|src|dst|ws|wd|ss|sd|hs|hd)
+                            runOnUiThread(() -> android.widget.Toast.makeText(this,
+                                    "배차시간표 파싱 중...", android.widget.Toast.LENGTH_SHORT).show());
+                            String json = parseBusTimesXls(xlsBytes);
+                            if (json.isEmpty()) throw new Exception("파싱 실패");
+
+                            // 3) Drive에 업로드
+                            runOnUiThread(() -> android.widget.Toast.makeText(this,
+                                    "Drive에 업로드 중...", android.widget.Toast.LENGTH_SHORT).show());
+                            new DriveUploadHelper(this).uploadFileSync(json, BUS_TIME_FILE);
+                            getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
+                                    .putString("bustimes_txt_cache", json).apply();
+                            saveBusTimes(json); // 내부 파일에 영구 저장
+                            loadBusTimesFromJson(json);
+
+                            runOnUiThread(() -> {
+                                btnBusTimes.setEnabled(true);
+                                btnBtBg.setColor(Color.parseColor("#00B894"));
+                                tvBusTimesStatus.setText("🕐 배차시간표: " + busTimesMap.size() + "개 노선 ✓");
+                                tvBusTimesStatus.setTextColor(Color.parseColor("#27AE60"));
+                                android.widget.Toast.makeText(this,
+                                        "✓ 배차시간표 " + busTimesMap.size() + "개 노선 업로드 완료!",
+                                        android.widget.Toast.LENGTH_LONG).show();
+                            });
+                        } catch (Exception e) {
+                            runOnUiThread(() -> {
+                                btnBusTimes.setEnabled(true);
+                                btnBtBg.setColor(Color.parseColor("#00B894"));
+                                android.widget.Toast.makeText(this,
+                                        "실패: " + e.getMessage(), android.widget.Toast.LENGTH_LONG).show();
+                            });
+                        }
+                    }).start();
+                }));
+        busManageCard.addView(btnBusTimes);
+
         layout.addView(busManageCard);
 
         layout.setPadding(0, 0, 0, dpToPx(40));
@@ -9731,6 +9954,7 @@ public class PinActivity extends AppCompatActivity {
         isOnSubScreen     = true;
         isOnMenuScreen    = false;
         isOnBalanceScreen = false;
+        busBackStack.clear(); // 백스택 초기화
 
         // ── 루트: LinearLayout VERTICAL (월별 통계와 동일) ─
         LinearLayout root = new LinearLayout(this);
@@ -9845,16 +10069,19 @@ public class PinActivity extends AppCompatActivity {
         trLp.setMargins(0, 0, 0, dpToPx(8));
         tabRow.setLayoutParams(trLp);
 
-        final boolean[] isBusTab = {true}; // true=버스, false=정류장
+        final boolean[] isBusTab = busIsBusTab; // true=버스, false=정류장
 
-        TextView tabBus = new TextView(this);
-        tabBus.setText("버스 번호 검색");
+        busTabBus = new TextView(this);
+        TextView tabBus = busTabBus;
+        busIsBusTab[0] = true;
+        tabBus.setText("번호 검색");
         tabBus.setGravity(Gravity.CENTER);
         tabBus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
         tabBus.setTypeface(null, android.graphics.Typeface.BOLD);
         tabBus.setPadding(dpToPx(12), dpToPx(11), dpToPx(12), dpToPx(11));
 
-        TextView tabStop = new TextView(this);
+        busTabStop = new TextView(this);
+        TextView tabStop = busTabStop;
         tabStop.setText("정류장 검색");
         tabStop.setGravity(Gravity.CENTER);
         tabStop.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
@@ -9870,7 +10097,7 @@ public class PinActivity extends AppCompatActivity {
         unselBg.setCornerRadius(dpToPx(8));
         unselBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
 
-        Runnable updateTabStyle = () -> {
+        busUpdateTabStyle = () -> {
             if (isBusTab[0]) {
                 android.graphics.drawable.GradientDrawable b1 = new android.graphics.drawable.GradientDrawable();
                 b1.setColor(Color.parseColor("#5BA9F0")); b1.setCornerRadius(dpToPx(8));
@@ -9888,15 +10115,54 @@ public class PinActivity extends AppCompatActivity {
                 b2.setColor(Color.parseColor("#5BA9F0")); b2.setCornerRadius(dpToPx(8));
                 tabStop.setBackground(b2); tabStop.setTextColor(Color.WHITE);
             }
+
         };
-        updateTabStyle.run();
+        if (busUpdateTabStyle != null) busUpdateTabStyle.run();
 
         LinearLayout.LayoutParams tabLp1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         tabLp1.setMargins(0, 0, dpToPx(6), 0);
         tabBus.setLayoutParams(tabLp1);
-        tabStop.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        LinearLayout.LayoutParams tabStopLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        tabStopLp.setMargins(0, 0, dpToPx(6), 0);
+        tabStop.setLayoutParams(tabStopLp);
         tabRow.addView(tabBus);
         tabRow.addView(tabStop);
+
+        // 지도 버튼 (탭과 동일한 스타일 - 내 위치 기반 주변 정류장 지도)
+        // GPS 이미지 탭 (지도 텍스트 제거 → GPS 아이콘)
+        busTabMap = new android.widget.ImageView(this);
+        android.widget.ImageView tabGpsIv = (android.widget.ImageView) busTabMap;
+        try {
+            android.graphics.Bitmap gpsBm0 = android.graphics.BitmapFactory
+                    .decodeStream(getAssets().open("gps0.png"));
+            tabGpsIv.setImageBitmap(gpsBm0);
+        } catch (Exception ignored) {}
+        tabGpsIv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        android.graphics.drawable.GradientDrawable myLocBg = new android.graphics.drawable.GradientDrawable();
+        myLocBg.setColor(Color.WHITE);
+        myLocBg.setCornerRadius(dpToPx(8));
+        myLocBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+        tabGpsIv.setBackground(myLocBg);
+        tabGpsIv.setPadding(dpToPx(8), dpToPx(5), dpToPx(8), dpToPx(5));
+        tabGpsIv.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(44), 1f));
+        tabGpsIv.setOnClickListener(v -> {
+            arrivalSessionCache.clear();
+            if (busFavSection != null) {
+                android.graphics.drawable.GradientDrawable gpsSelBg = new android.graphics.drawable.GradientDrawable();
+                gpsSelBg.setColor(Color.parseColor("#5BA9F0")); gpsSelBg.setCornerRadius(dpToPx(8));
+                tabGpsIv.setBackground(gpsSelBg);
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    android.graphics.drawable.GradientDrawable resetBg = new android.graphics.drawable.GradientDrawable();
+                    resetBg.setColor(Color.WHITE); resetBg.setCornerRadius(dpToPx(8));
+                    resetBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                    tabGpsIv.setBackground(resetBg);
+                }, 500);
+            }
+            refreshBusFavorites(busFavSection, busResultContainer);
+            android.widget.Toast.makeText(this, "GPS 갱신 중...", android.widget.Toast.LENGTH_SHORT).show();
+        });
+        tabRow.addView(tabGpsIv);
+
         searchArea.addView(tabRow);
 
         // 검색창 행
@@ -9978,6 +10244,7 @@ public class PinActivity extends AppCompatActivity {
 
         // ── 스크롤 (weight=1 로 남은 공간 모두 차지) ─────
         ScrollView sv = new ScrollView(this);
+        busTimelineSv = sv; // 타임라인 스크롤 제어용
         sv.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         sv.setOnTouchListener((v, event) -> {
@@ -9999,6 +10266,7 @@ public class PinActivity extends AppCompatActivity {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         svInner.addView(favSection);
         busFavSection2 = favSection;
+        busFavSection  = favSection; // refreshBusFavorites에서 참조할 수 있도록 즉시 설정
 
         // 결과 컨테이너 (단일)
         LinearLayout resultContainer = new LinearLayout(this);
@@ -10010,10 +10278,19 @@ public class PinActivity extends AppCompatActivity {
 
         // 즐겨찾기 로드 & 렌더링
         refreshBusFavorites(favSection, resultContainer);
+        startFavAutoRefresh(); // 즐겨찾기 자동갱신 시작
 
         root.addView(sv);
 
-        // ── 오너 전용: 정류장 DB 업데이트 버튼 ────────────
+        // ── 하단 고정 버튼 영역 (알림시작 등) ──────────
+        LinearLayout bottomBar = new LinearLayout(this);
+        bottomBar.setOrientation(LinearLayout.VERTICAL);
+        bottomBar.setVisibility(android.view.View.GONE);
+        bottomBar.setBackgroundColor(Color.parseColor("#F2F4F8"));
+        bottomBar.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        busBottomBar = bottomBar;
+        root.addView(bottomBar);
         if (isOwner) {
             LinearLayout ownerBar = new LinearLayout(this);
             ownerBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -10068,7 +10345,7 @@ public class PinActivity extends AppCompatActivity {
         tabBus.setOnClickListener(v -> {
             if (!isBusTab[0]) {
                 isBusTab[0] = true;
-                updateTabStyle.run();
+                if (busUpdateTabStyle != null) busUpdateTabStyle.run();
                 etSearch.setHint("버스 번호 입력");
                 etSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                 etSearch.setText("");
@@ -10080,7 +10357,7 @@ public class PinActivity extends AppCompatActivity {
         tabStop.setOnClickListener(v -> {
             if (isBusTab[0]) {
                 isBusTab[0] = false;
-                updateTabStyle.run();
+                if (busUpdateTabStyle != null) busUpdateTabStyle.run();
                 etSearch.setHint("정류장 이름 입력");
                 etSearch.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
                 etSearch.setText("");
@@ -10157,23 +10434,55 @@ public class PinActivity extends AppCompatActivity {
         btnBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14);
         btnBack.setTypeface(null, android.graphics.Typeface.BOLD);
         btnBack.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-        btnBack.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50)));
-        btnBack.setOnClickListener(v -> {
-            // 타임라인 화면(검색창 숨겨진 상태)이면 검색 화면으로 복귀
-            if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.GONE) {
-                if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
+        LinearLayout.LayoutParams backLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
+        backLp.setMargins(0, 0, 0, 0);
+        btnBack.setLayoutParams(backLp);
+        btnBack.setOnClickListener(v -> busNavigateBack());
+        btnBar.addView(btnBack);
+
+        // 새로고침 버튼
+        Button btnRefreshBar = new Button(this);
+        btnRefreshBar.setText("↺ 새로고침");
+        btnRefreshBar.setBackground(makeShadowCardDrawable("#D5EFF9", 14, 6));
+        btnRefreshBar.setTextColor(Color.parseColor("#0984E3"));
+        btnRefreshBar.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
+        btnRefreshBar.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnRefreshBar.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+        LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dpToPx(50), 1f);
+        btnRefreshBar.setLayoutParams(refreshLp);
+        btnRefreshBar.setOnClickListener(v -> {
+            // 즐겨찾기 화면이면 실시간 갱신 (백스택 비어있고 즐겨찾기 섹션 존재)
+            if (busBackStack.isEmpty()) {
+                if (busFavSection != null) {
+                    arrivalSessionCache.clear();
+                    refreshBusFavorites(busFavSection, busResultContainer);
+                    return;
+                }
+                // 검색화면 리셋
+                if (busEtSearch != null) busEtSearch.setText("");
+                if (busTabBus != null) busTabBus.performClick();
                 if (busResultContainer != null) busResultContainer.removeAllViews();
-            } else {
-                isOnSubScreen = false;
-                if (isOwner) ownerMenuBuilder.build();
-                else userMenuBuilder.build(false);
+                android.view.inputmethod.InputMethodManager imm2 =
+                        (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                if (imm2 != null && busEtSearch != null) imm2.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
+                return;
+            }
+            if (!busBackStack.isEmpty()) {
+                String[] cur = busBackStack.peek();
+                if ("timeline".equals(cur[0])) {
+                    if (busRefreshRunnable != null) busRefreshHandler.removeCallbacks(busRefreshRunnable);
+                    busResultContainer.removeAllViews();
+                    busFixedHeader.removeAllViews();
+                    busScreenLoadStops(cur[1], cur[2], busResultContainer, cur[3], cur[4]);
+                } else if ("arrival".equals(cur[0])) {
+                    arrivalSessionCache.remove(cur[1]);
+                    if (busResultContainer != null) busResultContainer.removeAllViews();
+                    final String nId = cur[1], nNm = cur[2], nNo = cur[3], fRno2 = cur[4];
+                    new Thread(() -> fetchAndRenderArrival(nId, nNm, nNo, fRno2, busResultContainer, true)).start();
+                }
             }
         });
-        btnBar.addView(btnBack);
+        btnBar.addView(btnRefreshBar);
         root.addView(btnBar);
 
         setContentView(root);
@@ -10400,7 +10709,7 @@ public class PinActivity extends AppCompatActivity {
             LinearLayout card = makeBusCard(
                     r[1] + "번",
                     (r[2].isEmpty()?"기점":r[2]) + "  ↔  " + (r[3].isEmpty()?"종점":r[3]),
-                    "", "#0984E3", routeTp);
+                    "", routeTypeBadge(routeTp)[1], routeTp);
             card.setOnClickListener(v -> {
                 if (busEtSearch != null) busEtSearch.setText("");
                 if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
@@ -10415,18 +10724,1404 @@ public class PinActivity extends AppCompatActivity {
         busScreenLoadStops(routeId, routeNo, container, "forward", "");
     }
 
+    /** 즐겨찾기 화면 자동갱신 시작 (30초마다) */
+    /** 공통 지도 다이얼로그 표시 */
+    private void openMapDialog(String title, String html) {
+        openMapDialog(title, html, null, null, null);
+    }
+
+    private void openMapDialog(String title, String html, String routeId,
+                                java.util.List<String[]> coordStops,
+                                java.util.Map<String, Integer> ordToIdx) {
+        android.app.Dialog mapDlg = new android.app.Dialog(this,
+                android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
+
+        // 상단 타이틀바
+        LinearLayout titleBar2 = new LinearLayout(this);
+        titleBar2.setOrientation(LinearLayout.HORIZONTAL);
+        titleBar2.setGravity(Gravity.CENTER_VERTICAL);
+        titleBar2.setBackgroundColor(Color.parseColor("#0984E3"));
+        titleBar2.setPadding(dpToPx(14), dpToPx(10), dpToPx(14), dpToPx(10));
+        android.widget.FrameLayout.LayoutParams tbLp = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(48));
+        titleBar2.setLayoutParams(tbLp);
+
+        TextView tvClose = new TextView(this);
+        tvClose.setText("✕");
+        tvClose.setTextColor(Color.WHITE);
+        tvClose.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
+        tvClose.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvClose.setPadding(0, 0, dpToPx(14), 0);
+        tvClose.setOnClickListener(v -> mapDlg.dismiss());
+        titleBar2.addView(tvClose);
+
+        final TextView tvTitle = new TextView(this);
+        tvTitle.setText(title);
+        tvTitle.setTextColor(Color.WHITE);
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvTitle.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        titleBar2.addView(tvTitle);
+
+        // GPS 수신 상태 표시 (지도 좌측 하단 오버레이)
+        final android.widget.ImageView ivGps = new android.widget.ImageView(this);
+        try {
+            android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeStream(getAssets().open("gps0.png"));
+            ivGps.setImageBitmap(bm);
+        } catch (Exception ignored) {}
+        ivGps.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        android.widget.FrameLayout.LayoutParams gpsLp = new android.widget.FrameLayout.LayoutParams(
+                dpToPx(80), dpToPx(40));
+        gpsLp.gravity = Gravity.BOTTOM | Gravity.START;
+        gpsLp.setMargins(dpToPx(12), 0, 0, dpToPx(12));
+        ivGps.setLayoutParams(gpsLp);
+
+        // WebView
+        android.webkit.WebView wv = new android.webkit.WebView(this);
+        wv.getSettings().setJavaScriptEnabled(true);
+        wv.getSettings().setDomStorageEnabled(true);
+        wv.getSettings().setAllowFileAccess(true);
+        wv.getSettings().setAllowFileAccessFromFileURLs(true);
+        wv.getSettings().setAllowUniversalAccessFromFileURLs(true);
+        wv.getSettings().setLoadWithOverviewMode(true);
+        wv.getSettings().setUseWideViewPort(true);
+        android.widget.FrameLayout.LayoutParams wvLp = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
+        wvLp.topMargin = dpToPx(48);
+        wv.setLayoutParams(wvLp);
+
+        frame.addView(wv);
+        frame.addView(titleBar2);
+        frame.addView(ivGps);
+        mapDlg.setContentView(frame);
+        mapDlg.show();
+        wv.post(() -> wv.loadDataWithBaseURL("https://unpkg.com", html, "text/html", "UTF-8", null));
+
+        // 실시간 갱신 (routeId 있을 때만 - 타임라인 버스 위치)
+        if (routeId != null && !routeId.isEmpty() && coordStops != null) {
+            final android.widget.ImageView fIvGps = ivGps;
+            // ordToCoord 맵 생성
+            final java.util.Map<String, double[]> ordToCoord2 = new java.util.HashMap<>();
+            for (String[] s : coordStops) {
+                if (s.length >= 6 && !s[4].isEmpty() && !s[5].isEmpty()) {
+                    try { ordToCoord2.put(s[2], new double[]{Double.parseDouble(s[4]), Double.parseDouble(s[5])}); }
+                    catch (Exception ig) {}
+                }
+            }
+            final String fRouteId = routeId;
+            final java.util.Map<String, Integer> fOrdToIdx = ordToIdx;
+            final android.os.Handler mapHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            final Runnable[] mapRefresh = {null};
+            mapRefresh[0] = new Runnable() {
+                @Override public void run() {
+                    if (!mapDlg.isShowing()) return;
+                    new Thread(() -> {
+                        try {
+                            String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                    + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                    + "&routeId=" + fRouteId + "&numOfRows=50&pageNo=1&_type=xml");
+                            // 도착정보 API: arrtime(초) 조회
+                            String arvlXml = "";
+                            try {
+                                // LC API에서 nodeord만 → 도착API로 arrtime 보완
+                                arvlXml = lcXml; // LC API 결과 재활용
+                            } catch (Exception ig) {}
+
+                            // GPS 좌표 + 보간 겸용: [[toIdx,arrSec,shortNo,lat,lon],...]
+                            StringBuilder jsUpdate = new StringBuilder("updateBuses([");
+                            boolean firstBus = true;
+                            int cnt = 0;
+                            java.util.Map<String,double[]> newGpsMap = new java.util.HashMap<>();
+                            for (String item : lcXml.split("<item>")) {
+                                String ord = tag(item, "nodeord");
+                                String vno = tag(item, "vehicleno");
+                                String gla = tag(item, "gpslati");
+                                String glo = tag(item, "gpslong");
+                                if (ord.isEmpty()) continue;
+                                Integer curIdx = fOrdToIdx != null ? fOrdToIdx.get(ord) : null;
+                                if (curIdx == null) continue;
+                                int toIdx = curIdx + 1;
+                                int arrSec = 20;
+                                String shortNo = vno.length() > 4 ? vno.substring(vno.length()-4) : vno;
+                                double lat = -1, lon = -1;
+                                if (!gla.isEmpty() && !glo.isEmpty()) {
+                                    try { lat = Double.parseDouble(gla); lon = Double.parseDouble(glo);
+                                          newGpsMap.put(ord, new double[]{lat, lon}); } catch(Exception ig){}
+                                }
+                                if (!firstBus) jsUpdate.append(",");
+                                jsUpdate.append("[").append(toIdx).append(",").append(arrSec)
+                                        .append(",'").append(shortNo).append("'")
+                                        .append(",").append(lat).append(",").append(lon).append("]");
+                                firstBus = false;
+                                cnt++;
+                            }
+                            if (!newGpsMap.isEmpty()) busGpsMap = newGpsMap;
+                            jsUpdate.append("]);");
+                            final String js = jsUpdate.toString();
+                            final int fCnt = cnt;
+                            final int gpsCount = newGpsMap.size(); // GPS 수신된 버스 수
+                            runOnUiThread(() -> {
+                                if (mapDlg.isShowing()) {
+                                    wv.evaluateJavascript(js, null);
+                                    tvTitle.setText(title.split("  ")[0] + "  " + fCnt + "대 운행중");
+                                    // GPS 수신 상태 업데이트
+                                    String gpsFile;
+                                    if (gpsCount > 0 && fCnt > 0) {
+                                        int strength = (int)((double)gpsCount / fCnt * 100);
+                                        if (strength >= 80) gpsFile = "gps4.png";
+                                        else if (strength >= 60) gpsFile = "gps3.png";
+                                        else if (strength >= 40) gpsFile = "gps2.png";
+                                        else gpsFile = "gps1.png";
+                                    } else {
+                                        gpsFile = "gps0.png";
+                                    }
+                                    try {
+                                        android.graphics.Bitmap bm = android.graphics.BitmapFactory
+                                                .decodeStream(getAssets().open(gpsFile));
+                                        fIvGps.setImageBitmap(bm);
+                                    } catch (Exception ignored) {}
+                                }
+                            });
+                        } catch (Exception ignored) {}
+                        if (mapDlg.isShowing()) mapHandler.postDelayed(mapRefresh[0], 20000);
+                    }).start();
+                }
+            };
+            // 20초 후 첫 갱신 시작
+            mapHandler.postDelayed(mapRefresh[0], 20000);
+            mapDlg.setOnDismissListener(d -> mapHandler.removeCallbacks(mapRefresh[0]));
+        }
+    }
+
+    /** GPS 좌표 직접 수신 버전 */
+    private void showBusMapDialogWithGps(String routeId, String routeNo,
+                                          java.util.List<String[]> stops,
+                                          java.util.Set<String> busOrdSet,
+                                          java.util.Map<String,String> vehMap,
+                                          java.util.Map<String,double[]> gpsMap) {
+        busGpsMap = gpsMap;
+        busVehMapForMap = vehMap;
+        showBusMapDialog(routeId, routeNo, stops, busOrdSet, vehMap);
+    }
+
+    /** 버스 노선 실시간 지도 (Leaflet.js + OpenStreetMap) */
+    private void showBusMapDialog(String routeId, String routeNo,
+                                   java.util.List<String[]> stops,
+                                   java.util.Set<String> busOrdSet) {
+        showBusMapDialog(routeId, routeNo, stops, busOrdSet, new java.util.HashMap<>());
+    }
+    private void showBusMapDialog(String routeId, String routeNo,
+                                   java.util.List<String[]> stops,
+                                   java.util.Set<String> busOrdSet,
+                                   java.util.Map<String,String> vehMap) {
+        java.util.List<String[]> coordStops = new java.util.ArrayList<>();
+        for (String[] s : stops) {
+            if (s.length >= 6 && !s[4].isEmpty() && !s[5].isEmpty()) coordStops.add(s);
+        }
+        if (coordStops.isEmpty()) {
+            android.widget.Toast.makeText(this, "정류장 좌표 로딩 중...", android.widget.Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                try {
+                    String stXml = httpGet(BUS_BASE2 + "BusRouteInfoInqireService/getRouteAcctoThrghSttnList"
+                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                            + "&routeId=" + routeId + "&numOfRows=100&pageNo=1&_type=xml");
+                    java.util.List<String[]> freshStops = new java.util.ArrayList<>();
+                    for (String item : stXml.split("<item>")) {
+                        if (!item.contains("<nodeid>")) continue;
+                        freshStops.add(new String[]{tag(item,"nodeid"),tag(item,"nodenm"),
+                                tag(item,"nodeord"),tag(item,"nodeno"),
+                                tag(item,"gpslati"),tag(item,"gpslong")});
+                    }
+                    runOnUiThread(() -> buildAndShowMap(routeId, routeNo, freshStops, busOrdSet, vehMap));
+                } catch (Exception e) {
+                    runOnUiThread(() -> android.widget.Toast.makeText(this,
+                            "지도 로드 실패", android.widget.Toast.LENGTH_SHORT).show());
+                }
+            }).start();
+        } else {
+            buildAndShowMap(routeId, routeNo, coordStops, busOrdSet, vehMap);
+        }
+    }
+
+    private void buildAndShowMap(String routeId, String routeNo,
+                                  java.util.List<String[]> stops,
+                                  java.util.Set<String> busOrdSet) {
+        buildAndShowMap(routeId, routeNo, stops, busOrdSet, new java.util.HashMap<>());
+    }
+    private void buildAndShowMap(String routeId, String routeNo,
+                                  java.util.List<String[]> stops,
+                                  java.util.Set<String> busOrdSet,
+                                  java.util.Map<String,String> vehMap) {
+        // ord → 좌표 맵 + 순서 리스트
+        java.util.Map<String, double[]> ordToCoord = new java.util.HashMap<>();
+        java.util.Map<String, Integer> ordToIdx = new java.util.HashMap<>();
+        java.util.List<double[]> coordList = new java.util.ArrayList<>();
+        double centerLat = 36.35, centerLon = 127.38;
+        boolean first = true;
+        for (String[] s : stops) {
+            if (s.length < 6 || s[4].isEmpty() || s[5].isEmpty()) continue;
+            try {
+                double la = Double.parseDouble(s[4]), lo = Double.parseDouble(s[5]);
+                ordToCoord.put(s[2], new double[]{la, lo});
+                ordToIdx.put(s[2], coordList.size());
+                coordList.add(new double[]{la, lo});
+                if (first) { centerLat = la; centerLon = lo; first = false; }
+            } catch (Exception ignored) {}
+        }
+
+        // 노선 좌표 배열 JS
+        StringBuilder latlngs = new StringBuilder("[");
+        for (double[] c : coordList) {
+            if (latlngs.length() > 1) latlngs.append(",");
+            latlngs.append("[").append(c[0]).append(",").append(c[1]).append("]");
+        }
+        latlngs.append("]");
+
+        // 전체 정류장 좌표 JS 배열 (보간용)
+        StringBuilder allCoordsJs = new StringBuilder("var allCoords=[");
+        for (int ci = 0; ci < coordList.size(); ci++) {
+            if (ci > 0) allCoordsJs.append(",");
+            allCoordsJs.append("[").append(coordList.get(ci)[0])
+                       .append(",").append(coordList.get(ci)[1]).append("]");
+        }
+        allCoordsJs.append("];");
+
+        // 정류장 마커 JS
+        StringBuilder stopJs = new StringBuilder();
+        for (String[] s : stops) {
+            if (s.length < 6 || s[4].isEmpty() || s[5].isEmpty()) continue;
+            boolean isFirst2 = s[2].equals("1");
+            boolean isLast2  = s[2].equals(String.valueOf(stops.size()));
+            String col = isFirst2 || isLast2 ? "#E74C3C" : "#0984E3";
+            stopJs.append(String.format(
+                "L.circleMarker([%s,%s],{radius:%d,color:'%s',fillColor:'%s',fillOpacity:0.9,weight:2})" +
+                ".bindTooltip('%s',{permanent:false,direction:'top'}).addTo(map);\n",
+                s[4], s[5], isFirst2||isLast2?7:4, col, col,
+                s[1].replace("'","\\\'").replace("\"","&quot;")));
+        }
+
+        // 버스 초기 위치 JS
+        StringBuilder busJs = new StringBuilder();
+        int busIdx = 0;
+        for (String ord : busOrdSet) {
+            // GPS 좌표 우선 사용, 없으면 정류장 좌표 fallback
+            double[] gpsCoord = busGpsMap.get(ord);
+            double[] coord = gpsCoord != null ? gpsCoord : ordToCoord.get(ord);
+            if (coord == null) continue;
+            String vno = vehMap.getOrDefault(ord, busVehMapForMap.getOrDefault(ord, ""));
+            String shortNo = vno.length() > 4 ? vno.substring(vno.length() - 4) : vno;
+            busJs.append(String.format("addBus(%d,[%f,%f],'%s');\n", busIdx++, coord[0], coord[1], shortNo));
+        }
+
+        String html = "<!DOCTYPE html><html><head><meta charset='utf-8'/>" +
+            "<meta name='viewport' content='width=device-width,initial-scale=1'/>" +
+            "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/>" +
+            "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>" +
+            "<style>html,body,#map{width:100%;height:100%;margin:0;padding:0;}" +
+            ".bus-label{background:rgba(9,132,227,0.85);color:white;font-size:13px;font-weight:bold;" +
+            "padding:2px 5px;border-radius:4px;border:1px solid white;text-align:center;" +
+            "box-shadow:0 1px 4px rgba(0,0,0,0.4);white-space:nowrap;margin-top:2px;}" +
+            ".bus-wrap{display:flex;flex-direction:column;align-items:center;background:transparent!important;border:none!important;}" +
+            ".leaflet-div-icon{background:transparent!important;border:none!important;}" +
+            "</style></head><body>" +
+            "<div id='map'></div><script>" +
+            "var map=L.map('map').setView([" + centerLat + "," + centerLon + "],14);" +
+            "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'," +
+            "{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);" +
+            "var latlngs=" + latlngs + ";" +
+            "L.polyline(latlngs,{color:'#0984E3',weight:4,opacity:0.8}).addTo(map);" +
+            allCoordsJs +
+            stopJs +
+            "var buses={};var busFrom={};var busTo={};var busLabels={};" +
+            "function makeBusIcon(label){" +
+            "  var lbl=label&&label.length>0?label:'--';" +
+            "  return L.divIcon({className:''," +
+            "  html:'<div class=\"bus-wrap\"><img src=\"file:///android_asset/bluebus.png\" width=\"48\" height=\"36\" style=\"filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))\"/><div class=\"bus-label\">'+ lbl +'</div></div>'," +
+            "  iconSize:[48,54],iconAnchor:[24,27]});}" +
+            "function interp(a,b,t){return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];}" +
+            "var animTimer=null;var animStart=0;var animDur=20;" +
+            "function startAnim(){" +
+            "  if(animTimer)clearInterval(animTimer);" +
+            "  animStart=Date.now();" +
+            "  animTimer=setInterval(function(){" +
+            "    var t=Math.min((Date.now()-animStart)/1000/animDur,1);" +
+            "    var e=t<0.5?2*t*t:(4-2*t)*t-1;" +
+            "    Object.keys(busTo).forEach(function(id){" +
+            "      var f=busFrom[id],to=busTo[id];" +
+            "      if(!f||!to)return;" +
+            "      var pos=interp(f,to,e);" +
+            "      if(buses[id])buses[id].setLatLng(pos);" +
+            "      else buses[id]=L.marker(pos,{icon:makeBusIcon(busLabels[id]||'--')}).addTo(map);" +
+            "    });" +
+            "  },500);" +
+            "}" +
+            "function updateBuses(busData){" +
+            "  busData.forEach(function(b,i){" +
+            "    var toIdx=b[0],lbl=b[2]||'',lat=b[3],lon=b[4];" +
+            "    var newPos=null;" +
+            "    if(lat&&lat>0&&lon&&lon>0){newPos=[lat,lon];}" +
+            "    else if(toIdx>=1&&toIdx<allCoords.length){newPos=allCoords[toIdx];}" +
+            "    if(!newPos)return;" +
+            "    busLabels[i]=lbl;" +
+            "    busFrom[i]=buses[i]?[buses[i].getLatLng().lat,buses[i].getLatLng().lng]:newPos;" +
+            "    busTo[i]=newPos;" +
+            "    if(!buses[i])buses[i]=L.marker(newPos,{icon:makeBusIcon(lbl)}).addTo(map);" +
+            "    else buses[i].setIcon(makeBusIcon(lbl));" +
+            "  });" +
+            "  startAnim();" +
+            "}" +
+            "if(latlngs.length>0)map.fitBounds(L.polyline(latlngs).getBounds().pad(0.1));" +
+            busJs +
+            "</script></body></html>";
+
+        openMapDialog(routeNo + "번 실시간 버스 위치  " + busOrdSet.size() + "대 운행중",
+                html, routeId, stops, ordToIdx);
+    }
+
+
+    /**
+     * GPS 좌표 기반으로 stops 중 가장 가까운 정류장의 nodeord 반환
+     * stops[4]=lat, stops[5]=lon
+     */
+    private String gpsToNearestOrd(double gpsLat, double gpsLon, java.util.List<String[]> stops) {
+        String bestOrd = "";
+        double bestDist = Double.MAX_VALUE;
+        for (String[] s : stops) {
+            if (s.length < 6 || s[4].isEmpty() || s[5].isEmpty()) continue;
+            try {
+                double sLat = Double.parseDouble(s[4]), sLon = Double.parseDouble(s[5]);
+                double dlat = Math.toRadians(sLat - gpsLat), dlon = Math.toRadians(sLon - gpsLon);
+                double a = Math.sin(dlat/2)*Math.sin(dlat/2)
+                        + Math.cos(Math.toRadians(gpsLat))*Math.cos(Math.toRadians(sLat))
+                        * Math.sin(dlon/2)*Math.sin(dlon/2);
+                double dist = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                if (dist < bestDist) { bestDist = dist; bestOrd = s[2]; }
+            } catch (Exception ignored) {}
+        }
+        return bestOrd;
+    }
+
+    /** 승하차 알림 설정 화면 */
+    /** 승·하차 알림 설정 메인 화면 */
+    private void showBusAlarmScreen(String routeNo, String routeId, String nodeId, String nodeNm, String nodeNo) {
+        showBusAlarmScreen(routeNo, routeId, nodeId, nodeNm, nodeNo, null, null);
+    }
+
+    private void showBusAlarmScreen(String routeNo, String routeId, String nodeId, String nodeNm, String nodeNo,
+                                    String alightNodeId, String alightNodeNm) {
+        // 백스택 처리
+        if (!busBackStack.isEmpty() && "alarm".equals(busBackStack.peek()[0])) busBackStack.pop();
+        busBackStack.push(new String[]{"alarm", routeId, routeNo, nodeId, nodeNm, nodeNo});
+        // arrivalRefresh 완전 중단
+        if (arrivalRefreshRunnable != null) {
+            arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable);
+            arrivalRefreshRunnable = null;
+        }
+        arrivalRefreshNodeId = "";
+        if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+        // ★ 이전 저장된 하차 알림 설정 초기화 (화면 진입마다 초기 상태)
+        android.content.SharedPreferences.Editor clearEd = getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit();
+        android.content.SharedPreferences clearPrefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        for (java.util.Map.Entry<String, ?> e : clearPrefs.getAll().entrySet()) {
+            if (e.getKey().startsWith("alarm_alight_" + routeId + "_")) clearEd.remove(e.getKey());
+        }
+        clearEd.remove("alarm_alight_last_" + routeId).apply();
+        // 헤더 태그를 alarm으로 변경 → renderArrivalRows 태그 체크 차단
+        if (busFixedHeader != null) busFixedHeader.setTag("alarm_" + nodeId);
+
+        // 노선 타입 색상
+        android.content.SharedPreferences bc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+        String rTp = bc.getString("route_" + routeId + "_rTp", "");
+        String[] badge = routeTypeBadge(rTp);
+        int busColor = android.graphics.Color.parseColor(badge[1]);
+
+        // ── 헤더 ──────────────────────────────────────
+        if (busFixedHeader != null) {
+            busFixedHeader.removeAllViews();
+            busFixedHeader.setVisibility(android.view.View.VISIBLE);
+            busFixedHeader.setBackgroundColor(Color.parseColor("#F2F4F8"));
+
+            LinearLayout titleBar = new LinearLayout(this);
+            titleBar.setOrientation(LinearLayout.HORIZONTAL);
+            titleBar.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams tbLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            tbLp.setMargins(dpToPx(12), dpToPx(4), dpToPx(12), dpToPx(4));
+            titleBar.setLayoutParams(tbLp);
+
+            TextView tvBack = new TextView(this);
+            tvBack.setText("\u2039");
+            tvBack.setTextColor(Color.parseColor("#0984E3"));
+            tvBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
+            tvBack.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvBack.setPadding(0, 0, dpToPx(8), 0);
+            tvBack.setOnClickListener(v -> busNavigateBack());
+            titleBar.addView(tvBack);
+
+            TextView tvTitle = new TextView(this);
+            tvTitle.setText("승·하차 알림 설정");
+            tvTitle.setTextColor(Color.parseColor("#111111"));
+            tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
+            tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+            titleBar.addView(tvTitle);
+            busFixedHeader.addView(titleBar);
+
+            // 노선 + 정류장 서브헤더
+            LinearLayout subBar = new LinearLayout(this);
+            subBar.setOrientation(LinearLayout.HORIZONTAL);
+            subBar.setGravity(Gravity.CENTER_VERTICAL);
+            subBar.setPadding(dpToPx(16), dpToPx(6), dpToPx(16), dpToPx(8));
+
+            // 버스 아이콘 (노선 색상)
+            android.widget.ImageView ivBusH = new android.widget.ImageView(this);
+            android.graphics.Bitmap busBmpH = getBusIconColor(busColor);
+            if (busBmpH != null) ivBusH.setImageBitmap(busBmpH);
+            android.graphics.drawable.GradientDrawable busHBg = new android.graphics.drawable.GradientDrawable();
+            busHBg.setColor(Color.parseColor("#F2F4F8")); busHBg.setCornerRadius(dpToPx(4));
+            ivBusH.setBackground(busHBg);
+            ivBusH.setPadding(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2));
+            ivBusH.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(30), dpToPx(30)));
+            subBar.addView(ivBusH);
+
+            TextView tvRno = new TextView(this);
+            tvRno.setText(" " + routeNo);
+            tvRno.setTextColor(Color.parseColor(badge[1]));
+            tvRno.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
+            tvRno.setTypeface(null, android.graphics.Typeface.BOLD);
+            subBar.addView(tvRno);
+
+            // stop.png 아이콘
+            android.widget.ImageView ivStopH = new android.widget.ImageView(this);
+            android.graphics.Bitmap stopBmpH = getStopIconColor(android.graphics.Color.parseColor("#555555"));
+            if (stopBmpH != null) ivStopH.setImageBitmap(stopBmpH);
+            ivStopH.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            android.graphics.drawable.GradientDrawable stopHBg = new android.graphics.drawable.GradientDrawable();
+            stopHBg.setColor(Color.parseColor("#F2F4F8")); stopHBg.setCornerRadius(dpToPx(4));
+            ivStopH.setBackground(stopHBg);
+            ivStopH.setPadding(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2));
+            LinearLayout.LayoutParams stopHLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
+            stopHLp.gravity = Gravity.CENTER_VERTICAL;
+            stopHLp.setMargins(dpToPx(10), 0, dpToPx(4), 0);
+            ivStopH.setLayoutParams(stopHLp);
+            subBar.addView(ivStopH);
+            TextView tvPin = new TextView(this);
+            tvPin.setText(nodeNm + (nodeNo.isEmpty() ? "" : "(" + nodeNo + ")"));
+            tvPin.setTextColor(Color.parseColor("#333333"));
+            tvPin.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+            tvPin.setTypeface(null, android.graphics.Typeface.BOLD);
+            subBar.addView(tvPin);
+            busFixedHeader.addView(subBar);
+
+            android.view.View hdiv = new android.view.View(this);
+            hdiv.setBackgroundColor(Color.parseColor("#DDDDDD"));
+            hdiv.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+            busFixedHeader.addView(hdiv);
+        }
+
+        // ── 본문 ──────────────────────────────────────
+        busResultContainer.removeAllViews();
+        ScrollView sv = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dpToPx(16), dpToPx(12), dpToPx(16), dpToPx(16));
+        sv.addView(content);
+        busResultContainer.addView(sv);
+
+        // stops 로드
+        String stopsStr = bc.getString("route_" + routeId + "_stops", "");
+        java.util.List<String[]> allStops = new java.util.ArrayList<>();
+        for (String line : stopsStr.split(";")) {
+            String[] p = line.split("\\|", -1);
+            if (p.length >= 4) allStops.add(p);
+        }
+        boolean foundBoard = false;
+        java.util.List<String[]> afterStops = new java.util.ArrayList<>();
+        for (String[] s : allStops) {
+            if (!foundBoard && (s[0].equals(nodeId) || s[1].equals(nodeNm))) { foundBoard = true; continue; }
+            if (foundBoard) afterStops.add(s);
+        }
+
+        // 현재 설정된 하차 정류장 - 실제 알림이 켜진 것만 선택 표시
+        final String alightPrefKey = "alarm_alight_last_" + routeId;
+        // alightNodeId가 파라미터로 넘어온 경우(상세화면에서 복귀)는 무시하고 항상 저장된 값 확인
+        String savedAlightId = "";
+        String savedAlightNm = "";
+        // 실제 알림이 켜진 정류장 찾기
+        for (String[] s : afterStops) {
+            if (getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                    .getBoolean("alarm_alight_" + routeId + "_" + s[0], false)) {
+                savedAlightId = s[0];
+                savedAlightNm = s[1];
+                break;
+            }
+        }
+
+        // ── 승차 알림 섹션 ──────────────────────────────
+        TextView tvBoardSec = new TextView(this);
+        tvBoardSec.setText("승차 알림");
+        tvBoardSec.setTextColor(Color.parseColor("#333333"));
+        tvBoardSec.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvBoardSec.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvBoardSec.setPadding(0, dpToPx(4), 0, dpToPx(8));
+        content.addView(tvBoardSec);
+
+        LinearLayout boardCard = new LinearLayout(this);
+        boardCard.setOrientation(LinearLayout.VERTICAL);
+        boardCard.setGravity(Gravity.CENTER);
+        boardCard.setMinimumHeight(dpToPx(70));
+        android.graphics.drawable.GradientDrawable boardBg = new android.graphics.drawable.GradientDrawable();
+        boardBg.setColor(Color.parseColor("#F8F9FA"));
+        boardBg.setCornerRadius(dpToPx(10));
+        boardBg.setStroke(dpToPx(1), Color.parseColor("#E0E0E0"));
+        boardCard.setBackground(boardBg);
+        boardCard.setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16));
+        LinearLayout.LayoutParams boardCardLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        boardCardLp.setMargins(0, 0, 0, dpToPx(16));
+        boardCard.setLayoutParams(boardCardLp);
+
+        TextView tvBoardInfo = new TextView(this);
+        tvBoardInfo.setGravity(Gravity.CENTER);
+        tvBoardInfo.setTextColor(Color.parseColor("#AAAAAA"));
+        tvBoardInfo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tvBoardInfo.setText("도착 정보 없음");
+        boardCard.addView(tvBoardInfo);
+        content.addView(boardCard);
+
+        new Thread(() -> {
+            try {
+                String arvlUrl = BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
+                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                        + "&nodeId=" + nodeId + "&numOfRows=50&pageNo=1&_type=xml";
+                String arvlXml = httpGet(arvlUrl);
+                String boardText = "도착 정보 없음"; String boardColor2 = "#AAAAAA";
+                for (String item : arvlXml.split("<item>")) {
+                    String rno2 = tag(item, "routeno");
+                    if (!rno2.equals(routeNo)) continue;
+                    int sec2 = -1; try { sec2 = Integer.parseInt(tag(item, "arrtime")); } catch(Exception ig){}
+                    int prev2 = -1; try { prev2 = Integer.parseInt(tag(item, "arrprevstationcnt")); } catch(Exception ig){}
+                    if (sec2 > 0) {
+                        if (sec2 < 60) { boardText = "곧 도착"; boardColor2 = "#E74C3C"; }
+                        else { boardText = "약 " + (sec2/60) + "분 후 도착"; boardColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
+                        if (prev2 > 0) boardText += "\n[" + prev2 + " 정거장 앞]";
+                    }
+                    break;
+                }
+                final String fText = boardText, fColor = boardColor2;
+                runOnUiThread(() -> { tvBoardInfo.setText(fText); tvBoardInfo.setTextColor(Color.parseColor(fColor));
+                    tvBoardInfo.setTypeface(null, android.graphics.Typeface.BOLD); });
+            } catch (Exception ignored) {}
+        }).start();
+
+        // ── 하차 알림 섹션 ──────────────────────────────
+        View sectionDiv = new View(this);
+        sectionDiv.setBackgroundColor(Color.parseColor("#EEEEEE"));
+        LinearLayout.LayoutParams sdLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+        sdLp.setMargins(0, 0, 0, dpToPx(12));
+        sectionDiv.setLayoutParams(sdLp);
+        content.addView(sectionDiv);
+
+        TextView tvAlightSec = new TextView(this);
+        tvAlightSec.setText("하차 알림");
+        tvAlightSec.setTextColor(Color.parseColor("#333333"));
+        tvAlightSec.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvAlightSec.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvAlightSec.setPadding(0, 0, 0, dpToPx(8));
+        content.addView(tvAlightSec);
+
+        // 정류장 목록 - 타임라인과 동일한 방식
+        if (afterStops.isEmpty()) {
+            TextView tvNo = new TextView(this);
+            tvNo.setText("이후 정류장 정보가 없습니다\n타임라인을 먼저 열어주세요");
+            tvNo.setTextColor(Color.parseColor("#AAAAAA"));
+            tvNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvNo.setGravity(Gravity.CENTER);
+            content.addView(tvNo);
+        } else {
+            for (int i = 0; i < afterStops.size(); i++) {
+                String[] s = afterStops.get(i);
+                final String sId = s[0], sNm = s[1], sNo = s.length > 3 ? s[3] : "";
+                final boolean fIsFirst = (i == 0);
+                final boolean fIsLast  = (i == afterStops.size() - 1);
+                boolean isSelected = sId.equals(savedAlightId);
+                boolean isLastUsed = sId.equals(
+                        getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString(alightPrefKey, ""))
+                        && !isSelected;
+
+                // 정류소 행
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.TOP);
+                row.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                row.setBackgroundColor(Color.TRANSPARENT);
+
+                // ── 타임라인 FrameLayout (세로줄 + 원) ── 타임라인과 동일
+                android.widget.FrameLayout tlFrame = new android.widget.FrameLayout(this);
+                tlFrame.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
+
+                // 세로줄
+                android.view.View lineView2 = new android.view.View(this) {
+                    @Override protected void onDraw(android.graphics.Canvas canvas) {
+                        super.onDraw(canvas);
+                        int w=getWidth(), h=getHeight(); float cx=w/2f;
+                        android.graphics.Paint lP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        lP.setColor(Color.parseColor("#AED6F1")); lP.setStrokeWidth(dpToPx(2));
+                        if (!fIsFirst) canvas.drawLine(cx, 0, cx, h, lP);
+                        else           canvas.drawLine(cx, h/2f, cx, h, lP);
+                        if (fIsLast) {
+                            android.graphics.Paint cp = new android.graphics.Paint();
+                            cp.setColor(Color.parseColor("#F2F4F8"));
+                            canvas.drawRect(cx-dpToPx(2), h/2f, cx+dpToPx(2), h, cp);
+                        }
+                    }
+                };
+                lineView2.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+                tlFrame.addView(lineView2);
+
+                // 원 (stop.png 대신 타임라인과 동일한 원)
+                android.view.View circleView2 = new android.view.View(this) {
+                    @Override protected void onDraw(android.graphics.Canvas canvas) {
+                        super.onDraw(canvas);
+                        int w=getWidth(), h=getHeight(); float cx=w/2f, cr=dpToPx(9);
+                        android.graphics.Paint bgP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        bgP.setColor(Color.parseColor("#F2F4F8"));
+                        canvas.drawRect(cx-cr-dpToPx(2), h/2f-cr-dpToPx(1), cx+cr+dpToPx(2), h/2f+cr+dpToPx(1), bgP);
+                        android.graphics.Paint cP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        cP.setStyle(android.graphics.Paint.Style.STROKE); cP.setStrokeWidth(dpToPx(1));
+                        cP.setColor(Color.parseColor(isSelected ? badge[1] : "#0984E3"));
+                        canvas.drawCircle(cx, h/2f, cr, cP);
+                        android.graphics.Paint wP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        wP.setColor(Color.WHITE);
+                        canvas.drawCircle(cx, h/2f, cr-dpToPx(1), wP);
+                        if (isSelected) {
+                            android.graphics.Paint dotP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                            dotP.setColor(Color.parseColor(badge[1]));
+                            canvas.drawCircle(cx, h/2f, dpToPx(4), dotP);
+                        } else {
+                            // 타임라인과 동일한 아래 화살표
+                            android.graphics.Paint vP = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                            vP.setColor(Color.parseColor("#0984E3"));
+                            vP.setStyle(android.graphics.Paint.Style.STROKE);
+                            vP.setStrokeWidth(dpToPx(2));
+                            vP.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                            float vSize=dpToPx(4), vy=h/2f;
+                            android.graphics.Path vPath = new android.graphics.Path();
+                            vPath.moveTo(cx-vSize, vy-vSize*0.5f);
+                            vPath.lineTo(cx, vy+vSize*0.5f);
+                            vPath.lineTo(cx+vSize, vy-vSize*0.5f);
+                            canvas.drawPath(vPath, vP);
+                        }
+                    }
+                };
+                circleView2.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(48)));
+                tlFrame.addView(circleView2);
+                row.addView(tlFrame);
+
+                // 정류장 정보 + 하차 버튼
+                LinearLayout stopInfo = new LinearLayout(this);
+                stopInfo.setOrientation(LinearLayout.HORIZONTAL);
+                stopInfo.setGravity(Gravity.CENTER_VERTICAL);
+                stopInfo.setMinimumHeight(dpToPx(48));
+                stopInfo.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                stopInfo.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
+
+                // 이름+번호 열
+                LinearLayout nameCol = new LinearLayout(this);
+                nameCol.setOrientation(LinearLayout.VERTICAL);
+                nameCol.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+                TextView tvSNm = new TextView(this);
+                tvSNm.setText(sNm);
+                tvSNm.setTextColor(isSelected ? Color.parseColor(badge[1]) : Color.parseColor("#333333"));
+                tvSNm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                if (isSelected) tvSNm.setTypeface(null, android.graphics.Typeface.BOLD);
+                nameCol.addView(tvSNm);
+
+                if (!sNo.isEmpty()) {
+                    TextView tvSNo = new TextView(this);
+                    tvSNo.setText(sNo);
+                    tvSNo.setTextColor(Color.parseColor("#AAAAAA"));
+                    tvSNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                    nameCol.addView(tvSNo);
+                }
+                if (isLastUsed) {
+                    TextView tvRecent2 = new TextView(this);
+                    tvRecent2.setText("최근사용");
+                    tvRecent2.setTextColor(Color.parseColor("#E74C3C"));
+                    tvRecent2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+                    tvRecent2.setTypeface(null, android.graphics.Typeface.BOLD);
+                    android.graphics.drawable.GradientDrawable rBg2 = new android.graphics.drawable.GradientDrawable();
+                    rBg2.setColor(Color.parseColor("#FDECEA")); rBg2.setCornerRadius(dpToPx(4));
+                    rBg2.setStroke(dpToPx(1), Color.parseColor("#E74C3C"));
+                    tvRecent2.setBackground(rBg2);
+                    tvRecent2.setPadding(dpToPx(5), dpToPx(2), dpToPx(5), dpToPx(2));
+                    LinearLayout.LayoutParams rLp2 = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    rLp2.setMargins(0, dpToPx(3), 0, 0);
+                    tvRecent2.setLayoutParams(rLp2);
+                    nameCol.addView(tvRecent2);
+                }
+                stopInfo.addView(nameCol);
+
+                // 하차 버튼
+                final String fSId = sId, fSNm = sNm;
+                TextView tvAlightBtn = new TextView(this);
+                tvAlightBtn.setText("하차");
+                tvAlightBtn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvAlightBtn.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvAlightBtn.setGravity(Gravity.CENTER);
+                tvAlightBtn.setPadding(dpToPx(9), dpToPx(5), dpToPx(9), dpToPx(5));
+                android.graphics.drawable.GradientDrawable alightBg = new android.graphics.drawable.GradientDrawable();
+                alightBg.setCornerRadius(dpToPx(5));
+                if (isSelected) {
+                    alightBg.setColor(Color.parseColor(badge[1]));
+                    alightBg.setStroke(dpToPx(1), Color.parseColor(badge[1]));
+                    tvAlightBtn.setTextColor(Color.WHITE);
+                } else {
+                    alightBg.setColor(Color.WHITE);
+                    alightBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
+                    tvAlightBtn.setTextColor(Color.parseColor("#888888"));
+                }
+                tvAlightBtn.setBackground(alightBg);
+                LinearLayout.LayoutParams alightBtnLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                alightBtnLp.gravity = Gravity.CENTER_VERTICAL;
+                tvAlightBtn.setLayoutParams(alightBtnLp);
+                tvAlightBtn.setOnClickListener(vb ->
+                    showAlightAlarmDetail(routeNo, routeId, nodeId, nodeNm, nodeNo, fSId, fSNm, badge[1]));
+                stopInfo.addView(tvAlightBtn);
+                row.addView(stopInfo);
+                content.addView(row);
+                // 구분선 (마지막 제외)
+                if (!fIsLast) {
+                    android.view.View rowDiv = new android.view.View(this);
+                    rowDiv.setBackgroundColor(Color.parseColor("#E8E8E8"));
+                    LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                    divLp.setMargins(dpToPx(40), 0, 0, 0); // 타임라인 선 너비만큼 여백
+                    rowDiv.setLayoutParams(divLp);
+                    content.addView(rowDiv);
+                }
+            }
+        }
+    }
+
+    /** 하차 알림 상세 화면 */
+    private void showAlightAlarmDetail(String routeNo, String routeId,
+                                        String boardNodeId, String boardNodeNm, String boardNodeNo,
+                                        String alightNodeId, String alightNodeNm, String colorHex) {
+        // ★ 저장은 알림시작 버튼 클릭 시에만 함 (여기서 저장 안 함)
+        int busColor2 = android.graphics.Color.parseColor(colorHex);
+        busResultContainer.removeAllViews();
+        busResultContainer.setOrientation(LinearLayout.VERTICAL);
+        // busBottomBar 초기화
+        if (busBottomBar != null) {
+            busBottomBar.removeAllViews();
+            busBottomBar.setVisibility(android.view.View.VISIBLE);
+        }
+
+        // stops 로드 - 승차 정류장부터 하차 정류장까지 전체
+        android.content.SharedPreferences bc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
+        String stopsStr2 = bc2.getString("route_" + routeId + "_stops", "");
+        java.util.List<String[]> allStops2 = new java.util.ArrayList<>();
+        for (String line : stopsStr2.split(";")) {
+            String[] p = line.split("\\|", -1);
+            if (p.length >= 4) allStops2.add(p);
+        }
+        // 승차 정류장 포함, 하차 정류장까지
+        java.util.List<String[]> rangeStops = new java.util.ArrayList<>();
+        boolean inRange = false;
+        for (String[] s : allStops2) {
+            if (!inRange && (s[0].equals(boardNodeId) || s[1].equals(boardNodeNm))) inRange = true;
+            if (inRange) rangeStops.add(s);
+            if (inRange && (s[0].equals(alightNodeId) || s[1].equals(alightNodeNm))) break;
+        }
+
+        // 스크롤 영역 - busResultContainer 전체 사용 (버튼은 busBottomBar에 고정)
+        ScrollView sv2 = new ScrollView(this);
+        sv2.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
+
+        LinearLayout content2 = new LinearLayout(this);
+        content2.setOrientation(LinearLayout.VERTICAL);
+        content2.setPadding(dpToPx(16), dpToPx(12), dpToPx(16), dpToPx(16));
+        sv2.addView(content2);
+        busResultContainer.addView(sv2);
+
+        // "현재 위치를 찾고 있어요" 상태
+        android.text.SpannableString ss2 = new android.text.SpannableString("현재 위치를 찾고 있어요");
+        ss2.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#E74C3C")),
+                0, 5, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        TextView tvStatus = new TextView(this);
+        tvStatus.setText(ss2);
+        tvStatus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvStatus.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusLp.setMargins(0, 0, 0, dpToPx(12));
+        tvStatus.setLayoutParams(statusLp);
+        content2.addView(tvStatus);
+
+        android.view.View divSt = new android.view.View(this);
+        divSt.setBackgroundColor(Color.parseColor("#EEEEEE"));
+        LinearLayout.LayoutParams divStLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+        divStLp.setMargins(0, 0, 0, dpToPx(12));
+        divSt.setLayoutParams(divStLp);
+        content2.addView(divSt);
+
+        // 정류장 목록 - 승차부터 하차까지 타임라인 스타일
+        for (int i = 0; i < rangeStops.size(); i++) {
+            String[] s = rangeStops.get(i);
+            String sId2 = s[0], sNm2 = s[1], sNo2 = s.length > 3 ? s[3] : "";
+            final boolean fIsFirst3 = (i == 0);
+            final boolean fIsLast3  = (i == rangeStops.size() - 1);
+            boolean isBoardStop  = sId2.equals(boardNodeId) || sNm2.equals(boardNodeNm);
+            boolean isAlightStop = sId2.equals(alightNodeId) || sNm2.equals(alightNodeNm);
+
+            LinearLayout row3 = new LinearLayout(this);
+            row3.setOrientation(LinearLayout.HORIZONTAL);
+            row3.setGravity(Gravity.TOP);
+            row3.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            // 타임라인 FrameLayout
+            android.widget.FrameLayout tlF3 = new android.widget.FrameLayout(this);
+            tlF3.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), LinearLayout.LayoutParams.MATCH_PARENT));
+
+            final boolean ff3 = fIsFirst3, fl3 = fIsLast3;
+            android.view.View lv3 = new android.view.View(this) {
+                @Override protected void onDraw(android.graphics.Canvas canvas) {
+                    super.onDraw(canvas); int w=getWidth(), h=getHeight(); float cx=w/2f;
+                    android.graphics.Paint lP3 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    lP3.setColor(Color.parseColor("#AED6F1")); lP3.setStrokeWidth(dpToPx(2));
+                    if (!ff3) canvas.drawLine(cx, 0, cx, h, lP3);
+                    else      canvas.drawLine(cx, h/2f, cx, h, lP3);
+                    if (fl3) { android.graphics.Paint cp3 = new android.graphics.Paint();
+                        cp3.setColor(Color.parseColor("#F2F4F8"));
+                        canvas.drawRect(cx-dpToPx(2), h/2f, cx+dpToPx(2), h, cp3); }
+                }
+            };
+            lv3.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+            tlF3.addView(lv3);
+
+            // 원 - 승차/하차는 채워진 원, 중간은 빈 원
+            final boolean fIsBoard3 = isBoardStop, fIsAlight3 = isAlightStop;
+            android.view.View cv3 = new android.view.View(this) {
+                @Override protected void onDraw(android.graphics.Canvas canvas) {
+                    super.onDraw(canvas); int w=getWidth(), h=getHeight(); float cx=w/2f, cr=dpToPx(9);
+                    android.graphics.Paint bgP3 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    bgP3.setColor(Color.parseColor("#F2F4F8"));
+                    canvas.drawRect(cx-cr-dpToPx(2), h/2f-cr-dpToPx(1), cx+cr+dpToPx(2), h/2f+cr+dpToPx(1), bgP3);
+                    android.graphics.Paint cP3 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    cP3.setStyle(android.graphics.Paint.Style.STROKE); cP3.setStrokeWidth(dpToPx(1));
+                    cP3.setColor(Color.parseColor(colorHex));
+                    canvas.drawCircle(cx, h/2f, cr, cP3);
+                    android.graphics.Paint wP3 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    wP3.setColor(Color.WHITE);
+                    canvas.drawCircle(cx, h/2f, cr-dpToPx(1), wP3);
+                    if (fIsBoard3 || fIsAlight3) {
+                        android.graphics.Paint dotP3 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        dotP3.setColor(Color.parseColor(colorHex));
+                        canvas.drawCircle(cx, h/2f, dpToPx(4), dotP3);
+                    } else {
+                        // 아래 화살표 (타임라인과 동일)
+                        android.graphics.Paint vP3 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                        vP3.setColor(Color.parseColor(colorHex));
+                        vP3.setStyle(android.graphics.Paint.Style.STROKE);
+                        vP3.setStrokeWidth(dpToPx(2));
+                        vP3.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                        float vSize3=dpToPx(4), vy3=h/2f;
+                        android.graphics.Path vPath3 = new android.graphics.Path();
+                        vPath3.moveTo(cx-vSize3, vy3-vSize3*0.5f);
+                        vPath3.lineTo(cx, vy3+vSize3*0.5f);
+                        vPath3.lineTo(cx+vSize3, vy3-vSize3*0.5f);
+                        canvas.drawPath(vPath3, vP3);
+                    }
+                }
+            };
+            cv3.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(48)));
+            tlF3.addView(cv3);
+            row3.addView(tlF3);
+
+            // 정류장 정보
+            LinearLayout si3 = new LinearLayout(this);
+            si3.setOrientation(LinearLayout.VERTICAL);
+            si3.setMinimumHeight(dpToPx(48));
+            si3.setGravity(Gravity.CENTER_VERTICAL);
+            si3.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            si3.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
+
+            // 승차/하차 뱃지
+            if (isBoardStop || isAlightStop) {
+                TextView tvBadge3 = new TextView(this);
+                tvBadge3.setText(isBoardStop ? "승차" : "하차");
+                tvBadge3.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+                tvBadge3.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvBadge3.setTextColor(Color.WHITE);
+                tvBadge3.setGravity(Gravity.CENTER);
+                tvBadge3.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+                android.graphics.drawable.GradientDrawable b3Bg = new android.graphics.drawable.GradientDrawable();
+                b3Bg.setColor(android.graphics.Color.parseColor(colorHex));
+                b3Bg.setCornerRadius(dpToPx(4));
+                tvBadge3.setBackground(b3Bg);
+                LinearLayout.LayoutParams b3Lp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                b3Lp.setMargins(0, 0, 0, dpToPx(2));
+                tvBadge3.setLayoutParams(b3Lp);
+                si3.addView(tvBadge3);
+            }
+
+            TextView tvNm3 = new TextView(this);
+            tvNm3.setText(sNm2);
+            tvNm3.setTextColor((isBoardStop || isAlightStop) ? android.graphics.Color.parseColor(colorHex) : Color.parseColor("#333333"));
+            tvNm3.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+            if (isBoardStop || isAlightStop) tvNm3.setTypeface(null, android.graphics.Typeface.BOLD);
+            si3.addView(tvNm3);
+
+            if (!sNo2.isEmpty()) {
+                TextView tvNo3 = new TextView(this);
+                tvNo3.setText(sNo2);
+                tvNo3.setTextColor(Color.parseColor("#AAAAAA"));
+                tvNo3.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                si3.addView(tvNo3);
+            }
+            row3.addView(si3);
+            content2.addView(row3);
+            // 구분선 (마지막 제외)
+            if (!fIsLast3) {
+                android.view.View rowDiv3 = new android.view.View(this);
+                rowDiv3.setBackgroundColor(Color.parseColor("#E8E8E8"));
+                LinearLayout.LayoutParams div3Lp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                div3Lp.setMargins(dpToPx(40), 0, 0, 0);
+                rowDiv3.setLayoutParams(div3Lp);
+                content2.addView(rowDiv3);
+            }
+        } // for 루프 끝
+
+        // 하단 버튼 (알림시작 / 알림종료)
+        boolean alreadySet = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                .getBoolean("alarm_alight_" + routeId + "_" + alightNodeId, false);
+
+        TextView tvAlarmBtn = new TextView(this);
+        tvAlarmBtn.setText(alreadySet ? "알림종료" : "알림시작");
+        tvAlarmBtn.setTextColor(Color.WHITE);
+        tvAlarmBtn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+        tvAlarmBtn.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvAlarmBtn.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable alarmBtnBg = new android.graphics.drawable.GradientDrawable();
+        alarmBtnBg.setColor(alreadySet ? Color.parseColor("#F05454") : android.graphics.Color.parseColor(colorHex));
+        alarmBtnBg.setCornerRadius(dpToPx(30));
+        tvAlarmBtn.setBackground(alarmBtnBg);
+        LinearLayout.LayoutParams alarmBtnLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(56));
+        alarmBtnLp.setMargins(dpToPx(20), dpToPx(8), dpToPx(20), dpToPx(12));
+        tvAlarmBtn.setLayoutParams(alarmBtnLp);
+        tvAlarmBtn.setOnClickListener(v -> {
+            boolean nowSet = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                    .getBoolean("alarm_alight_" + routeId + "_" + alightNodeId, false);
+            if (nowSet) {
+                // 알림 종료
+                getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                        .remove("alarm_alight_" + routeId + "_" + alightNodeId)
+                        .remove("alarm_alight_last_" + routeId)
+                        .apply();
+                if (busBottomBar != null) busBottomBar.setVisibility(android.view.View.GONE);
+                // 서비스 종료
+                Intent stopSvc = new Intent(this, BusAlarmService.class);
+                stopSvc.setAction(BusAlarmService.ACTION_STOP);
+                startService(stopSvc);
+                busNavigateBack();
+            } else {
+                // 하차 정류장 순번 계산
+                int alightOrdVal = -1;
+                for (String[] s : rangeStops) {
+                    if (s[0].equals(alightNodeId)) {
+                        try { alightOrdVal = Integer.parseInt(s[2]); } catch (Exception ig) {}
+                        break;
+                    }
+                }
+                // 알림시작 팝업
+                showAlarmStartPopup(routeNo, routeId, boardNodeNm, boardNodeNo,
+                        alightNodeId, alightNodeNm, alightOrdVal, colorHex, tvAlarmBtn, alarmBtnBg);
+            }
+        });
+        if (busBottomBar != null) busBottomBar.addView(tvAlarmBtn);
+    }
+
+    /** 알림시작 확인 팝업 */
+    private void showAlarmStartPopup(String routeNo, String routeId,
+                                      String boardNodeNm, String boardNodeNo,
+                                      String alightNodeId, String alightNodeNm,
+                                      int alightOrd,
+                                      String colorHex, TextView tvAlarmBtn,
+                                      android.graphics.drawable.GradientDrawable alarmBtnBg) {
+        android.app.Dialog dlg = new android.app.Dialog(this, android.R.style.Theme_Material_Light_Dialog);
+        dlg.setCanceledOnTouchOutside(true);
+
+        LinearLayout dlgRoot = new LinearLayout(this);
+        dlgRoot.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable dlgBg = new android.graphics.drawable.GradientDrawable();
+        dlgBg.setColor(Color.WHITE);
+        dlgBg.setCornerRadius(dpToPx(20));
+        dlgRoot.setBackground(dlgBg);
+        dlgRoot.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+
+        // 제목
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("🔔 하차 알림 설정");
+        tvTitle.setTextColor(Color.parseColor("#111111"));
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvTitle.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleLp.setMargins(0, 0, 0, dpToPx(20));
+        tvTitle.setLayoutParams(titleLp);
+        dlgRoot.addView(tvTitle);
+
+        // 노선 색상
+        int busColor3 = android.graphics.Color.parseColor(colorHex);
+        android.content.SharedPreferences bc3 = getSharedPreferences("bus_cache", MODE_PRIVATE);
+        String rTp3 = bc3.getString("route_" + routeId + "_rTp", "");
+        String[] badge3 = routeTypeBadge(rTp3);
+
+        // 노선 카드
+        LinearLayout routeCard = new LinearLayout(this);
+        routeCard.setOrientation(LinearLayout.HORIZONTAL);
+        routeCard.setGravity(Gravity.CENTER_VERTICAL);
+        android.graphics.drawable.GradientDrawable rcBg = new android.graphics.drawable.GradientDrawable();
+        rcBg.setColor(Color.parseColor("#F8F9FA"));
+        rcBg.setCornerRadius(dpToPx(12));
+        rcBg.setStroke(dpToPx(1), Color.parseColor(colorHex));
+        routeCard.setBackground(rcBg);
+        routeCard.setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12));
+        LinearLayout.LayoutParams rcLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rcLp.setMargins(0, 0, 0, dpToPx(16));
+        routeCard.setLayoutParams(rcLp);
+
+        // 버스 아이콘
+        android.widget.ImageView ivBusP = new android.widget.ImageView(this);
+        android.graphics.Bitmap busBmpP = getBusIconColor(busColor3);
+        if (busBmpP != null) ivBusP.setImageBitmap(busBmpP);
+        LinearLayout.LayoutParams busIconLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
+        busIconLp.gravity = Gravity.CENTER_VERTICAL;
+        ivBusP.setLayoutParams(busIconLp);
+        routeCard.addView(ivBusP);
+
+        // 노선번호 (WRAP_CONTENT 고정)
+        TextView tvRnoP = new TextView(this);
+        tvRnoP.setText("  " + routeNo);
+        tvRnoP.setTextColor(Color.parseColor(colorHex));
+        tvRnoP.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
+        tvRnoP.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvRnoP.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        routeCard.addView(tvRnoP);
+
+        // 구분 텍스트
+        TextView tvSep = new TextView(this);
+        tvSep.setText("  →  ");
+        tvSep.setTextColor(Color.parseColor("#AAAAAA"));
+        tvSep.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tvSep.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        routeCard.addView(tvSep);
+
+        // 하차 정류장 이름 (말줄임)
+        TextView tvAlightHere = new TextView(this);
+        tvAlightHere.setText(alightNodeNm);
+        tvAlightHere.setTextColor(Color.parseColor(colorHex));
+        tvAlightHere.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvAlightHere.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvAlightHere.setMaxLines(1);
+        tvAlightHere.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tvAlightHere.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        routeCard.addView(tvAlightHere);
+
+        dlgRoot.addView(routeCard);
+
+        // 승차 → 하차 타임라인 (간단)
+        LinearLayout tlCard = new LinearLayout(this);
+        tlCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable tlBg = new android.graphics.drawable.GradientDrawable();
+        tlBg.setColor(Color.parseColor("#F8F9FA"));
+        tlBg.setCornerRadius(dpToPx(12));
+        tlCard.setBackground(tlBg);
+        tlCard.setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14));
+        LinearLayout.LayoutParams tlLp2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlLp2.setMargins(0, 0, 0, dpToPx(16));
+        tlCard.setLayoutParams(tlLp2);
+
+        // 승차 행
+        LinearLayout boardRow = new LinearLayout(this);
+        boardRow.setOrientation(LinearLayout.HORIZONTAL);
+        boardRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView tvBoardBadge = new TextView(this);
+        tvBoardBadge.setText("승차");
+        tvBoardBadge.setTextColor(Color.parseColor(colorHex));
+        tvBoardBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        tvBoardBadge.setTypeface(null, android.graphics.Typeface.BOLD);
+        android.graphics.drawable.GradientDrawable bbBg = new android.graphics.drawable.GradientDrawable();
+        bbBg.setColor(Color.parseColor("#EBF5FF")); bbBg.setCornerRadius(dpToPx(4));
+        bbBg.setStroke(dpToPx(1), Color.parseColor(colorHex));
+        tvBoardBadge.setBackground(bbBg);
+        tvBoardBadge.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+        boardRow.addView(tvBoardBadge);
+        TextView tvBoardNm = new TextView(this);
+        tvBoardNm.setText("  " + boardNodeNm + (boardNodeNo.isEmpty() ? "" : " (" + boardNodeNo + ")"));
+        tvBoardNm.setTextColor(Color.parseColor("#333333"));
+        tvBoardNm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvBoardNm.setTypeface(null, android.graphics.Typeface.BOLD);
+        boardRow.addView(tvBoardNm);
+        tlCard.addView(boardRow);
+
+        // 연결 선 + 화살표
+        LinearLayout arrowRow = new LinearLayout(this);
+        arrowRow.setOrientation(LinearLayout.HORIZONTAL);
+        arrowRow.setGravity(Gravity.CENTER_VERTICAL);
+        arrowRow.setPadding(dpToPx(6), dpToPx(4), 0, dpToPx(4));
+        LinearLayout arrowCol = new LinearLayout(this);
+        arrowCol.setOrientation(LinearLayout.VERTICAL);
+        arrowCol.setGravity(Gravity.CENTER_HORIZONTAL);
+        android.view.View lineA = new android.view.View(this);
+        lineA.setBackgroundColor(Color.parseColor("#AED6F1"));
+        LinearLayout.LayoutParams laLp = new LinearLayout.LayoutParams(dpToPx(2), dpToPx(16));
+        laLp.gravity = Gravity.CENTER_HORIZONTAL;
+        lineA.setLayoutParams(laLp);
+        arrowCol.addView(lineA);
+        TextView tvArrow = new TextView(this);
+        tvArrow.setText("▼");
+        tvArrow.setTextColor(Color.parseColor("#AED6F1"));
+        tvArrow.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+        tvArrow.setGravity(Gravity.CENTER_HORIZONTAL);
+        arrowCol.addView(tvArrow);
+        android.view.View lineB = new android.view.View(this);
+        lineB.setBackgroundColor(Color.parseColor("#AED6F1"));
+        LinearLayout.LayoutParams lbLp2 = new LinearLayout.LayoutParams(dpToPx(2), dpToPx(16));
+        lbLp2.gravity = Gravity.CENTER_HORIZONTAL;
+        lineB.setLayoutParams(lbLp2);
+        arrowCol.addView(lineB);
+        LinearLayout.LayoutParams acLp = new LinearLayout.LayoutParams(dpToPx(20), LinearLayout.LayoutParams.WRAP_CONTENT);
+        arrowCol.setLayoutParams(acLp);
+        arrowRow.addView(arrowCol);
+        tlCard.addView(arrowRow);
+
+        // 하차 행
+        LinearLayout alightRow = new LinearLayout(this);
+        alightRow.setOrientation(LinearLayout.HORIZONTAL);
+        alightRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView tvAlightBadge = new TextView(this);
+        tvAlightBadge.setText("하차");
+        tvAlightBadge.setTextColor(Color.WHITE);
+        tvAlightBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        tvAlightBadge.setTypeface(null, android.graphics.Typeface.BOLD);
+        android.graphics.drawable.GradientDrawable abBg = new android.graphics.drawable.GradientDrawable();
+        abBg.setColor(busColor3); abBg.setCornerRadius(dpToPx(4));
+        tvAlightBadge.setBackground(abBg);
+        tvAlightBadge.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+        alightRow.addView(tvAlightBadge);
+        TextView tvAlightNm = new TextView(this);
+        tvAlightNm.setText("  " + alightNodeNm);
+        tvAlightNm.setTextColor(Color.parseColor(colorHex));
+        tvAlightNm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        tvAlightNm.setTypeface(null, android.graphics.Typeface.BOLD);
+        alightRow.addView(tvAlightNm);
+        tlCard.addView(alightRow);
+        dlgRoot.addView(tlCard);
+
+        // 안내 메시지
+        TextView tvDesc = new TextView(this);
+        tvDesc.setText("버스가 하차 정류장 2정거장 전에\n알림을 드립니다 🔔");
+        tvDesc.setTextColor(Color.parseColor("#555555"));
+        tvDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+        tvDesc.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        descLp.setMargins(0, 0, 0, dpToPx(20));
+        tvDesc.setLayoutParams(descLp);
+        dlgRoot.addView(tvDesc);
+
+        // 버튼 행
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setGravity(Gravity.CENTER);
+
+        // 취소 버튼
+        TextView tvCancel = new TextView(this);
+        tvCancel.setText("취소");
+        tvCancel.setTextColor(Color.parseColor("#888888"));
+        tvCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvCancel.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvCancel.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable cancelBg = new android.graphics.drawable.GradientDrawable();
+        cancelBg.setColor(Color.parseColor("#F0F0F0"));
+        cancelBg.setCornerRadius(dpToPx(12));
+        tvCancel.setBackground(cancelBg);
+        tvCancel.setPadding(0, dpToPx(14), 0, dpToPx(14));
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        cancelLp.setMargins(0, 0, dpToPx(8), 0);
+        tvCancel.setLayoutParams(cancelLp);
+        tvCancel.setOnClickListener(vv -> dlg.dismiss());
+        btnRow.addView(tvCancel);
+
+        // 확인 버튼
+        TextView tvConfirm = new TextView(this);
+        tvConfirm.setText("알림 시작");
+        tvConfirm.setTextColor(Color.WHITE);
+        tvConfirm.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvConfirm.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvConfirm.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable confirmBg = new android.graphics.drawable.GradientDrawable();
+        confirmBg.setColor(busColor3);
+        confirmBg.setCornerRadius(dpToPx(12));
+        tvConfirm.setBackground(confirmBg);
+        tvConfirm.setPadding(0, dpToPx(14), 0, dpToPx(14));
+        tvConfirm.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        tvConfirm.setOnClickListener(vv -> {
+            dlg.dismiss();
+            // 저장
+            getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                    .putBoolean("alarm_alight_" + routeId + "_" + alightNodeId, true)
+                    .putString("alarm_alight_last_" + routeId, alightNodeId)
+                    .apply();
+            // 버튼 → 알림종료로 변경
+            tvAlarmBtn.setText("알림종료");
+            alarmBtnBg.setColor(Color.parseColor("#F05454"));
+            tvAlarmBtn.setBackground(alarmBtnBg);
+            // 포그라운드 서비스 시작
+            Intent svcIntent = new Intent(this, BusAlarmService.class);
+            svcIntent.setAction(BusAlarmService.ACTION_START);
+            svcIntent.putExtra(BusAlarmService.EXTRA_ROUTE_ID,   routeId);
+            svcIntent.putExtra(BusAlarmService.EXTRA_ROUTE_NO,   routeNo);
+            svcIntent.putExtra(BusAlarmService.EXTRA_BOARD_NM,   boardNodeNm);
+            svcIntent.putExtra(BusAlarmService.EXTRA_ALIGHT_ID,  alightNodeId);
+            svcIntent.putExtra(BusAlarmService.EXTRA_ALIGHT_NM,  alightNodeNm);
+            svcIntent.putExtra(BusAlarmService.EXTRA_ALIGHT_ORD, alightOrd);
+            svcIntent.putExtra(BusAlarmService.EXTRA_COLOR,      colorHex);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(svcIntent);
+            } else {
+                startService(svcIntent);
+            }
+            android.widget.Toast.makeText(this,
+                    "🔔 " + alightNodeNm + " 하차 알림이 시작되었습니다",
+                    android.widget.Toast.LENGTH_SHORT).show();
+        });
+        btnRow.addView(tvConfirm);
+        dlgRoot.addView(btnRow);
+
+        dlg.setContentView(dlgRoot);
+        if (dlg.getWindow() != null) {
+            dlg.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+            android.view.WindowManager.LayoutParams wlp = dlg.getWindow().getAttributes();
+            wlp.width = (int)(getResources().getDisplayMetrics().widthPixels * 0.88f);
+            dlg.getWindow().setAttributes(wlp);
+        }
+        dlg.show();
+    }
+
+    /** 승/하차 정류장 행 빌더 */
+    private LinearLayout buildAlarmStopRow(String label, String stopNm, String stopNo, int busColor2, boolean isBoard) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        // 라벨 원 (승차/하차)
+        TextView tvLabel2 = new TextView(this);
+        tvLabel2.setText(label);
+        tvLabel2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+        tvLabel2.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvLabel2.setGravity(Gravity.CENTER);
+        tvLabel2.setTextColor(Color.parseColor("#666666"));
+        android.graphics.drawable.GradientDrawable labelBg = new android.graphics.drawable.GradientDrawable();
+        labelBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        labelBg.setColor(Color.WHITE);
+        labelBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+        tvLabel2.setBackground(labelBg);
+        LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(dpToPx(40), dpToPx(40));
+        tvLabel2.setLayoutParams(labelLp);
+        row.addView(tvLabel2);
+
+        // 정류장 정보
+        LinearLayout info2 = new LinearLayout(this);
+        info2.setOrientation(LinearLayout.VERTICAL);
+        info2.setPadding(dpToPx(16), 0, 0, 0);
+
+        TextView tvNm2 = new TextView(this);
+        tvNm2.setText(stopNm);
+        tvNm2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+        tvNm2.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvNm2.setTextColor(Color.parseColor("#222222"));
+        info2.addView(tvNm2);
+
+        if (!stopNo.isEmpty()) {
+            TextView tvNo2 = new TextView(this);
+            tvNo2.setText(stopNo);
+            tvNo2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+            tvNo2.setTextColor(Color.parseColor("#AAAAAA"));
+            info2.addView(tvNo2);
+        }
+        row.addView(info2);
+        return row;
+    }
+
+
+    private void startFavAutoRefresh() {
+        stopFavAutoRefresh();
+        busFavRefreshRunnable = new Runnable() {
+            @Override public void run() {
+                if (busFavSection != null && busBackStack.isEmpty()) {
+                    arrivalSessionCache.clear();
+                    refreshBusFavorites(busFavSection, busResultContainer, false);
+                }
+                busFavRefreshHandler.postDelayed(this, 30000);
+            }
+        };
+        busFavRefreshHandler.postDelayed(busFavRefreshRunnable, 30000); // 첫 갱신은 즉시 X, 30초 후부터
+    }
+
+    /** 즐겨찾기 화면 자동갱신 중단 */
+    private void stopFavAutoRefresh() {
+        if (busFavRefreshRunnable != null) {
+            busFavRefreshHandler.removeCallbacks(busFavRefreshRunnable);
+            busFavRefreshRunnable = null;
+        }
+    }
+
 
     private void startBusAutoRefresh(
             String routeId, String routeNo, String direction, LinearLayout container,
             String sNm, String eNm, String stF, String etF, String interval, String rTp,
             java.util.List<String[]> stops, String turnOrd) {
         if (busRefreshRunnable != null) busRefreshHandler.removeCallbacks(busRefreshRunnable);
+        if (arrivalRefreshRunnable != null) { arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable); arrivalRefreshRunnable = null; }
         final String fRId=routeId, fRNo=routeNo, fDir=direction;
         final String fSNm=sNm, fENm=eNm, fStF=stF, fEtF=etF, fInterval=interval, fRTp=rTp, fTurnOrd=turnOrd;
         final java.util.List<String[]> fStops = stops;
         busRefreshRunnable = new Runnable() {
             @Override public void run() {
                 if (!isOnSubScreen) return;
+                if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) {
+                    busRefreshHandler.postDelayed(this, 20000);
+                    return;
+                }
                 new Thread(() -> {
                     try {
                         String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
@@ -10436,29 +12131,179 @@ public class PinActivity extends AppCompatActivity {
                         try { cnt = Integer.parseInt(tag(lcXml,"totalCount")); } catch(Exception ig){}
                         java.util.Set<String> ordSet = new java.util.HashSet<>();
                         java.util.Map<String,String> vehMap = new java.util.HashMap<>();
+                        java.util.Map<String,double[]> newGpsMap = new java.util.HashMap<>();
                         for (String item : lcXml.split("<item>")) {
                             String ord=tag(item,"nodeord"), vno=tag(item,"vehicleno");
-                            if (!ord.isEmpty()) { ordSet.add(ord); if (!vno.isEmpty()) vehMap.put(ord,vno); }
+                            String gla=tag(item,"gpslati"), glo=tag(item,"gpslong");
+                            if (ord.isEmpty()) continue;
+                            // GPS 좌표 수집
+                            String useOrd = ord;
+                            if (!gla.isEmpty() && !glo.isEmpty()) {
+                                try {
+                                    double la=Double.parseDouble(gla), lo=Double.parseDouble(glo);
+                                    newGpsMap.put(ord, new double[]{la, lo});
+                                    // GPS로 가장 가까운 정류장 계산
+                                    if (!fStops.isEmpty()) {
+                                        String nearOrd = gpsToNearestOrd(la, lo, fStops);
+                                        if (!nearOrd.isEmpty()) useOrd = nearOrd;
+                                    }
+                                } catch(Exception ig){}
+                            }
+                            ordSet.add(useOrd);
+                            if (!vno.isEmpty()) vehMap.put(useOrd, vno);
                         }
+                        // GPS 맵 갱신
+                        if (!newGpsMap.isEmpty()) busGpsMap = newGpsMap;
+                        final boolean hasGps = !newGpsMap.isEmpty();
                         final int fCnt=cnt;
                         final java.util.Set<String> fOrd=ordSet;
                         final java.util.Map<String,String> fVeh=vehMap;
                         runOnUiThread(() -> {
                             if (!isOnSubScreen) return;
+                            if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
                             renderBusTimeline(fRId, fRNo, fDir, container,
                                     fSNm, fENm, fStF, fEtF, fInterval, fRTp,
                                     fCnt, fVeh, fOrd, fStops, fTurnOrd);
                         });
-                    } catch (Exception ignored) {}
+                        // GPS 수신 중이면 3초, 아니면 20초 간격
+                        int delay = hasGps ? 8000 : 20000;
+                        busRefreshHandler.postDelayed(this, delay);
+                    } catch (Exception ignored) {
+                        busRefreshHandler.postDelayed(this, 20000);
+                    }
                 }).start();
-                busRefreshHandler.postDelayed(this, 30000);
             }
         };
-        busRefreshHandler.postDelayed(busRefreshRunnable, 30000);
+        busRefreshHandler.postDelayed(busRefreshRunnable, 0); // 즉시 첫 갱신
+    }
+
+    /** 버스 화면 뒤로가기 - 백스택 기반 */
+    private void busNavigateBack() {
+        // busBottomBar 항상 숨김 (알림시작 화면 벗어날 때)
+        if (busBottomBar != null) { busBottomBar.removeAllViews(); busBottomBar.setVisibility(android.view.View.GONE); }
+        // 현재 화면을 스택에서 제거
+        if (!busBackStack.isEmpty()) busBackStack.pop();
+
+        if (busBackStack.isEmpty()) {
+            // 스택 비면 버스 검색 화면으로 - 완전 리셋
+            if (busRefreshRunnable != null) {
+                busRefreshHandler.removeCallbacks(busRefreshRunnable);
+                busRefreshRunnable = null;
+            }
+            if (arrivalRefreshRunnable != null) { arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable); arrivalRefreshRunnable = null; }
+            if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
+            if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+            if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+            // 입력창 초기화 + 탭을 버스번호 검색으로 리셋
+            if (busEtSearch != null) {
+                busEtSearch.setText("");
+                busEtSearch.setHint("버스 번호 입력");
+                busEtSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            }
+            // 탭 버스번호 검색으로 리셋
+            busIsBusTab[0] = true;
+            if (busUpdateTabStyle != null) busUpdateTabStyle.run();
+            // 키보드 숨김
+            android.view.inputmethod.InputMethodManager immBack =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+            if (immBack != null && busEtSearch != null)
+                immBack.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
+            // 결과 컨테이너 초기화
+            // 검색화면 완전 리셋 (즐겨찾기 제외)
+            if (busEtSearch != null) {
+                busEtSearch.setText("");
+                busEtSearch.setHint("버스 번호 입력");
+                busEtSearch.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            }
+            busIsBusTab[0] = true;
+            if (busUpdateTabStyle != null) busUpdateTabStyle.run();
+            // 키보드 숨김
+            android.view.inputmethod.InputMethodManager immBack2 =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+            if (immBack2 != null && busEtSearch != null)
+                immBack2.hideSoftInputFromWindow(busEtSearch.getWindowToken(), 0);
+            // 결과 컨테이너 초기화
+            if (busResultContainer != null) {
+                busResultContainer.removeAllViews();
+                busResultContainer.post(() -> busResultContainer.removeAllViews());
+            }
+            // 즐겨찾기 변경됐을 때만 갱신
+            if (busFavDirty && busFavSection != null && busResultContainer != null) {
+                refreshBusFavorites(busFavSection, busResultContainer);
+                busFavDirty = false;
+            } else if (busFavSection != null && busResultContainer != null) {
+                // 즐겨찾기 화면 복귀 시 즉시 갱신
+                arrivalSessionCache.clear();
+                refreshBusFavorites(busFavSection, busResultContainer);
+            }
+            startFavAutoRefresh(); // 자동갱신 재시작
+            return;
+        }
+
+        // 이전 화면 복원
+        String[] prev = busBackStack.peek();
+        busBackStack.pop();
+
+        String type = prev[0];
+        if ("timeline".equals(type)) {
+            String routeId = prev[1], routeNo = prev[2], dir = prev[3], rtp = prev[4];
+            if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
+            if (busResultContainer != null) busResultContainer.removeAllViews();
+            final int restoreY = busTimelineRestoreScrollY;
+            busTimelineRestoreScrollY = -1;
+            busScreenLoadStops(routeId, routeNo, busResultContainer, dir, rtp);
+            // 저장된 스크롤 위치 복원
+            if (restoreY > 0 && busTimelineSv != null) {
+                busResultContainer.postDelayed(() -> {
+                    if (busTimelineSv != null) busTimelineSv.scrollTo(0, restoreY);
+                }, 400);
+            }
+        } else if ("alarm".equals(type)) {
+            // 승하차 화면 → 도착화면으로 복귀
+            String nId = prev[3], nNm = prev[4], nNo = prev[5] != null ? prev[5] : "";
+            String filter = prev[2]; // routeNo
+            if (busFixedHeader != null) busFixedHeader.removeAllViews();
+            if (busResultContainer != null) busResultContainer.removeAllViews();
+            busScreenLoadArrival(nId, nNm, nNo, filter, busResultContainer);
+        } else if ("arrival".equals(type)) {
+            String nodeId = prev[1], nodeNm = prev[2], nodeNo = prev[3], filter = prev[4];
+            if (busFixedHeader != null) { busFixedHeader.removeAllViews(); }
+            if (busResultContainer != null) busResultContainer.removeAllViews();
+            busScreenLoadArrival(nodeId, nodeNm, nodeNo, filter, busResultContainer);
+        } else {
+            // search
+            if (busRefreshRunnable != null) {
+                busRefreshHandler.removeCallbacks(busRefreshRunnable);
+                busRefreshRunnable = null;
+            }
+            if (arrivalRefreshRunnable != null) { arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable); arrivalRefreshRunnable = null; }
+            if (busFixedHeader != null) { busFixedHeader.removeAllViews(); busFixedHeader.setVisibility(android.view.View.GONE); }
+            if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
+            if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
+            if (busResultContainer != null) busResultContainer.removeAllViews();
+            // 즐겨찾기 복귀 시 즉시 갱신
+            if (busFavSection != null && busResultContainer != null) {
+                arrivalSessionCache.clear();
+                refreshBusFavorites(busFavSection, busResultContainer);
+                busFavDirty = false;
+            }
+            startFavAutoRefresh(); // 자동갱신 재시작
+        }
     }
 
     private void busScreenLoadStops(String routeId, String routeNo, LinearLayout container,
                                     String direction, String routeType) {
+        stopFavAutoRefresh(); // 즐겨찾기 자동갱신 중단
+        // 백스택에 타임라인 저장 (같은 routeId timeline이 top이면 중복 push 방지)
+        boolean alreadyTimeline = !busBackStack.isEmpty()
+                && "timeline".equals(busBackStack.peek()[0])
+                && routeId.equals(busBackStack.peek()[1]);
+        if (!alreadyTimeline) {
+            busBackStack.push(new String[]{"timeline", routeId, routeNo, direction, routeType});
+        } else {
+            // 방향만 업데이트
+            busBackStack.peek()[3] = direction;
+        }
         container.removeAllViews();
         // 기존 자동 갱신 중단
         if (busRefreshRunnable != null) {
@@ -10492,7 +12337,7 @@ public class PinActivity extends AppCompatActivity {
             java.util.List<String[]> stops = new java.util.ArrayList<>();
             for (String line : cache.getString(cKey + "_stops", "").split(";")) {
                 String[] parts = line.split("\\|", -1);
-                if (parts.length == 4) stops.add(parts);
+                if (parts.length >= 4) stops.add(parts);
             }
             boolean isReverse = "reverse".equals(direction);
             if (isReverse) java.util.Collections.reverse(stops);
@@ -10519,7 +12364,18 @@ public class PinActivity extends AppCompatActivity {
                     java.util.Map<String,String> vehMap = new java.util.HashMap<>();
                     for (String item : lcXml.split("<item>")) {
                         String ord = tag(item,"nodeord"), vno = tag(item,"vehicleno");
-                        if (!ord.isEmpty()) { ordSet.add(ord); if (!vno.isEmpty()) vehMap.put(ord,vno); }
+                        String gla=tag(item,"gpslati"), glo=tag(item,"gpslong");
+                        if (ord.isEmpty()) continue;
+                        String useOrd = ord;
+                        if (!gla.isEmpty() && !glo.isEmpty() && !fStops.isEmpty()) {
+                            try {
+                                double gl=Double.parseDouble(gla), go=Double.parseDouble(glo);
+                                String nearOrd = gpsToNearestOrd(gl, go, fStops);
+                                if (!nearOrd.isEmpty()) useOrd = nearOrd;
+                            } catch(Exception ig){}
+                        }
+                        ordSet.add(useOrd);
+                        if (!vno.isEmpty()) vehMap.put(useOrd, vno);
                     }
                     final int fCnt = cnt;
                     final java.util.Set<String> fOrd = ordSet;
@@ -10564,6 +12420,13 @@ public class PinActivity extends AppCompatActivity {
                             .putString(cKey+"_interval", interval).putString(cKey+"_rTp", rTp)
                             .putString(cKey+"_turnOrd", turnOrd).apply();
 
+                    // ① 완료 즉시 빈 타임라인 골격 UI 표시 (정류장/버스 없이)
+                    final String fSNm2=startNm, fENm2=endNm, fStF2=stF, fEtF2=etF, fIv2=interval, fRTp2=rTp, fTO2=turnOrd;
+                    runOnUiThread(() -> renderBusTimeline(routeId, routeNo, direction, container,
+                            fSNm2, fENm2, fStF2, fEtF2, fIv2, fRTp2,
+                            0, new java.util.HashMap<>(), new java.util.HashSet<>(),
+                            new java.util.ArrayList<>(), fTO2));
+
                     // ② 실시간
                     String lcXml = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
                             + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
@@ -10572,9 +12435,20 @@ public class PinActivity extends AppCompatActivity {
                     try { cnt = Integer.parseInt(tag(lcXml,"totalCount")); } catch (Exception ig) {}
                     java.util.Set<String> ordSet = new java.util.HashSet<>();
                     java.util.Map<String,String> vehMap = new java.util.HashMap<>();
+                    // GPS 좌표 임시 저장 (stops 로드 후 nearest ord 계산용)
+                    java.util.List<double[]> busGpsList = new java.util.ArrayList<>();
+                    java.util.List<String> busVnoList = new java.util.ArrayList<>();
                     for (String item : lcXml.split("<item>")) {
                         String ord = tag(item,"nodeord"), vno = tag(item,"vehicleno");
-                        if (!ord.isEmpty()) { ordSet.add(ord); if (!vno.isEmpty()) vehMap.put(ord,vno); }
+                        String gla = tag(item,"gpslati"), glo = tag(item,"gpslong");
+                        if (ord.isEmpty()) continue;
+                        ordSet.add(ord);
+                        if (!vno.isEmpty()) vehMap.put(ord, vno);
+                        // GPS 좌표 저장
+                        if (!gla.isEmpty() && !glo.isEmpty()) {
+                            try { busGpsList.add(new double[]{Double.parseDouble(gla), Double.parseDouble(glo)});
+                                  busVnoList.add(vno); } catch(Exception ig){}
+                        }
                     }
 
                     // ③ 정류소 목록
@@ -10585,17 +12459,35 @@ public class PinActivity extends AppCompatActivity {
                     StringBuilder sb = new StringBuilder();
                     for (String item : stXml.split("<item>")) {
                         if (!item.contains("<nodeid>")) continue;
+                        String lat2 = tag(item,"gpslati"), lon2 = tag(item,"gpslong");
                         String[] stop = {tag(item,"nodeid"),tag(item,"nodenm"),
-                                tag(item,"nodeord"),tag(item,"nodeno")};
+                                tag(item,"nodeord"),tag(item,"nodeno"),lat2,lon2};
                         stops.add(stop);
                         if (sb.length()>0) sb.append(";");
                         sb.append(stop[0]).append("|").append(stop[1]).append("|")
-                                .append(stop[2]).append("|").append(stop[3]);
+                                .append(stop[2]).append("|").append(stop[3])
+                                .append("|").append(lat2).append("|").append(lon2);
                     }
                     cache.edit().putString(cKey+"_stops", sb.toString()).apply();
+                    cache.edit().putString(cKey+"_no", routeNo).apply(); // 노선번호 저장
+                    cache.edit().putInt(cKey+"_running", cnt).apply(); // 운행 대수 저장
 
                     boolean isReverse = "reverse".equals(direction);
                     if (isReverse) java.util.Collections.reverse(stops);
+
+                    // GPS 좌표로 ordSet 재매핑 (stops 좌표 확보 후)
+                    if (!busGpsList.isEmpty() && !stops.isEmpty()) {
+                        ordSet.clear(); vehMap.clear();
+                        for (int bi = 0; bi < busGpsList.size(); bi++) {
+                            double[] gps = busGpsList.get(bi);
+                            String nearOrd = gpsToNearestOrd(gps[0], gps[1], stops);
+                            if (!nearOrd.isEmpty()) {
+                                ordSet.add(nearOrd);
+                                String bvno = bi < busVnoList.size() ? busVnoList.get(bi) : "";
+                                if (!bvno.isEmpty()) vehMap.put(nearOrd, bvno);
+                            }
+                        }
+                    }
 
                     final int fCnt = cnt;
                     final java.util.Set<String> fOrd = ordSet;
@@ -10637,18 +12529,47 @@ public class PinActivity extends AppCompatActivity {
                         if (result.size() >= 30) break;
                     }
                 }
-                runOnUiThread(() -> {
-                    container.removeAllViews();
-                    if (result.isEmpty()) {
+                if (!result.isEmpty()) {
+                    runOnUiThread(() -> {
+                        container.removeAllViews();
+                        renderStopCards(result, keyword, container);
+                    });
+                    return;
+                }
+                // 로컬 DB에 없으면 API로 폴백
+                try {
+                    String url = BUS_BASE2 + "BusSttnInfoInqireService/getSttnNoList"
+                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                            + "&nodeNm=" + java.net.URLEncoder.encode(keyword, "UTF-8")
+                            + "&numOfRows=30&pageNo=1&_type=xml";
+                    String xml = httpGet(url);
+                    java.util.List<String[]> apiStops = new java.util.ArrayList<>();
+                    for (String item : xml.split("<item>")) {
+                        if (!item.contains("<nodeid>")) continue;
+                        apiStops.add(new String[]{tag(item,"nodeid"), tag(item,"nodenm"), tag(item,"nodeno")});
+                    }
+                    runOnUiThread(() -> {
+                        container.removeAllViews();
+                        if (apiStops.isEmpty()) {
+                            TextView tv = new TextView(this);
+                            tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
+                            tv.setTextColor(Color.parseColor("#AAAAAA"));
+                            tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                            container.addView(tv);
+                        } else {
+                            renderStopCards(apiStops, keyword, container);
+                        }
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> {
+                        container.removeAllViews();
                         TextView tv = new TextView(this);
                         tv.setText("'" + keyword + "' 정류소를 찾을 수 없습니다");
                         tv.setTextColor(Color.parseColor("#AAAAAA"));
                         tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
                         container.addView(tv);
-                    } else {
-                        renderStopCards(result, keyword, container);
-                    }
-                });
+                    });
+                }
             }).start();
             return;
         }
@@ -10711,10 +12632,20 @@ public class PinActivity extends AppCompatActivity {
     /** 정류소 카드 렌더링 공통 */
     private void renderStopCards(java.util.List<String[]> stops, String keyword, LinearLayout container) {
         for (String[] s : stops) {
-            LinearLayout card = makeBusCard(s[1],
-                    s[2].isEmpty() ? "" : "정류소번호: " + s[2],
-                    "", "#0984E3");
-            card.setOnClickListener(v -> busScreenLoadArrival(s[0], s[1], "", container));
+            // 방면 계산 (bus_cache에서 다음 정류소 최빈값)
+            String dir4s = getDirectionForNode(s[0]);
+            String subLabel = s[2].isEmpty() ? dir4s
+                    : (dir4s.isEmpty() ? s[2] : s[2] + "  |  " + dir4s);
+            LinearLayout card = makeBusCard(s[1], subLabel, "", "#0984E3");
+            card.setOnClickListener(v -> {
+                android.view.inputmethod.InputMethodManager imm2 =
+                        (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                if (imm2 != null) imm2.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                if (getCurrentFocus() != null) getCurrentFocus().clearFocus();
+                if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+                busScreenLoadArrival(s[0], s[1], s[2], "", busResultContainer);
+            });
             container.addView(card);
         }
     }
@@ -10728,7 +12659,23 @@ public class PinActivity extends AppCompatActivity {
             String fStartNm, String fEndNm, String fStF, String fEtF, String fInterval, String fRTp,
             int fRunning, java.util.Map<String,String> fBusVehicle,
             java.util.Set<String> busOrdSet, java.util.List<String[]> stops, String turnOrd) {
+        // ★★★ 절대 규칙: 검색화면이 열려있으면 타임라인 렌더링 완전 차단
+        if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
+        // ★★★ 절대 규칙: 현재 백스택 top이 이 노선의 타임라인이 아니면 렌더링 차단
+        if (busBackStack.isEmpty()) return;
+        String[] top = busBackStack.peek();
+        if (!"timeline".equals(top[0]) || !routeId.equals(top[1])) return;
+
         container.removeAllViews();
+        // ★ 절대 규칙: 타임라인 진입 시 검색화면 반드시 숨김
+        if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+        if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.VISIBLE); busFixedHeader.setTag("timeline"); }
+        // forward 방향 전환 시 맨 위로 스크롤
+        if ("forward".equals(busPendingScrollDir)) {
+            busPendingScrollDir = null;
+            if (busTimelineSv != null) busTimelineSv.post(() -> busTimelineSv.smoothScrollTo(0, 0));
+        }
 
         // ── 헤더: ‹ [배지] 번호 + 즐겨찾기 ─────────────────
         LinearLayout topHeader = new LinearLayout(this);
@@ -10785,7 +12732,7 @@ public class PinActivity extends AppCompatActivity {
         }
         TextView tvRouteNo = new TextView(this);
         tvRouteNo.setText(routeNo);
-        tvRouteNo.setTextColor(Color.parseColor("#1A1A2E"));
+        tvRouteNo.setTextColor(Color.parseColor(routeTypeBadge(fRTp)[1]));
         tvRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
         tvRouteNo.setShadowLayer(5f, 0f, 2f, 0x50000000);
         tvRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -10795,10 +12742,28 @@ public class PinActivity extends AppCompatActivity {
         hSpace.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
         topHeader.addView(hSpace);
 
+        // GPS 수신 이미지 (즐겨찾기 왼쪽)
+        android.widget.ImageView ivGpsHeader = new android.widget.ImageView(this);
+        int gpsRcv = 0;
+        for (String ord : busOrdSet) { if (busGpsMap.containsKey(ord)) gpsRcv++; }
+        int gpsSt = (fRunning > 0 && gpsRcv > 0) ? (int)((double)gpsRcv / fRunning * 100) : 0;
+        String gpsF = gpsSt >= 80 ? "gps4.png" : gpsSt >= 60 ? "gps3.png" : gpsSt >= 40 ? "gps2.png" : gpsSt > 0 ? "gps1.png" : "gps0.png";
+        try {
+            android.graphics.Bitmap gpsBm2 = android.graphics.BitmapFactory
+                    .decodeStream(getAssets().open(gpsF));
+            ivGpsHeader.setImageBitmap(gpsBm2);
+        } catch (Exception ignored) {}
+        ivGpsHeader.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams gpsHLp = new LinearLayout.LayoutParams(dpToPx(36), dpToPx(36));
+        gpsHLp.setMargins(0, 0, dpToPx(8), 0);
+        gpsHLp.gravity = Gravity.CENTER_VERTICAL;
+        ivGpsHeader.setLayoutParams(gpsHLp);
+        topHeader.addView(ivGpsHeader);
+
         // 노선 즐겨찾기 버튼
         boolean isRevDir = "reverse".equals(direction);
         String dirLabel  = isRevDir ? fStartNm : fEndNm;
-        String shortDir  = dirLabel.length() > 5 ? dirLabel.substring(0,5) + " 방면" : dirLabel + " 방면";
+        String shortDir  = dirLabel + " 방면";
         String routeFavKey = "fav_route_" + routeId + "_" + direction;
         boolean isRouteFav = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(routeFavKey, false);
 
@@ -10835,14 +12800,14 @@ public class PinActivity extends AppCompatActivity {
                         .remove("fav_route_id_"    + routeId + "_" + direction)
                         .remove("fav_route_dirkey_"+ routeId + "_" + direction)
                         .remove("fav_route_memo_"  + routeId + "_" + direction).apply();
+                favOrderRemove("R:" + routeId + "_" + direction);
                 android.graphics.drawable.GradientDrawable offBg = new android.graphics.drawable.GradientDrawable();
                 offBg.setCornerRadius(dpToPx(5)); offBg.setColor(Color.WHITE);
                 offBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
                 tvRouteStar.setTextColor(Color.parseColor("#888888"));
                 tvRouteStar.setBackground(offBg);
                 android.widget.Toast.makeText(this, routeNo + "번 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
-                if (busFavSection != null && busResultContainer != null)
-                    refreshBusFavorites(busFavSection, busResultContainer);
+                busFavDirty = true;
             } else {
                 String existingMemo = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
                         .getString("fav_route_memo_" + routeId + "_" + direction, "");
@@ -10961,12 +12926,8 @@ public class PinActivity extends AppCompatActivity {
                     tvRouteStar.setTextColor(Color.WHITE); tvRouteStar.setBackground(onBg);
                     android.widget.Toast.makeText(this, routeNo + "번 " + shortDir + " 즐겨찾기 추가",
                             android.widget.Toast.LENGTH_SHORT).show();
-                    // 즐겨찾기 추가 후 검색화면으로 복귀하며 즐겨찾기 새로고침
-                    if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-                    if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                    if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                    if (busFavSection2 != null && busResultContainer != null)
-                        refreshBusFavorites(busFavSection2, busResultContainer);
+                    favOrderAdd("R:" + routeId + "_" + direction);
+                    busFavDirty = true;
                 });
                 btnRow.addView(btnFavOk);
                 dlgLayout.addView(btnRow);
@@ -11045,6 +13006,11 @@ public class PinActivity extends AppCompatActivity {
                     new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
                             .setTitle("\u23f1 운행 정보").setMessage(msg).setPositiveButton("확인", null).show();
                 });
+            } else if (qi == 2) {
+                final String fRouteId2 = routeId, fRouteNo2 = routeNo;
+                final java.util.List<String[]> fStops2 = stops;
+                final java.util.Set<String> fBusOrdSet2 = busOrdSet;
+                qCard.setOnClickListener(v2 -> showBusMapDialog(fRouteId2, fRouteNo2, fStops2, fBusOrdSet2));
             }
             quickMenu.addView(qCard);
         }
@@ -11087,7 +13053,26 @@ public class PinActivity extends AppCompatActivity {
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             tLp2.setMargins(0,dpToPx(3),0,0); tvTime.setLayoutParams(tLp2); dc.addView(tvTime);
             final String dKey = dirKeys[d];
-            dc.setOnClickListener(v2 -> busScreenLoadStops(routeId, routeNo, container, dKey, fRTp));
+            dc.setOnClickListener(v2 -> {
+                if (direction.equals(dKey)) {
+                    // 이미 선택된 방향 - 스크롤만
+                    if (busTimelineSv != null) {
+                        if ("forward".equals(dKey)) {
+                            busTimelineSv.smoothScrollTo(0, 0);
+                        } else {
+                            if (busTurnRowY >= 0) {
+                                int offset = busTimelineSv.getHeight() / 3;
+                                busTimelineSv.smoothScrollTo(0, Math.max(0, busTurnRowY - offset));
+                            }
+                        }
+                    }
+                } else {
+                    // 다른 방향 - 재로드 후 자동 스크롤 플래그 설정
+                    busTurnRowY = -1;
+                    busPendingScrollDir = dKey;
+                    busScreenLoadStops(routeId, routeNo, container, dKey, fRTp);
+                }
+            });
             dirRow.addView(dc);
         }
         LinearLayout.LayoutParams drLp2 = new LinearLayout.LayoutParams(
@@ -11113,6 +13098,7 @@ public class PinActivity extends AppCompatActivity {
         rbLp.setMargins(0,0,0,dpToPx(4)); runBanner.setLayoutParams(rbLp);
         View rbSpace = new View(this);
         rbSpace.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); runBanner.addView(rbSpace);
+
         // 버스 이미지
         android.widget.ImageView ivRunBus = new android.widget.ImageView(this);
         android.graphics.Bitmap runBusBmp = getBusIcon();
@@ -11145,12 +13131,7 @@ public class PinActivity extends AppCompatActivity {
         android.graphics.drawable.GradientDrawable intBg = new android.graphics.drawable.GradientDrawable();
         intBg.setColor(Color.parseColor("#EBF5FB")); intBg.setCornerRadius(dpToPx(8));
         intBg.setStroke(dpToPx(1), Color.parseColor("#AED6F1")); tvIntervalBtn.setBackground(intBg);
-        tvIntervalBtn.setOnClickListener(v2 -> {
-            String msg = "평일 배차간격: " + (fInterval.isEmpty()?"-":fInterval+"분")
-                    + "\n\n첫차: " + fStF + "\n막차: " + fEtF;
-            new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                    .setTitle("\u23f1 배차 시간").setMessage(msg).setPositiveButton("확인",null).show();
-        });
+        tvIntervalBtn.setOnClickListener(v2 -> showBusTimeTableDialog(routeNo, true));
         runBanner.addView(tvIntervalBtn);
         container.addView(runBanner);
 
@@ -11185,6 +13166,11 @@ public class PinActivity extends AppCompatActivity {
             row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.TOP);
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            row.setTag("stop_" + s[0]); // nodeId tag (스크롤 위치 찾기용)
+            boolean isFavRow = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                    .getBoolean("fav_stop_" + routeId + "_" + s[0], false);
+            // row 전체 배경은 투명 유지 (tlFrame 왼쪽 제외)
+            row.setBackgroundColor(Color.TRANSPARENT);
             final boolean fFirst2=isFirst, fLast2=isLast, fIsReturn=isReturn;
 
             // ── 타임라인 FrameLayout (세로줄 + 원 + 버스오버레이) ──
@@ -11283,7 +13269,7 @@ public class PinActivity extends AppCompatActivity {
                         }
                         if (!fShortNo.isEmpty()) {
                             android.graphics.Paint np2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                            np2.setColor(Color.parseColor("#E74C3C")); np2.setTextSize(dpToPx(8));
+                            np2.setColor(Color.parseColor("#E74C3C")); np2.setTextSize(dpToPx(10));
                             np2.setTextAlign(android.graphics.Paint.Align.CENTER); np2.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
                             canvas.drawText(fShortNo, cx, startY+imgH+gap+numH*0.8f, np2);
                         }
@@ -11295,6 +13281,15 @@ public class PinActivity extends AppCompatActivity {
                 tlFrame.addView(busOverlay);
             }
             row.addView(tlFrame);
+
+            // stopInfo + tvStar를 감싸는 contentArea (즐겨찾기 배경색 적용 영역)
+            LinearLayout contentArea = new LinearLayout(this);
+            contentArea.setOrientation(LinearLayout.HORIZONTAL);
+            contentArea.setGravity(Gravity.CENTER_VERTICAL);
+            contentArea.setWeightSum(1f);
+            contentArea.setLayoutParams(new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+            contentArea.setBackgroundColor(isFavRow ? Color.parseColor("#FFF8E1") : Color.TRANSPARENT);
 
 
             LinearLayout stopInfo = new LinearLayout(this);
@@ -11325,7 +13320,7 @@ public class PinActivity extends AppCompatActivity {
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                 tagLp.setMargins(0,dpToPx(2),0,0); tvTag.setLayoutParams(tagLp); stopInfo.addView(tvTag);
             }
-            row.addView(stopInfo);
+            contentArea.addView(stopInfo);
 
             // 즐겨찾기 버튼
             final String favKey = "fav_stop_" + routeId + "_" + s[0];
@@ -11349,25 +13344,170 @@ public class PinActivity extends AppCompatActivity {
             final String stopName=s[1], stopNo=s[3], nodeId2=s[0];
             tvStar.setOnClickListener(v2 -> {
                 boolean wasFav3 = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(favKey, false);
-                boolean nowFav3 = !wasFav3;
-                getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
-                        .putBoolean(favKey, nowFav3).putString(favNameKey,stopName)
-                        .putString(favNoKey,stopNo).putString(favRouteKey2,routeNo)
-                        .putString(favRouteIdKey,routeId).apply();
-                android.graphics.drawable.GradientDrawable newBg = new android.graphics.drawable.GradientDrawable();
-                newBg.setCornerRadius(dpToPx(4));
-                if (nowFav3) { newBg.setColor(Color.parseColor("#F39C12")); newBg.setStroke(dpToPx(1),Color.parseColor("#F39C12")); tvStar.setTextColor(Color.WHITE); }
-                else         { newBg.setColor(Color.WHITE); newBg.setStroke(dpToPx(1),Color.parseColor("#AAAAAA")); tvStar.setTextColor(Color.parseColor("#888888")); }
-                tvStar.setBackground(newBg);
-                android.widget.Toast.makeText(this, nowFav3?stopName+" 즐겨찾기 추가":stopName+" 즐겨찾기 해제",
-                        android.widget.Toast.LENGTH_SHORT).show();
-                if (busFavSection != null && busResultContainer != null)
-                    refreshBusFavorites(busFavSection, busResultContainer);
-            });
-            row.addView(tvStar);
+                if (wasFav3) {
+                    // 즐겨찾기 해제
+                    getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                            .remove(favKey).remove(favNameKey).remove(favNoKey)
+                            .remove(favRouteKey2).remove(favRouteIdKey)
+                            .remove(favKey + "_memo").apply();
+                    android.graphics.drawable.GradientDrawable offBg = new android.graphics.drawable.GradientDrawable();
+                    offBg.setCornerRadius(dpToPx(4)); offBg.setColor(Color.WHITE);
+                    offBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
+                    tvStar.setTextColor(Color.parseColor("#888888")); tvStar.setBackground(offBg);
+                    contentArea.setBackgroundColor(Color.TRANSPARENT); // contentArea 배경 제거
+                    android.widget.Toast.makeText(this, stopName + " 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
+                    busFavDirty = true;
+                } else {
+                    // 즐겨찾기 추가 - 노선 즐겨찾기와 동일한 다이얼로그
+                    String existMemo = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString(favKey + "_memo", "");
+                    android.app.Dialog stopFavDlg = new android.app.Dialog(this, android.R.style.Theme_Material_Light_Dialog);
+                    LinearLayout dlgLayout = new LinearLayout(this);
+                    dlgLayout.setOrientation(LinearLayout.VERTICAL);
+                    android.graphics.drawable.GradientDrawable dlgBg = new android.graphics.drawable.GradientDrawable();
+                    dlgBg.setColor(Color.WHITE); dlgBg.setCornerRadius(dpToPx(16));
+                    dlgLayout.setBackground(dlgBg);
+                    dlgLayout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
 
-            final String nodeId=s[0], nodeNm=s[1];
-            row.setOnClickListener(v -> busScreenLoadArrival(nodeId, nodeNm, routeNo, container));
+                    // 제목
+                    TextView tvDlgTitle = new TextView(this);
+                    tvDlgTitle.setText(stopName + " (" + routeNo + "번)");
+                    tvDlgTitle.setTextColor(Color.parseColor("#0984E3"));
+                    tvDlgTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                    tvDlgTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvDlgTitle.setGravity(Gravity.CENTER);
+                    LinearLayout.LayoutParams dtLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    dtLp.setMargins(0, 0, 0, dpToPx(14)); tvDlgTitle.setLayoutParams(dtLp);
+                    dlgLayout.addView(tvDlgTitle);
+
+                    // 구분선
+                    android.view.View favDiv = new android.view.View(this);
+                    favDiv.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                    LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                    divLp.setMargins(0, 0, 0, dpToPx(14)); favDiv.setLayoutParams(divLp);
+                    dlgLayout.addView(favDiv);
+
+                    // 메모 라벨
+                    TextView tvMemoLabel = new TextView(this);
+                    tvMemoLabel.setText("메모 (선택)");
+                    tvMemoLabel.setTextColor(Color.parseColor("#555555"));
+                    tvMemoLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    LinearLayout.LayoutParams mlLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    mlLp.setMargins(0, 0, 0, dpToPx(6)); tvMemoLabel.setLayoutParams(mlLp);
+                    dlgLayout.addView(tvMemoLabel);
+
+                    // 메모 입력
+                    android.widget.EditText etMemo = new android.widget.EditText(this);
+                    setBlackCursor(etMemo);
+                    etMemo.setHint("예) 집앞, 출근길");
+                    etMemo.setText(existMemo);
+                    etMemo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                    etMemo.setSingleLine(true);
+                    android.graphics.drawable.GradientDrawable memoBg = new android.graphics.drawable.GradientDrawable();
+                    memoBg.setColor(Color.parseColor("#F8F8F8")); memoBg.setCornerRadius(dpToPx(10));
+                    memoBg.setStroke(dpToPx(1), Color.parseColor("#DDDDDD"));
+                    etMemo.setBackground(memoBg);
+                    etMemo.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+                    LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    etLp.setMargins(0, 0, 0, dpToPx(20)); etMemo.setLayoutParams(etLp);
+                    dlgLayout.addView(etMemo);
+
+                    // 버튼 행
+                    LinearLayout btnRow = new LinearLayout(this);
+                    btnRow.setOrientation(LinearLayout.HORIZONTAL);
+                    btnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+                    // 취소
+                    TextView btnCancel = new TextView(this);
+                    btnCancel.setText("취소");
+                    btnCancel.setTextColor(Color.parseColor("#888888"));
+                    btnCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnCancel.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnCancel.setGravity(Gravity.CENTER);
+                    btnCancel.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                    android.graphics.drawable.GradientDrawable cancelBg = new android.graphics.drawable.GradientDrawable();
+                    cancelBg.setColor(Color.parseColor("#F0F0F0")); cancelBg.setCornerRadius(dpToPx(10));
+                    btnCancel.setBackground(cancelBg);
+                    LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                    cancelLp.setMargins(0, 0, dpToPx(8), 0); btnCancel.setLayoutParams(cancelLp);
+                    btnCancel.setOnClickListener(vv -> stopFavDlg.dismiss());
+                    btnRow.addView(btnCancel);
+
+                    // 확인
+                    TextView btnOk = new TextView(this);
+                    btnOk.setText("확인");
+                    btnOk.setTextColor(Color.WHITE);
+                    btnOk.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnOk.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnOk.setGravity(Gravity.CENTER);
+                    btnOk.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                    android.graphics.drawable.GradientDrawable okBg = new android.graphics.drawable.GradientDrawable();
+                    okBg.setColor(Color.parseColor("#5BA9F0")); okBg.setCornerRadius(dpToPx(10));
+                    btnOk.setBackground(okBg);
+                    btnOk.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                    btnOk.setOnClickListener(vv -> {
+                        stopFavDlg.dismiss();
+                        String memo = etMemo.getText().toString().trim();
+                        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                                .putBoolean(favKey, true)
+                                .putString(favNameKey, stopName)
+                                .putString(favNoKey, stopNo)
+                                .putString(favRouteKey2, routeNo)
+                                .putString(favRouteIdKey, routeId)
+                                .putString(favKey + "_memo", memo).apply();
+                        android.graphics.drawable.GradientDrawable onBg = new android.graphics.drawable.GradientDrawable();
+                        onBg.setCornerRadius(dpToPx(4)); onBg.setColor(Color.parseColor("#F39C12"));
+                        onBg.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
+                        tvStar.setTextColor(Color.WHITE); tvStar.setBackground(onBg);
+                        contentArea.setBackgroundColor(Color.parseColor("#FFF8E1")); // contentArea 배경 강조
+                        android.widget.Toast.makeText(this, stopName + " 즐겨찾기 추가",
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        favOrderAdd("S:" + favKey.substring("fav_stop_".length()));
+                        busFavDirty = true;
+                    });
+                    btnRow.addView(btnOk);
+                    dlgLayout.addView(btnRow);
+
+                    stopFavDlg.setContentView(dlgLayout);
+                    stopFavDlg.setCancelable(true);
+                    if (stopFavDlg.getWindow() != null)
+                        stopFavDlg.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                    stopFavDlg.show();
+                }
+            });
+            contentArea.addView(tvStar);
+            row.addView(contentArea);
+
+            final String nodeId=s[0], nodeNm=s[1], nodeNo2=s[3];
+            // 회차 지점(nodeno 없음)은 실제 정류소가 아니므로 클릭 비활성화
+            if (!s[3].isEmpty()) {
+                row.setOnClickListener(v -> busScreenLoadArrival(nodeId, nodeNm, nodeNo2, routeNo, container));
+            }
+            // 회차 행 Y좌표 저장 (reverse 방향 클릭 시 스크롤용)
+            if (isTurn) {
+                final LinearLayout fRow = row;
+                row.post(() -> {
+                    int[] loc = new int[2];
+                    fRow.getLocationOnScreen(loc);
+                    if (busTimelineSv != null) {
+                        int[] svLoc = new int[2];
+                        busTimelineSv.getLocationOnScreen(svLoc);
+                        busTurnRowY = busTimelineSv.getScrollY() + (loc[1] - svLoc[1]);
+                        // 대기 중인 스크롤 처리
+                        if ("reverse".equals(busPendingScrollDir)) {
+                            busPendingScrollDir = null;
+                            busTimelineSv.post(() -> {
+                                int offset = busTimelineSv.getHeight() / 3;
+                                busTimelineSv.smoothScrollTo(0, Math.max(0, busTurnRowY - offset));
+                            });
+                        }
+                    }
+                });
+            }
             container.addView(row);
 
             if (!isLast) {
@@ -11396,114 +13536,1358 @@ public class PinActivity extends AppCompatActivity {
 
     /** 정류소 도착정보 표시 */
     private void busScreenLoadArrival(String nodeId, String nodeNm, String filterRouteNo, LinearLayout container) {
-        container.removeAllViews();
-        TextView tvL = new TextView(this); tvL.setText("도착 정보 불러오는 중...");
-        tvL.setTextColor(Color.parseColor("#AAAAAA")); tvL.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12)); container.addView(tvL);
-        new Thread(() -> {
-            try {
-                String url = BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
-                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                        + "&nodeId=" + nodeId + "&numOfRows=30&pageNo=1&_type=xml";
-                String xml = httpGet(url);
-                java.util.List<String[]> all = new java.util.ArrayList<>();
-                for (String item : xml.split("<item>")) {
-                    if (!item.contains("<routeno>")) continue;
-                    String rno = tag(item,"routeno"), arrt = tag(item,"arrtime"), arrc = tag(item,"arrprevstationcnt");
-                    String min = "-";
-                    try { min = (Integer.parseInt(arrt)/60) + "분 후"; } catch (Exception ig) {}
-                    all.add(new String[]{rno, arrc + "정류장", min});
+        busScreenLoadArrival(nodeId, nodeNm, "", filterRouteNo, container);
+    }
+
+    private void busScreenLoadArrival(String nodeId, String nodeNm, String nodeNo, String filterRouteNo, LinearLayout container) {
+        stopFavAutoRefresh(); // 즐겨찾기 자동갱신 중단
+        // ★★★ 절대 규칙: 검색화면이 열려있으면 도착화면 렌더링 차단
+        if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
+        // 백스택에 arrival 저장 (이미 같은 nodeId arrival이 top이면 중복 push 방지)
+        boolean alreadyOnStack = !busBackStack.isEmpty()
+                && "arrival".equals(busBackStack.peek()[0])
+                && nodeId.equals(busBackStack.peek()[1]);
+        if (!alreadyOnStack) {
+            busBackStack.push(new String[]{"arrival", nodeId, nodeNm, nodeNo, filterRouteNo});
+        }
+        // ① 타임라인 자동갱신 타이머 중단
+        if (busRefreshRunnable != null) {
+            busRefreshHandler.removeCallbacks(busRefreshRunnable);
+            busRefreshRunnable = null;
+        }
+        // ① 도착화면 자동갱신 시작 (30초마다)
+        if (arrivalRefreshRunnable != null) arrivalRefreshHandler.removeCallbacks(arrivalRefreshRunnable);
+        arrivalRefreshNodeId = nodeId; arrivalRefreshNodeNm = nodeNm;
+        arrivalRefreshNodeNo = nodeNo; arrivalRefreshRouteNo = filterRouteNo;
+        final LinearLayout fArrContainer = container;
+        arrivalRefreshRunnable = new Runnable() {
+            @Override public void run() {
+                if (!isOnSubScreen) return;
+                if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) {
+                    arrivalRefreshHandler.postDelayed(this, 20000); return;
                 }
-                java.util.List<String[]> filtered = new java.util.ArrayList<>();
-                for (String[] a : all) if (filterRouteNo.isEmpty() || a[0].equals(filterRouteNo)) filtered.add(a);
+                if (!busBackStack.isEmpty() && "arrival".equals(busBackStack.peek()[0])
+                        && arrivalRefreshNodeId.equals(busBackStack.peek()[1])) {
+                    // LC API로 GPS 먼저 조회
+                    new Thread(() -> {
+                        try {
+                            boolean hasGps = false;
+                            android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+                            java.util.Map<String, ?> allPrefs = prefs.getAll();
+                            for (java.util.Map.Entry<String, ?> entry : allPrefs.entrySet()) {
+                                String key = entry.getKey();
+                                if (!key.startsWith("fav_route_") || key.contains("_no_") || key.contains("_dir_") || key.contains("_id_") || key.contains("_dirkey_") || key.contains("_memo_")) continue;
+                                String routeId2 = prefs.getString(key.replace("fav_route_", "fav_route_id_"), "");
+                                if (routeId2.isEmpty()) continue;
+                                try {
+                                    String lcUrl = BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                            + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                            + "&routeId=" + routeId2 + "&numOfRows=50&pageNo=1&_type=xml";
+                                    String lcXml2 = httpGet(lcUrl);
+                                    for (String item : lcXml2.split("<item>")) {
+                                        String gla = tag(item, "gpslati"), glo = tag(item, "gpslong");
+                                        if (!gla.isEmpty() && !glo.isEmpty()) { hasGps = true; break; }
+                                    }
+                                } catch (Exception ig) {}
+                                if (hasGps) break;
+                            }
+                            final boolean fHasGps = hasGps;
+                            // 갱신 전 다시 도착화면인지 확인
+                            if (!isOnSubScreen) return;
+                            if (busBackStack.isEmpty() || !"arrival".equals(busBackStack.peek()[0])) return;
+                            if (!arrivalRefreshNodeId.equals(busBackStack.peek()[1])) return;
+                            arrivalSessionCache.remove(arrivalRefreshNodeId);
+                            // fArrContainer 대신 busResultContainer 사용
+                            fetchAndRenderArrival(arrivalRefreshNodeId, arrivalRefreshNodeNm,
+                                    arrivalRefreshNodeNo, arrivalRefreshRouteNo, busResultContainer, true);
+                            int delay = fHasGps ? 10000 : 20000;
+                            arrivalRefreshHandler.postDelayed(this, delay);
+                        } catch (Exception ignored) {
+                            arrivalRefreshHandler.postDelayed(this, 20000);
+                        }
+                    }).start();
+                } else {
+                    arrivalRefreshHandler.postDelayed(this, 20000);
+                }
+            }
+        };
+        arrivalRefreshHandler.postDelayed(arrivalRefreshRunnable, 20000); // 20초 후부터 자동갱신
+        // ② 검색창·즐겨찾기 숨기기
+        if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
 
-                runOnUiThread(() -> {
-                    container.removeAllViews();
-                    // 뒤로가기
-                    TextView btnBack2 = new TextView(this);
-                    btnBack2.setText("← 뒤로");
-                    btnBack2.setTextColor(Color.parseColor("#0984E3"));
-                    btnBack2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                    LinearLayout.LayoutParams bkLp = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    bkLp.setMargins(0, 0, 0, dpToPx(8));
-                    btnBack2.setLayoutParams(bkLp);
-                    // 뒤로가기는 단순히 재검색 불가이므로 container 비우기
-                    btnBack2.setOnClickListener(v -> container.removeAllViews());
-                    container.addView(btnBack2);
+        // ③ busFixedHeader → 정류장 타이틀바
+        if (busFixedHeader != null) {
+            busFixedHeader.removeAllViews();
+            busFixedHeader.setTag("arrival_" + nodeId); // 화면 식별 태그
+            busFixedHeader.setVisibility(android.view.View.VISIBLE);
+            busFixedHeader.setBackgroundColor(Color.parseColor("#F2F4F8"));
+            busFixedHeader.setPadding(0, 0, 0, 0);
 
-                    TextView tvTitle2 = new TextView(this);
-                    tvTitle2.setText("🚏 " + nodeNm + (filterRouteNo.isEmpty() ? "" : " · " + filterRouteNo + "번"));
-                    tvTitle2.setTextColor(Color.parseColor("#1A1A2E"));
-                    tvTitle2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                    tvTitle2.setTypeface(null, android.graphics.Typeface.BOLD);
-                    LinearLayout.LayoutParams ttLp = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    ttLp.setMargins(0, 0, 0, dpToPx(8));
-                    tvTitle2.setLayoutParams(ttLp);
-                    container.addView(tvTitle2);
+            LinearLayout titleBar = new LinearLayout(this);
+            titleBar.setOrientation(LinearLayout.HORIZONTAL);
+            titleBar.setGravity(Gravity.CENTER_VERTICAL);
+            titleBar.setBackgroundColor(Color.parseColor("#F2F4F8"));
+            LinearLayout.LayoutParams titleBarLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            titleBarLp.setMargins(dpToPx(12), dpToPx(4), dpToPx(12), 0);
+            titleBar.setLayoutParams(titleBarLp);
 
-                    if (filtered.isEmpty()) {
-                        TextView tv = new TextView(this);
-                        tv.setText(filterRouteNo.isEmpty() ? "현재 도착 예정 버스가 없습니다"
-                                : filterRouteNo + "번 버스 도착 예정이 없습니다 (전체 " + all.size() + "대)");
-                        tv.setTextColor(Color.parseColor("#AAAAAA")); tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12)); container.addView(tv);
-                    } else {
-                        for (String[] arr : filtered) {
-                            LinearLayout row = new LinearLayout(this);
-                            row.setOrientation(LinearLayout.HORIZONTAL);
-                            row.setGravity(Gravity.CENTER_VERTICAL);
-                            row.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 4));
-                            row.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-                            LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                            rLp.setMargins(0, 0, 0, dpToPx(6));
-                            row.setLayoutParams(rLp);
-                            row.setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8));
+            TextView tvBack = new TextView(this);
+            tvBack.setText("\u2039");
+            tvBack.setTextColor(Color.parseColor("#0984E3"));
+            tvBack.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(24));
+            tvBack.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvBack.setPadding(0, 0, dpToPx(8), 0);
+            tvBack.setOnClickListener(v -> busNavigateBack());
+            titleBar.addView(tvBack);
 
-                            TextView tvNo2 = new TextView(this);
-                            tvNo2.setText(arr[0]);
-                            tvNo2.setTextColor(Color.parseColor("#0984E3"));
-                            tvNo2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
-                            tvNo2.setTypeface(null, android.graphics.Typeface.BOLD);
-                            tvNo2.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(70), LinearLayout.LayoutParams.WRAP_CONTENT));
-                            row.addView(tvNo2);
+            TextView tvTitle = new TextView(this);
+            tvTitle.setText(nodeNm);
+            tvTitle.setTextColor(Color.parseColor("#111111"));
+            tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
+            tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvTitle.setLayoutParams(new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            titleBar.addView(tvTitle);
 
-                            TextView tvSt2 = new TextView(this);
-                            tvSt2.setText(arr[1]);
-                            tvSt2.setTextColor(Color.parseColor("#888888"));
-                            tvSt2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                            tvSt2.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-                            row.addView(tvSt2);
+            // GPS 수신 이미지 (nodeNm 오른쪽)
+            android.widget.ImageView ivGpsArr = new android.widget.ImageView(this);
+            ivGpsArr.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            LinearLayout.LayoutParams gpsArrLp = new LinearLayout.LayoutParams(dpToPx(36), dpToPx(36));
+            gpsArrLp.setMargins(dpToPx(8), 0, dpToPx(4), 0);
+            gpsArrLp.gravity = Gravity.CENTER_VERTICAL;
+            ivGpsArr.setLayoutParams(gpsArrLp);
+            // 초기값: gps1 (미수신)
+            try {
+                android.graphics.Bitmap gpsBm = android.graphics.BitmapFactory
+                        .decodeStream(getAssets().open("gps0.png"));
+                ivGpsArr.setImageBitmap(gpsBm);
+            } catch (Exception ignored) {}
+            ivGpsArr.setTag("gps_arr_iv");
+            titleBar.addView(ivGpsArr);
 
-                            TextView tvTm2 = new TextView(this);
-                            tvTm2.setText(arr[2]);
-                            tvTm2.setTextColor(Color.parseColor("#E74C3C"));
-                            tvTm2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                            tvTm2.setTypeface(null, android.graphics.Typeface.BOLD);
-                            tvTm2.setGravity(Gravity.END);
-                            row.addView(tvTm2);
-                            container.addView(row);
+            // 정류소 즐겨찾기 버튼 (기존 스타일)
+            final String stopOnlyFavKey = "fav_stop_" + nodeId;
+            boolean stopOnlyFaved = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(stopOnlyFavKey, false);
+            TextView tvStopOnlyFav = new TextView(this);
+            tvStopOnlyFav.setText("즐겨찾기");
+            tvStopOnlyFav.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvStopOnlyFav.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvStopOnlyFav.setGravity(Gravity.CENTER);
+            tvStopOnlyFav.setPadding(dpToPx(9), dpToPx(5), dpToPx(9), dpToPx(5));
+            android.graphics.drawable.GradientDrawable hFavBg = new android.graphics.drawable.GradientDrawable();
+            hFavBg.setCornerRadius(dpToPx(5));
+            if (stopOnlyFaved) { hFavBg.setColor(Color.parseColor("#F39C12")); hFavBg.setStroke(dpToPx(1),Color.parseColor("#F39C12")); tvStopOnlyFav.setTextColor(Color.WHITE); }
+            else               { hFavBg.setColor(Color.WHITE); hFavBg.setStroke(dpToPx(1),Color.parseColor("#AAAAAA")); tvStopOnlyFav.setTextColor(Color.parseColor("#888888")); }
+            tvStopOnlyFav.setBackground(hFavBg);
+            LinearLayout.LayoutParams hFavLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            hFavLp.gravity = Gravity.CENTER_VERTICAL; hFavLp.setMargins(dpToPx(4),0,0,0);
+            tvStopOnlyFav.setLayoutParams(hFavLp);
+            tvStopOnlyFav.setOnClickListener(vf -> {
+                boolean cur = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(stopOnlyFavKey, false);
+                android.graphics.drawable.GradientDrawable newBg = new android.graphics.drawable.GradientDrawable();
+                newBg.setCornerRadius(dpToPx(4));
+                if (cur) {
+                    getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                            .remove(stopOnlyFavKey).remove("fav_stop_name_"+nodeId).remove("fav_stop_no_"+nodeId).apply();
+                    newBg.setColor(Color.WHITE); newBg.setStroke(dpToPx(1),Color.parseColor("#AAAAAA"));
+                    tvStopOnlyFav.setTextColor(Color.parseColor("#888888")); tvStopOnlyFav.setBackground(newBg);
+                    android.widget.Toast.makeText(this, nodeNm+" 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
+                } else {
+                    getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                            .putBoolean(stopOnlyFavKey, true)
+                            .putString("fav_stop_name_"+nodeId, nodeNm)
+                            .putString("fav_stop_no_"+nodeId, nodeNo).apply();
+                    newBg.setColor(Color.parseColor("#F39C12")); newBg.setStroke(dpToPx(1),Color.parseColor("#F39C12"));
+                    tvStopOnlyFav.setTextColor(Color.WHITE); tvStopOnlyFav.setBackground(newBg);
+                    android.widget.Toast.makeText(this, nodeNm+" 즐겨찾기 추가", android.widget.Toast.LENGTH_SHORT).show();
+                    favOrderAdd("S:" + nodeId);
+                }
+                busFavDirty = true;
+            });
+            titleBar.addView(tvStopOnlyFav);
+            busFixedHeader.addView(titleBar);
+
+            View divT = new View(this);
+            divT.setBackgroundColor(Color.parseColor("#EEEEEE"));
+            divT.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+            busFixedHeader.addView(divT);
+
+            LinearLayout infoBox = new LinearLayout(this);
+            infoBox.setOrientation(LinearLayout.VERTICAL);
+            infoBox.setGravity(Gravity.CENTER_HORIZONTAL);
+            infoBox.setBackgroundColor(Color.parseColor("#F7F7F7"));
+            infoBox.setPadding(dpToPx(16), dpToPx(10), dpToPx(16), dpToPx(10));
+            infoBox.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            // nodeNo가 비어있으면 JSON 캐시에서 nodeId로 no 찾기
+            String displayNo = nodeNo;
+            if (displayNo.isEmpty()) {
+                String sc = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
+                        .getString("stop_json_cache", "");
+                int ix = sc.indexOf("\"id\":\"" + nodeId + "\"");
+                if (ix >= 0) {
+                    int os = sc.lastIndexOf("{", ix);
+                    int oe = sc.indexOf("}", ix);
+                    if (os >= 0 && oe >= 0) displayNo = jsonVal(sc.substring(os, oe+1), "no");
+                }
+            }
+
+            TextView tvNo = new TextView(this);
+            tvNo.setText(displayNo.isEmpty() ? nodeId : displayNo);
+            tvNo.setTextColor(Color.parseColor("#999999"));
+            tvNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvNo.setGravity(Gravity.CENTER_HORIZONTAL);
+            infoBox.addView(tvNo);
+
+            // 여백
+            android.view.View sp1 = new android.view.View(this);
+            sp1.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4)));
+            infoBox.addView(sp1);
+
+            // 방면 표시 TextView
+            TextView tvDirection = new TextView(this);
+            tvDirection.setTag("direction_ph");
+            tvDirection.setTextColor(Color.parseColor("#444444"));
+            tvDirection.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvDirection.setGravity(Gravity.CENTER_HORIZONTAL);
+            tvDirection.setTypeface(null, android.graphics.Typeface.BOLD);
+            infoBox.addView(tvDirection);
+            busDirectionTV = tvDirection;
+
+            // 정류소에 정차하는 버스 종류 태그 (노선번호 → routeType → 종류별 색상)
+            String routesForNode = nodeNo.isEmpty() ? "" : nodeNoToRoutes.get(nodeNo);
+            if ((routesForNode == null || routesForNode.isEmpty()) && !nodeId.isEmpty()) {
+                if (stopDbList != null) {
+                    for (String[] s : stopDbList) {
+                        if (s[0].equals(nodeId) && s.length > 4) { routesForNode = s[4]; break; }
+                    }
+                }
+            }
+            if (routesForNode != null && !routesForNode.isEmpty() && routeDbList != null) {
+                // 종류 중복 없이 수집
+                java.util.LinkedHashMap<String, String> typeColorMap = new java.util.LinkedHashMap<>();
+                for (String rno : routesForNode.split(",")) {
+                    rno = rno.trim(); if (rno.isEmpty()) continue;
+                    // routeDbList에서 routeId 찾아 bus_cache에서 rTp 가져오기
+                    for (String[] rd : routeDbList) {
+                        if (rd[1].equals(rno)) {
+                            String rTpVal = getSharedPreferences("bus_cache", MODE_PRIVATE)
+                                    .getString("route_" + rd[0] + "_rTp", "");
+                            String[] badge = routeTypeBadge(rTpVal);
+                            if (!badge[0].isEmpty()) typeColorMap.put(badge[0], badge[1]);
+                            break;
                         }
                     }
-                    // 새로고침
-                    TextView btnR2 = new TextView(this);
-                    btnR2.setText("↻ 새로고침");
-                    btnR2.setTextColor(Color.parseColor("#0984E3"));
-                    btnR2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-                    btnR2.setGravity(Gravity.CENTER);
-                    LinearLayout.LayoutParams rfLp = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    rfLp.setMargins(0, dpToPx(2), 0, dpToPx(4));
-                    btnR2.setLayoutParams(rfLp);
-                    btnR2.setOnClickListener(v -> busScreenLoadArrival(nodeId, nodeNm, filterRouteNo, container));
-                    container.addView(btnR2);
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> { container.removeAllViews();
-                    TextView tv = new TextView(this); tv.setText("조회 실패: " + e.getMessage());
-                    tv.setTextColor(Color.parseColor("#E74C3C")); tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11)); container.addView(tv); });
+                }
+                if (!typeColorMap.isEmpty()) {
+                    LinearLayout typeRow = new LinearLayout(this);
+                    typeRow.setOrientation(LinearLayout.HORIZONTAL);
+                    typeRow.setGravity(Gravity.CENTER_HORIZONTAL);
+                    LinearLayout.LayoutParams trLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    trLp.setMargins(0, dpToPx(4), 0, 0);
+                    typeRow.setLayoutParams(trLp);
+                    for (java.util.Map.Entry<String, String> tc : typeColorMap.entrySet()) {
+                        TextView tvType = new TextView(this);
+                        tvType.setText(tc.getKey());
+                        tvType.setTextColor(Color.WHITE);
+                        tvType.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+                        tvType.setTypeface(null, android.graphics.Typeface.BOLD);
+                        tvType.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+                        android.graphics.drawable.GradientDrawable typeBg = new android.graphics.drawable.GradientDrawable();
+                        typeBg.setColor(Color.parseColor(tc.getValue()));
+                        typeBg.setCornerRadius(dpToPx(4));
+                        tvType.setBackground(typeBg);
+                        LinearLayout.LayoutParams tvTypeLp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        tvTypeLp.setMargins(dpToPx(2), 0, dpToPx(2), 0);
+                        tvType.setLayoutParams(tvTypeLp);
+                        typeRow.addView(tvType);
+                    }
+                    infoBox.addView(typeRow);
+                }
             }
-        }).start();
+
+            // 여백
+            android.view.View sp2 = new android.view.View(this);
+            sp2.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(6)));
+            infoBox.addView(sp2);
+            // 구분선 위
+            android.view.View divUp = new android.view.View(this);
+            divUp.setBackgroundColor(Color.parseColor("#DDDDDD"));
+            divUp.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+            infoBox.addView(divUp);
+            // X분 후 버스 행 (왼쪽: 텍스트, 오른쪽: 정렬버튼)
+            LinearLayout soonRow = new LinearLayout(this);
+            soonRow.setOrientation(LinearLayout.HORIZONTAL);
+            soonRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams soonRowLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            soonRowLp.setMargins(0, dpToPx(6), 0, dpToPx(6));
+            soonRow.setLayoutParams(soonRowLp);
+            // 버스 텍스트 (왼쪽, weight=1)
+            TextView tvSoonPH = new TextView(this);
+            tvSoonPH.setTag("soon_ph");
+            tvSoonPH.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            tvSoonPH.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            busSoonTV = tvSoonPH;
+            soonRow.addView(tvSoonPH);
+            // 정렬 버튼 (오른쪽 끝)
+            final String[] sortModes = {"도착순", "번호순", "유형순"};
+            TextView tvSort = new TextView(this);
+            tvSort.setText(sortModes[busSortMode]);
+            tvSort.setTextColor(Color.parseColor("#0984E3"));
+            tvSort.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvSort.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvSort.setGravity(Gravity.CENTER);
+            tvSort.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
+            android.graphics.drawable.GradientDrawable sortBg = new android.graphics.drawable.GradientDrawable();
+            sortBg.setColor(Color.parseColor("#EBF5FB"));
+            sortBg.setStroke(dpToPx(1), Color.parseColor("#0984E3"));
+            sortBg.setCornerRadius(dpToPx(6));
+            tvSort.setBackground(sortBg);
+            LinearLayout.LayoutParams sortLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            sortLp.gravity = Gravity.CENTER_VERTICAL;
+            tvSort.setLayoutParams(sortLp);
+            tvSort.setClickable(true); tvSort.setFocusable(true);
+            final String fNodeId2 = nodeId, fNodeNm2 = nodeNm, fNodeNo2 = nodeNo;
+            tvSort.setOnClickListener(vs -> {
+                busSortMode = (busSortMode + 1) % 3;
+                tvSort.setText(sortModes[busSortMode]);
+                if (busResultContainer != null) {
+                    busResultContainer.removeAllViews();
+                    Object[] cached = arrivalSessionCache.get(fNodeId2);
+                    if (cached != null) {
+                        java.util.List<String[]> cachedRoutes = (java.util.List<String[]>) cached[1];
+                        java.util.Map<String, String[]> cachedMap = (java.util.Map<String, String[]>) cached[2];
+                        renderArrivalRows(fNodeId2, fNodeNm2, fNodeNo2, "", busResultContainer, cachedRoutes, cachedMap);
+                    }
+                }
+            });
+            busSortTV = tvSort;
+            soonRow.addView(tvSort);
+            infoBox.addView(soonRow);
+            // 구분선 아래
+            android.view.View divDown = new android.view.View(this);
+            divDown.setBackgroundColor(Color.parseColor("#DDDDDD"));
+            divDown.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+            infoBox.addView(divDown);
+            busFixedHeader.addView(infoBox);
+
+            View divI = new View(this);
+            divI.setBackgroundColor(Color.parseColor("#DDDDDD"));
+            divI.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+            busFixedHeader.addView(divI);
+        }
+
+        container.removeAllViews();
+
+        // ── 세션 캐시 히트 → 즉시 렌더링 ──────────────────────────────
+        Object[] cached = arrivalSessionCache.get(nodeId);
+        if (cached != null) {
+            long cacheTime = (long) cached[0];
+            // 30초 이내 캐시면 즉시 표시
+            if (System.currentTimeMillis() - cacheTime < 20000) {
+                @SuppressWarnings("unchecked")
+                java.util.List<String[]> cachedRoutes = (java.util.List<String[]>) cached[1];
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, String[]> cachedArrMap = (java.util.Map<String, String[]>) cached[2];
+                renderArrivalRows(nodeId, nodeNm, nodeNo, filterRouteNo, container, cachedRoutes, cachedArrMap);
+                // 백그라운드에서 조용히 갱신
+                final LinearLayout fContainer = container;
+                new Thread(() -> fetchAndRenderArrival(nodeId, nodeNm, nodeNo, filterRouteNo, fContainer, false)).start();
+                return;
+            }
+        }
+
+        // 캐시 없음 → routes 먼저 메모리에서 즉시 추출 후 UI 그리기
+        java.util.List<String[]> quickRoutes = new java.util.ArrayList<>();
+
+        // ① 정류장 노선 영구캐시 먼저 확인 (가장 빠름)
+        android.content.SharedPreferences arrCache = getSharedPreferences("arrival_cache", MODE_PRIVATE);
+        String cachedRoutesStr = arrCache.getString("routes_" + nodeId, "");
+        if (!cachedRoutesStr.isEmpty()) {
+            for (String line : cachedRoutesStr.split(";")) {
+                String[] p = line.split("\\|", -1);
+                if (p.length >= 2) quickRoutes.add(new String[]{
+                    p[0], p.length>1?p[1]:"", p.length>2?p[2]:"", p.length>3?p[3]:"", p.length>4?p[4]:""});
+            }
+        }
+
+        // ② 캐시 없으면 메모리에서 추출
+        if (quickRoutes.isEmpty()) {
+            String memRoutes = nodeNo.isEmpty() ? "" : nodeNoToRoutes.get(nodeNo);
+            if (memRoutes == null && !nodeId.isEmpty()) {
+                if (stopDbList != null) {
+                    for (String[] s : stopDbList) {
+                        if (s[0].equals(nodeId)) { memRoutes = s.length > 4 ? s[4] : ""; break; }
+                    }
+                }
+            }
+            if (memRoutes != null && !memRoutes.isEmpty()) {
+                for (String rno : memRoutes.split(",")) {
+                    rno = rno.trim(); if (rno.isEmpty()) continue;
+                    if (routeDbList != null) {
+                        for (String[] rd : routeDbList) {
+                            if (rd[1].equals(rno)) {
+                                quickRoutes.add(new String[]{rd[1], rd[0], rd[2], rd[3], rd.length>4?rd[4]:""});
+                                break;
+                            }
+                        }
+                    } else { quickRoutes.add(new String[]{rno, "", "", "", ""}); }
+                }
+            }
+        }
+        // 메모리에서 routes 알고 있으면 → 즉시 골격 UI 그리기 (실시간 없이)
+        if (!quickRoutes.isEmpty()) {
+            renderArrivalRows(nodeId, nodeNm, nodeNo, filterRouteNo, container, quickRoutes, new java.util.HashMap<>());
+        } else {
+            TextView tvL = new TextView(this);
+            tvL.setText("정류장 버스 정보 불러오는 중...");
+            tvL.setTextColor(Color.parseColor("#AAAAAA"));
+            tvL.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvL.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams ldLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            ldLp.setMargins(0, dpToPx(20), 0, 0);
+            tvL.setLayoutParams(ldLp);
+            container.addView(tvL);
+        }
+
+        // 백그라운드에서 실시간 API 호출 후 갱신
+        final LinearLayout fContainer = container;
+        new Thread(() -> fetchAndRenderArrival(nodeId, nodeNm, nodeNo, filterRouteNo, fContainer, true)).start();
+    }
+
+    /** 도착정보 API 호출 + 렌더링 (백그라운드에서 호출) */
+    private void fetchAndRenderArrival(String nodeId, String nodeNm, String nodeNo,
+                                       String filterRouteNo, LinearLayout container, boolean fullFetch) {
+        try {
+            // ── STEP 1: stop_json_cache에서 nodeno로 routes 직접 파싱 ──
+            java.util.List<String[]> allRoutes = new java.util.ArrayList<>();
+            String foundRoutes = "";
+            String fNodeNo = nodeNo;
+
+            // 내부 파일 우선 읽기, 없으면 SharedPreferences
+            String stopCache = loadStopDb();
+            if (stopCache.isEmpty())
+                stopCache = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
+                        .getString("stop_json_cache", "");
+
+            // 구버전 캐시(routes 없음)면 Drive에서 새로 받기
+            if (!stopCache.contains("\"routes\":")) {
+                try {
+                    DriveReadHelper dr = new DriveReadHelper(PinActivity.this);
+                    final String[] newJson = {""};
+                    final Object lock2 = new Object();
+                    dr.readFile(STOP_DB_FILE, new DriveReadHelper.ReadCallback() {
+                        @Override public void onSuccess(String content) {
+                            synchronized(lock2) { newJson[0] = content; lock2.notifyAll(); }
+                        }
+                        @Override public void onFailure(String e) {
+                            synchronized(lock2) { lock2.notifyAll(); }
+                        }
+                    });
+                    synchronized(lock2) { lock2.wait(15000); }
+                    if (!newJson[0].isEmpty()) {
+                        getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
+                                .putString("stop_json_cache", newJson[0]).apply();
+                        saveStopDb(newJson[0]); // 내부 파일에도 저장
+                        stopCache = newJson[0];
+                    }
+                } catch (Exception ignored) {}
+            }
+
+
+            if (!stopCache.isEmpty()) {
+                // fNodeNo가 있으면 "no":"46810" 패턴으로 직접 검색
+                if (!fNodeNo.isEmpty()) {
+                    String noPattern = "\"no\":\"" + fNodeNo + "\"";
+                    int idx = stopCache.indexOf(noPattern);
+                    while (idx >= 0) {
+                        int objStart = stopCache.lastIndexOf("{", idx);
+                        int objEnd   = stopCache.indexOf("}", idx);
+                        if (objStart >= 0 && objEnd >= 0) {
+                            String obj = stopCache.substring(objStart, objEnd + 1);
+                            String r = jsonVal(obj, "routes");
+                            if (!r.isEmpty()) { foundRoutes = r; break; }
+                        }
+                        idx = stopCache.indexOf(noPattern, idx + 1);
+                    }
+                }
+                // nodeno로 못 찾으면 nodeId로 검색
+                if (foundRoutes.isEmpty()) {
+                    String idPattern = "\"id\":\"" + nodeId + "\"";
+                    int idx = stopCache.indexOf(idPattern);
+                    if (idx >= 0) {
+                        int objStart = stopCache.lastIndexOf("{", idx);
+                        int objEnd   = stopCache.indexOf("}", idx);
+                        if (objStart >= 0 && objEnd >= 0) {
+                            String obj = stopCache.substring(objStart, objEnd + 1);
+                            foundRoutes = jsonVal(obj, "routes");
+                            if (fNodeNo.isEmpty()) fNodeNo = jsonVal(obj, "no");
+                        }
+                    }
+                }
+                // 그래도 없으면 nodeNm으로 검색
+                if (foundRoutes.isEmpty()) {
+                    String nmPattern = "\"nm\":\"" + nodeNm + "\"";
+                    int idx = stopCache.indexOf(nmPattern);
+                    if (idx >= 0) {
+                        int objStart = stopCache.lastIndexOf("{", idx);
+                        int objEnd   = stopCache.indexOf("}", idx);
+                        if (objStart >= 0 && objEnd >= 0) {
+                            String obj = stopCache.substring(objStart, objEnd + 1);
+                            foundRoutes = jsonVal(obj, "routes");
+                            if (fNodeNo.isEmpty()) fNodeNo = jsonVal(obj, "no");
+                        }
+                    }
+                }
+            }
+
+            if (!foundRoutes.isEmpty()) {
+                // routes = "211,212,601,708" → 각 노선번호로 routeDbList에서 정보 찾기
+                for (String rno : foundRoutes.split(",")) {
+                    rno = rno.trim();
+                    if (rno.isEmpty()) continue;
+                    boolean found = false;
+                    if (routeDbList != null) {
+                        for (String[] rd : routeDbList) {
+                            if (rd[1].equals(rno)) {
+                                allRoutes.add(new String[]{rd[1], rd[0], rd[2], rd[3], rd.length>4?rd[4]:""});
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    // routeDbList에 없으면 노선번호만으로라도 추가
+                    if (!found) allRoutes.add(new String[]{rno, "", "", "", ""});
+                }
+            } else {
+                // routes 정보 없음 → bus_cache stops 캐시 fallback
+                android.content.SharedPreferences busCache = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                java.util.Map<String, ?> allKeys = busCache.getAll();
+                java.util.Set<String> foundRouteIds = new java.util.HashSet<>();
+
+                for (java.util.Map.Entry<String, ?> entry : allKeys.entrySet()) {
+                    String key = entry.getKey();
+                    if (!key.endsWith("_stops")) continue;
+                    Object val = entry.getValue();
+                    if (!(val instanceof String)) continue;
+                    String stopsRaw = (String) val;
+                    if (stopsRaw.isEmpty()) continue;
+                    String routeId2 = key.replace("route_", "").replace("_stops", "");
+                    for (String line : stopsRaw.split(";")) {
+                        String[] p = line.split("\\|", -1);
+                        if (p.length < 2) continue;
+                        boolean match = p[0].equals(nodeId) || p[1].equals(nodeNm)
+                                || (!fNodeNo.isEmpty() && p.length > 3 && p[3].equals(fNodeNo));
+                        if (match) { foundRouteIds.add(routeId2); break; }
+                    }
+                }
+                if (routeDbList != null) {
+                    for (String[] rd : routeDbList) {
+                        if (foundRouteIds.contains(rd[0]))
+                            allRoutes.add(new String[]{rd[1], rd[0], rd[2], rd[3], rd.length>4?rd[4]:""});
+                    }
+                }
+                // routeDbList 없어도 routeId로 추가 (노선번호는 _stops 키명에서 추출 불가, routeNo 캐시에서 시도)
+                if (allRoutes.isEmpty() && !foundRouteIds.isEmpty()) {
+                    android.content.SharedPreferences bc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                    for (String rId : foundRouteIds) {
+                        String rNo = bc2.getString("route_" + rId + "_no", "");
+                        if (rNo.isEmpty()) rNo = bc2.getString(rId + "_no", "");
+                        allRoutes.add(new String[]{rNo, rId, "", "", ""});
+                    }
+                }
+            }
+
+            // 로컬 캐시 없으면 실시간 API 결과만 사용 (fallback)
+            boolean localDataFound = !allRoutes.isEmpty();
+
+            // allRoutes 확정 시 정류장 노선 영구캐시 저장 (노선 변경 감지 포함)
+            if (!allRoutes.isEmpty()) {
+                StringBuilder routesSb = new StringBuilder();
+                for (String[] r : allRoutes) {
+                    if (routesSb.length() > 0) routesSb.append(";");
+                    routesSb.append(r[0]).append("|").append(r[1]).append("|")
+                            .append(r[2]).append("|").append(r[3]).append("|").append(r.length>4?r[4]:"");
+                }
+                android.content.SharedPreferences ac = getSharedPreferences("arrival_cache", MODE_PRIVATE);
+                String existing = ac.getString("routes_" + nodeId, "");
+                // 노선 목록이 바뀌었을 때만 저장 (불필요한 write 방지)
+                if (!existing.equals(routesSb.toString())) {
+                    ac.edit().putString("routes_" + nodeId, routesSb.toString()).apply();
+                }
+            }
+
+            // ── 방면 계산: getDirectionForNode 사용 ──
+            if (busDirectionTV != null) {
+                final String nodeId4dir = nodeId;
+                new Thread(() -> {
+                    String dir4a = getDirectionForNode(nodeId4dir);
+                    if (!dir4a.isEmpty()) {
+                        runOnUiThread(() -> { if (busDirectionTV != null) busDirectionTV.setText(dir4a); });
+                    }
+                }).start();
+            }
+
+            // ── STEP 2: 실시간 도착정보 API ──────────────────────────────
+            // GPS 거리 기반 도착시간 보정용: routeNo → GPS 거리(m)
+            java.util.Map<String, Integer> gpsDistMap = new java.util.HashMap<>();
+            try {
+                // 현재 정류장 좌표 (stopDbList에서 찾기)
+                double stopLat = 0, stopLon = 0;
+                for (String[] sd : stopDbList != null ? stopDbList : new java.util.ArrayList<String[]>()) {
+                    if (sd.length >= 3 && sd[0].equals(nodeId)) {
+                        // stopDbList에 좌표 없음 → getCrdntPrxmtSttnList에서 이미 받은 busGpsMap 활용
+                        break;
+                    }
+                }
+                // allRoutes의 각 노선에 대해 LC API로 버스 GPS 조회
+                for (String[] route : allRoutes) {
+                    String rId = route[1], rNo = route[0];
+                    if (rId.isEmpty()) continue;
+                    try {
+                        String lcUrl = BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&routeId=" + rId + "&numOfRows=50&pageNo=1&_type=xml";
+                        String lcXml2 = httpGet(lcUrl);
+                        // 정류장 캐시에서 nodeId의 좌표 찾기
+                        android.content.SharedPreferences fc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                        String stopsStr = fc.getString("route_" + rId + "_stops", "");
+                        double tLat = 0, tLon = 0;
+                        for (String sl : stopsStr.split(";")) {
+                            String[] sp = sl.split("\\|", -1);
+                            if (sp.length >= 6 && sp[0].equals(nodeId)) {
+                                try { tLat = Double.parseDouble(sp[4]); tLon = Double.parseDouble(sp[5]); } catch(Exception ig){}
+                                break;
+                            }
+                        }
+                        if (tLat == 0) continue;
+                        // 버스 GPS → 정류장까지 최소 거리 계산
+                        int minDist = Integer.MAX_VALUE;
+                        for (String item2 : lcXml2.split("<item>")) {
+                            String gla = tag(item2, "gpslati"), glo = tag(item2, "gpslong");
+                            if (gla.isEmpty() || glo.isEmpty()) continue;
+                            try {
+                                double bLat = Double.parseDouble(gla), bLon = Double.parseDouble(glo);
+                                double dlat = Math.toRadians(tLat-bLat), dlon = Math.toRadians(tLon-bLon);
+                                double a = Math.sin(dlat/2)*Math.sin(dlat/2)
+                                        + Math.cos(Math.toRadians(bLat))*Math.cos(Math.toRadians(tLat))
+                                        * Math.sin(dlon/2)*Math.sin(dlon/2);
+                                int dist = (int)(6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+                                if (dist < minDist) minDist = dist;
+                            } catch(Exception ig){}
+                        }
+                        if (minDist < Integer.MAX_VALUE) gpsDistMap.put(rNo, minDist);
+                    } catch(Exception ig){}
+                }
+            } catch (Exception ignored) {}
+
+            // GPS 수신 여부 최종 이미지 업데이트
+            final boolean hasGpsDist = !gpsDistMap.isEmpty();
+            runOnUiThread(() -> {
+                if (busFixedHeader == null) return;
+                android.view.View gpsIv = busFixedHeader.findViewWithTag("gps_arr_iv");
+                if (gpsIv instanceof android.widget.ImageView) {
+                    int totalBus = allRoutes.size();
+                    int gpsCnt = gpsDistMap.size();
+                    int strength = totalBus > 0 ? (int)((double)gpsCnt/totalBus*100) : 0;
+                    String gpsFile = strength >= 80 ? "gps4.png" : strength >= 60 ? "gps3.png" : strength >= 40 ? "gps2.png" : strength > 0 ? "gps1.png" : "gps0.png";
+                    try {
+                        android.graphics.Bitmap bm = android.graphics.BitmapFactory
+                                .decodeStream(getAssets().open(gpsFile));
+                        ((android.widget.ImageView)gpsIv).setImageBitmap(bm);
+                    } catch(Exception ig){}
+                }
+            });
+
+            java.util.Map<String, String[]> arrMap = new java.util.HashMap<>();
+            try {
+                String arvlUrl = BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
+                        + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                        + "&nodeId=" + nodeId + "&numOfRows=50&pageNo=1&_type=xml";
+                String arvlXml = httpGet(arvlUrl);
+
+                java.util.Map<String, Integer> minSec = new java.util.HashMap<>();
+                for (String item : arvlXml.split("<item>")) {
+                    if (!item.contains("<routeno>")) continue;
+                    String rno    = tag(item, "routeno");
+                    String rid    = tag(item, "routeid");
+                    String arrt   = tag(item, "arrtime");
+                    String arrc   = tag(item, "arrprevstationcnt");
+                    String nextnm = tag(item, "nodenm");
+                    String endnm  = tag(item, "endnodenm");
+
+                    int sec = -1;
+                    try { sec = Integer.parseInt(arrt); } catch (Exception ig) {}
+                    int prev = -1;
+                    try { prev = Integer.parseInt(arrc); } catch (Exception ig) {}
+
+                    // GPS 거리 기반 도착시간 (GPS 우선)
+                    boolean usedGps = false;
+                    if (gpsDistMap.containsKey(rno)) {
+                        int distM = gpsDistMap.get(rno);
+                        // 버스 평균속도 20km/h(시내 정체) = 5.56m/s
+                        int gpsSec = (int)(distM / 5.56);
+                        if (sec > 0) {
+                            // GPS 값 우선 사용, arrtime은 보조
+                            sec = gpsSec;
+                        } else {
+                            sec = gpsSec;
+                        }
+                        usedGps = true;
+                    }
+                    // GPS 이미지 업데이트 (헤더에서 찾아서)
+                    final boolean fUsedGps = usedGps;
+                    runOnUiThread(() -> {
+                        if (busFixedHeader == null) return;
+                        android.view.View gpsIv = busFixedHeader.findViewWithTag("gps_arr_iv");
+                        if (gpsIv instanceof android.widget.ImageView) {
+                            String gpsFile = fUsedGps ? "gps4.png" : "gps0.png";
+                            try {
+                                android.graphics.Bitmap bm = android.graphics.BitmapFactory
+                                        .decodeStream(getAssets().open(gpsFile));
+                                ((android.widget.ImageView)gpsIv).setImageBitmap(bm);
+                            } catch(Exception ig){}
+                        }
+                    });
+
+                    if (minSec.containsKey(rno) && sec >= 0 && sec >= minSec.get(rno)) continue;
+                    if (sec >= 0) minSec.put(rno, sec);
+
+                    String timeStr, timeColor;
+                    if (sec <= 0 || prev == 0) {
+                        // 기점 대기 또는 정보 없음 → 배차시간표에서 다음 출발 시간
+                        String nd = getNextDeparture(rno, true);
+                        if (nd.isEmpty()) nd = getNextDeparture(rno, false);
+                        if (!nd.isEmpty()) {
+                            timeStr = nd; timeColor = "#555555";
+                        } else {
+                            java.util.Calendar cal = java.util.Calendar.getInstance();
+                            timeStr = cal.get(java.util.Calendar.HOUR_OF_DAY) + "시 "
+                                    + String.format("%02d", cal.get(java.util.Calendar.MINUTE)) + "분 출발";
+                            timeColor = "#555555";
+                        }
+                    } else if (sec < 60) {
+                        timeStr = "곧 도착"; timeColor = "#E74C3C";
+                    } else if (sec / 60 <= 5) {
+                        timeStr = "약 " + (sec/60) + "분"; timeColor = "#E74C3C";
+                    } else {
+                        timeStr = "약 " + (sec/60) + "분"; timeColor = "#333333";
+                    }
+                    String prevStr = prev == 0 ? "[출발지 대기중]" : prev == 1 ? "[바로 앞 정거장]" : prev > 0 ? "[" + prev + " 정거장 앞]" : "";
+                    arrMap.put(rno, new String[]{timeStr, prevStr, timeColor, endnm, nextnm});
+
+
+                    // 로컬 캐시 없으면 API 노선도 목록에 추가
+                    if (!localDataFound) {
+                        boolean already = false;
+                        for (String[] r : allRoutes) if (r[0].equals(rno)) { already = true; break; }
+                        if (!already) allRoutes.add(new String[]{rno, rid, "", endnm, ""});
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            // 운행종료 등으로 arrMap 비어도 bus_cache에서 이 정류장 지나는 노선 추가
+            if (allRoutes.isEmpty()) {
+                android.content.SharedPreferences bc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                java.util.Map<String, ?> bcAll = bc.getAll();
+                for (java.util.Map.Entry<String, ?> entry : bcAll.entrySet()) {
+                    if (!entry.getKey().endsWith("_stops")) continue;
+                    String stopsRaw = entry.getValue() instanceof String ? (String)entry.getValue() : "";
+                    if (stopsRaw.isEmpty()) continue;
+                    String rId2 = entry.getKey().replace("route_","").replace("_stops","");
+                    for (String line : stopsRaw.split(";")) {
+                        String[] p = line.split("\\|", -1);
+                        if (p.length < 2) continue;
+                        boolean match = p[0].equals(nodeId) || p[1].equals(nodeNm)
+                                || (!nodeNo.isEmpty() && p.length > 3 && p[3].equals(nodeNo));
+                        if (match) {
+                            // routeDbList에서 노선번호 찾기
+                            String rNo2 = "", rEnd2 = "";
+                            if (routeDbList != null) {
+                                for (String[] rd : routeDbList) {
+                                    if (rd[0].equals(rId2)) { rNo2 = rd[1]; rEnd2 = rd.length>3?rd[3]:""; break; }
+                                }
+                            }
+                            if (!rNo2.isEmpty()) {
+                                boolean already2 = false;
+                                for (String[] r : allRoutes) if (r[0].equals(rNo2)) { already2 = true; break; }
+                                if (!already2) allRoutes.add(new String[]{rNo2, rId2, "", rEnd2, ""});
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 노선번호 오름차순 정렬
+            allRoutes.sort((a, b) -> {
+                try { return Integer.parseInt(a[0]) - Integer.parseInt(b[0]); }
+                catch (Exception ig) { return a[0].compareTo(b[0]); }
+            });
+
+            // 모든 버스를 시간순 정렬해서 표시
+            int soonSec = Integer.MAX_VALUE;
+            // 시간→노선 리스트 맵
+            java.util.TreeMap<Integer, java.util.List<String>> secToRnoMap = new java.util.TreeMap<>();
+            for (java.util.Map.Entry<String, String[]> en : arrMap.entrySet()) {
+                String ts = en.getValue()[0];
+                int s2 = Integer.MAX_VALUE;
+                if (ts.equals("곧 도착")) s2 = 0;
+                else if (ts.contains("분")) {
+                    try { s2 = Integer.parseInt(ts.replaceAll("[^0-9]","")) * 60; } catch(Exception ig){}
+                }
+                if (s2 < Integer.MAX_VALUE) {
+                    if (s2 < soonSec) soonSec = s2;
+                    if (!secToRnoMap.containsKey(s2)) secToRnoMap.put(s2, new java.util.ArrayList<>());
+                    secToRnoMap.get(s2).add(en.getKey());
+                }
+            }
+            // 전체 버스 시간순 리스트
+            java.util.List<String> soonRnoList = new java.util.ArrayList<>();
+            for (java.util.List<String> rnos : secToRnoMap.values()) soonRnoList.addAll(rnos);
+
+            final java.util.List<String[]> fAllRoutes = allRoutes;
+            final java.util.Map<String, String[]> fArrMap = arrMap;
+            final String fSoonRno = soonRnoList.isEmpty() ? "" : soonRnoList.get(0);
+            final int fSoonSec = soonSec;
+            final java.util.List<String> fSoonRnoList = soonRnoList;
+            final java.util.TreeMap<Integer, java.util.List<String>> fSecToRnoMap = secToRnoMap;
+
+            // 세션 캐시 저장
+            arrivalSessionCache.put(nodeId, new Object[]{
+                    System.currentTimeMillis(), allRoutes, arrMap
+            });
+
+            runOnUiThread(() -> {
+                // 검색화면이면 렌더링 차단
+                if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
+                // 도착화면 태그 검증 - 다른 화면으로 이미 전환됐으면 중단
+                if (busFixedHeader == null || !("arrival_" + nodeId).equals(busFixedHeader.getTag())) return;
+                // 헤더 곧도착 업데이트
+                if (busFixedHeader != null && busFixedHeader.getChildCount() >= 3) {
+                    android.view.View infoBoxV = busFixedHeader.getChildAt(2);
+                    if (infoBoxV instanceof LinearLayout) {
+                        if (busSoonTV != null && !fSoonRnoList.isEmpty() && fSoonSec < Integer.MAX_VALUE) {
+                            busSoonCache = fSecToRnoMap;
+                            busSoonRoutesCache = fAllRoutes;
+                            refreshSoonTV();
+                        }
+                    }
+                }
+
+                container.removeAllViews();
+
+                if (fAllRoutes.isEmpty()) {
+                    TextView tvEmpty = new TextView(this);
+                    tvEmpty.setText("이 정류장 노선 정보가 없습니다\n타임라인을 먼저 한 번 열어주세요");
+                    tvEmpty.setTextColor(Color.parseColor("#AAAAAA"));
+                    tvEmpty.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                    tvEmpty.setGravity(Gravity.CENTER);
+                    LinearLayout.LayoutParams emLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    emLp.setMargins(dpToPx(16), dpToPx(24), dpToPx(16), 0);
+                    tvEmpty.setLayoutParams(emLp);
+                    container.addView(tvEmpty);
+                } else {
+                    renderArrivalRows(nodeId, nodeNm, nodeNo, filterRouteNo, container, fAllRoutes, fArrMap);
+                }
+            });
+        } catch (Exception e) {
+            runOnUiThread(() -> {
+                if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
+                container.removeAllViews();
+                TextView tv = new TextView(this);
+                tv.setText("조회 실패: " + e.getMessage());
+                tv.setTextColor(Color.parseColor("#E74C3C"));
+                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tv.setGravity(Gravity.CENTER);
+                container.addView(tv);
+            });
+        }
+    }
+
+
+    /** 도착정보 행 즉시 렌더링 (캐시 히트 or 골격 UI용) */
+    private void renderArrivalRows(String nodeId, String nodeNm, String nodeNo,
+                                   String filterRouteNo, LinearLayout container,
+                                   java.util.List<String[]> allRoutes,
+                                   java.util.Map<String, String[]> arrMap) {
+        // 검색화면이면 차단
+        if (busSearchArea != null && busSearchArea.getVisibility() == android.view.View.VISIBLE) return;
+        // 도착화면 태그 검증
+        if (busFixedHeader == null || !("arrival_" + nodeId).equals(busFixedHeader.getTag())) return;
+
+        // busSortMode에 따라 allRoutes 정렬
+        java.util.List<String[]> sortedRoutes = new java.util.ArrayList<>(allRoutes);
+        if (busSortMode == 0) {
+            // 도착순 - arrMap의 시간 기준
+            sortedRoutes.sort((a, b) -> {
+                String[] ai = arrMap.get(a[0]); String[] bi = arrMap.get(b[0]);
+                int ta = getSecFromTimeStr(ai != null ? ai[0] : "");
+                int tb = getSecFromTimeStr(bi != null ? bi[0] : "");
+                return Integer.compare(ta, tb);
+            });
+        } else if (busSortMode == 1) {
+            // 번호순
+            sortedRoutes.sort((a, b) -> {
+                try { return Integer.compare(Integer.parseInt(a[0].replaceAll("[^0-9]","")), Integer.parseInt(b[0].replaceAll("[^0-9]",""))); }
+                catch(Exception e) { return a[0].compareTo(b[0]); }
+            });
+        } else if (busSortMode == 2) {
+            // 유형순
+            sortedRoutes.sort((a, b) -> {
+                String ta = a.length>4?a[4]:"", tb2 = b.length>4?b[4]:"";
+                return routeTypeBadge(ta)[0].compareTo(routeTypeBadge(tb2)[0]);
+            });
+        }
+        // filterRouteNo가 있으면 해당 노선을 맨 위로 고정, 나머지는 도착순
+        if (!filterRouteNo.isEmpty()) {
+            java.util.List<String[]> pinned = new java.util.ArrayList<>();
+            java.util.List<String[]> others = new java.util.ArrayList<>();
+            for (String[] r : sortedRoutes) {
+                if (r[0].equals(filterRouteNo)) pinned.add(r);
+                else others.add(r);
+            }
+            // 나머지는 항상 도착순으로 재정렬
+            others.sort((a, b) -> {
+                String[] ai2 = arrMap.get(a[0]); String[] bi2 = arrMap.get(b[0]);
+                int ta2 = getSecFromTimeStr(ai2 != null ? ai2[0] : "");
+                int tb2 = getSecFromTimeStr(bi2 != null ? bi2[0] : "");
+                return Integer.compare(ta2, tb2);
+            });
+            sortedRoutes = new java.util.ArrayList<>();
+            sortedRoutes.addAll(pinned);
+            sortedRoutes.addAll(others);
+        }
+        allRoutes = sortedRoutes;
+
+        // 가장 빠른 버스 계산
+        String soonRno = ""; int soonSec = Integer.MAX_VALUE;
+        for (java.util.Map.Entry<String, String[]> en : arrMap.entrySet()) {
+            String ts = en.getValue()[0];
+            int s2 = Integer.MAX_VALUE;
+            if (ts.equals("곧 도착")) s2 = 0;
+            else if (ts.contains("분")) {
+                try { s2 = Integer.parseInt(ts.replaceAll("[^0-9]","")) * 60; } catch(Exception ig){}
+            }
+            if (s2 < soonSec) { soonSec = s2; soonRno = en.getKey(); }
+        }
+        // 전체 버스 시간순 수집 (두번째 경로)
+        java.util.TreeMap<Integer, java.util.List<String>> secToRnoMap2 = new java.util.TreeMap<>();
+        for (java.util.Map.Entry<String, String[]> en2c : arrMap.entrySet()) {
+            String ts2c = en2c.getValue()[0];
+            int s2c = Integer.MAX_VALUE;
+            if (ts2c.equals("곧 도착")) s2c = 0;
+            else if (ts2c.contains("분")) { try { s2c = Integer.parseInt(ts2c.replaceAll("[^0-9]","")) * 60; } catch(Exception ig){} }
+            if (s2c < Integer.MAX_VALUE) {
+                if (!secToRnoMap2.containsKey(s2c)) secToRnoMap2.put(s2c, new java.util.ArrayList<>());
+                secToRnoMap2.get(s2c).add(en2c.getKey());
+            }
+        }
+        java.util.List<String> soonRnoList2 = new java.util.ArrayList<>();
+        for (java.util.List<String> rl2 : secToRnoMap2.values()) soonRnoList2.addAll(rl2);
+        // 헤더 곧도착 업데이트
+        if (busFixedHeader != null && busFixedHeader.getChildCount() >= 3) {
+            // busSoonTV 직접 업데이트
+            if (busSoonTV != null && !soonRnoList2.isEmpty() && soonSec < Integer.MAX_VALUE) {
+                busSoonCache = secToRnoMap2;
+                busSoonRoutesCache = allRoutes;
+                refreshSoonTV();
+            } else if (busSoonTV != null && arrMap.isEmpty()) {
+                // 현재 시간이 운행 시간 외인지 확인
+                java.util.Calendar cal = java.util.Calendar.getInstance();
+                int nowMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE);
+                // allRoutes에서 첫 번째 노선의 운행시간 확인
+                boolean isOutOfService = false;
+                String nextDep = "";
+                for (String[] r : allRoutes) {
+                    String nd = getNextDeparture(r[0], true);
+                    if (nd.isEmpty()) nd = getNextDeparture(r[0], false);
+                    if (!nd.isEmpty()) { nextDep = nd; break; }
+                    // 캐시에서 운행시간 확인
+                    String rId = r[1];
+                    if (!rId.isEmpty()) {
+                        android.content.SharedPreferences bc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                        String et = bc.getString("route_" + rId + "_endTime", "");
+                        if (!et.isEmpty()) {
+                            try {
+                                int etH = Integer.parseInt(et.length() >= 4 ? et.substring(0,2) : "0");
+                                int etM = Integer.parseInt(et.length() >= 4 ? et.substring(2,4) : "0");
+                                int etMin = etH * 60 + etM;
+                                if (nowMin > etMin) { isOutOfService = true; break; }
+                            } catch (Exception ig) {}
+                        }
+                    }
+                }
+                if (isOutOfService && !nextDep.isEmpty()) {
+                    busSoonTV.setText("다음 출발: " + nextDep);
+                    busSoonTV.setTextColor(Color.parseColor("#555555"));
+                    busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                } else if (isOutOfService) {
+                    busSoonTV.setText("금일 운행 종료");
+                    busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
+                    busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                } else {
+                    busSoonTV.setText("곧 도착 없음");
+                    busSoonTV.setTextColor(Color.parseColor("#AAAAAA"));
+                    busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                }
+            }
+        }
+        container.removeAllViews();
+        // filterRouteNo가 있으면 목록 맨 위로 스크롤
+        if (!filterRouteNo.isEmpty() && busTimelineSv != null) {
+            busTimelineSv.post(() -> busTimelineSv.scrollTo(0, 0));
+        }
+        // fetchAndRenderArrival의 runOnUiThread 내부와 동일한 로직 호출
+        // allRoutes와 arrMap을 final로 넘겨 렌더링
+        final java.util.List<String[]> fR = allRoutes;
+        final java.util.Map<String,String[]> fA = arrMap;
+        final boolean fEmpty = arrMap.isEmpty();
+        if (allRoutes.isEmpty()) {
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText("이 정류장 노선 정보가 없습니다\n타임라인을 먼저 한 번 열어주세요");
+            tvEmpty.setTextColor(Color.parseColor("#AAAAAA"));
+            tvEmpty.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            tvEmpty.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams emLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            emLp.setMargins(dpToPx(16), dpToPx(24), dpToPx(16), 0);
+            tvEmpty.setLayoutParams(emLp);
+            container.addView(tvEmpty);
+            return;
+        }
+        for (String[] route : fR) {
+            String rno = route[0], stnm = route[2], etnm = route[3];
+            boolean isPinned = !filterRouteNo.isEmpty() && rno.equals(filterRouteNo);
+            String[] ai = fA.get(rno);
+            String timeStr, prevStr, timeColor, endNm, nextNm;
+            if (ai != null) {
+                timeStr = ai[0]; prevStr = ai[1]; timeColor = ai[2];
+                endNm = !ai[3].isEmpty() ? ai[3] : etnm; nextNm = ai[4];
+            } else {
+                String nextDep = getNextDeparture(rno, true);
+                timeStr = nextDep.isEmpty() ? (fEmpty ? "조회중..." : "도착정보 없음") : nextDep;
+                prevStr = nextDep.isEmpty() ? "" : "[출발지 대기중]";
+                timeColor = "#555555"; endNm = etnm; nextNm = "";
+            }
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dpToPx(14), dpToPx(8), dpToPx(10), dpToPx(8));
+            row.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            // 배경 먼저 설정 (자식뷰 addView 전)
+            if (isPinned) {
+                // 타임라인에서 진입한 노선 - 연한 노란색 고정 배경
+                row.setBackground(new android.graphics.drawable.ColorDrawable(Color.parseColor("#FFF8E1")));
+            } else {
+                android.graphics.drawable.StateListDrawable sldEarly = new android.graphics.drawable.StateListDrawable();
+                sldEarly.addState(new int[]{android.R.attr.state_pressed}, new android.graphics.drawable.ColorDrawable(Color.parseColor("#E3F2FD")));
+                sldEarly.addState(new int[]{}, new android.graphics.drawable.ColorDrawable(Color.WHITE));
+                row.setBackground(sldEarly);
+            }
+
+            // ─ 왼쪽: 노선번호 + 서브텍스트 ─
+            LinearLayout leftCol = new LinearLayout(this);
+            leftCol.setOrientation(LinearLayout.VERTICAL);
+            leftCol.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            // routeType 기반 색상
+            String rnoRid = route.length > 1 ? route[1] : "";
+            String rnoRtp = route.length > 4 ? route[4] : "";
+            String rnoTp = getSharedPreferences("bus_cache", MODE_PRIVATE).getString("route_" + rnoRid + "_rTp", rnoRtp);
+            String[] rnoBadge = routeTypeBadge(rnoTp);
+            // 배지 + 번호 가로 행
+            LinearLayout rnoRow = new LinearLayout(this);
+            rnoRow.setOrientation(LinearLayout.HORIZONTAL);
+            rnoRow.setGravity(Gravity.CENTER_VERTICAL);
+            rnoRow.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            // 종류 배지
+            TextView tvRnoBadge = new TextView(this);
+            tvRnoBadge.setText(rnoBadge[0]);
+            tvRnoBadge.setTextColor(Color.WHITE);
+            tvRnoBadge.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(10));
+            tvRnoBadge.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvRnoBadge.setGravity(Gravity.CENTER);
+            tvRnoBadge.setPadding(dpToPx(5), dpToPx(2), dpToPx(5), dpToPx(2));
+            android.graphics.drawable.GradientDrawable rnoBadgeBg = new android.graphics.drawable.GradientDrawable();
+            rnoBadgeBg.setColor(Color.parseColor(rnoBadge[1]));
+            rnoBadgeBg.setCornerRadius(dpToPx(4));
+            tvRnoBadge.setBackground(rnoBadgeBg);
+            LinearLayout.LayoutParams rnoBadgeLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            rnoBadgeLp.setMargins(0, 0, dpToPx(5), 0);
+            tvRnoBadge.setLayoutParams(rnoBadgeLp);
+            rnoRow.addView(tvRnoBadge);
+            // 번호
+            TextView tvRno = new TextView(this);
+            tvRno.setText(rno);
+            tvRno.setTextColor(Color.parseColor(rnoBadge[1]));
+            tvRno.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
+            tvRno.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvRno.setSingleLine(true);
+            tvRno.setEllipsize(null);
+            rnoRow.addView(tvRno);
+            leftCol.addView(rnoRow);
+
+            // 서브텍스트 (방면+다음정류소)
+            // 다음 정류소: bus_cache의 route_RID_stops에서 nodeId 다음 항목
+            String nextStopNm = "";
+            String rId4Next = route.length > 1 ? route[1] : "";
+            if (!rId4Next.isEmpty()) {
+                android.content.SharedPreferences bc4 = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                String stopsStr = bc4.getString("route_" + rId4Next + "_stops", "");
+                if (!stopsStr.isEmpty()) {
+                    String[] stopItems = stopsStr.split(";");
+                    for (int si = 0; si < stopItems.length - 1; si++) {
+                        String[] sp = stopItems[si].split("\\|");
+                        if (sp.length > 0 && sp[0].equals(nodeId)) {
+                            String[] spNext = stopItems[si + 1].split("\\|");
+                            if (spNext.length > 1) nextStopNm = spNext[1];
+                            break;
+                        }
+                    }
+                }
+            }
+            String subTxt = "";
+            if (!endNm.isEmpty() && !nextStopNm.isEmpty()) {
+                subTxt = endNm + "방면  다음 : " + nextStopNm;
+            } else if (!endNm.isEmpty()) {
+                subTxt = endNm + "방면";
+            } else if (!nextStopNm.isEmpty()) {
+                subTxt = "다음 : " + nextStopNm;
+            }
+            if (!subTxt.isEmpty()) {
+                TextView tvSub = new TextView(this);
+                tvSub.setText(subTxt);
+                tvSub.setTextColor(Color.parseColor("#888888"));
+                tvSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                tvSub.setSingleLine(true);
+                tvSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                subLp.setMargins(0, dpToPx(2), 0, 0);
+                tvSub.setLayoutParams(subLp);
+                leftCol.addView(tvSub);
+            }
+            row.addView(leftCol);
+
+            // ─ 오른쪽: 시간 + 즐겨찾기/알림 버튼 (세로) ─
+            final String fRno = rno, fRid = route[1], fRtp = route.length > 4 ? route[4] : "";
+            final String favKey = "fav_stop_" + fRid + "_" + nodeId;
+            final String favNameKey = "fav_stop_name_" + fRid + "_" + nodeId;
+            final String favNoKey   = "fav_stop_no_"   + fRid + "_" + nodeId;
+            final String favRnoKey  = "fav_stop_route_"    + fRid + "_" + nodeId;
+            final String favRidKey  = "fav_stop_routeid_"  + fRid + "_" + nodeId;
+            boolean isFavArr = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(favKey, false);
+
+            LinearLayout rightCol = new LinearLayout(this);
+            rightCol.setOrientation(LinearLayout.VERTICAL);
+            rightCol.setGravity(Gravity.END);
+            rightCol.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            // 시간 행
+            LinearLayout timeRow = new LinearLayout(this);
+            timeRow.setOrientation(LinearLayout.HORIZONTAL);
+            timeRow.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+            timeRow.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            TextView tvTime = new TextView(this);
+            tvTime.setText(timeStr);
+            tvTime.setTextColor(Color.parseColor(timeColor));
+            tvTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+            tvTime.setTypeface(null, android.graphics.Typeface.BOLD);
+            timeRow.addView(tvTime);
+            if (!prevStr.isEmpty()) {
+                TextView tvPrev = new TextView(this);
+                tvPrev.setText(" " + prevStr);
+                tvPrev.setTextColor(Color.parseColor("#888888"));
+                tvPrev.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                timeRow.addView(tvPrev);
+            }
+            rightCol.addView(timeRow);
+
+            // 즐겨찾기 버튼
+            TextView tvStar2 = new TextView(this);
+            tvStar2.setText("즐겨찾기");
+            tvStar2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvStar2.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvStar2.setGravity(Gravity.CENTER);
+            tvStar2.setPadding(dpToPx(9), dpToPx(5), dpToPx(9), dpToPx(5));
+            android.graphics.drawable.GradientDrawable starBg2 = new android.graphics.drawable.GradientDrawable();
+            starBg2.setCornerRadius(dpToPx(5));
+            if (isFavArr) { starBg2.setColor(Color.parseColor("#F39C12")); starBg2.setStroke(dpToPx(1), Color.parseColor("#F39C12")); tvStar2.setTextColor(Color.WHITE); }
+            else          { starBg2.setColor(Color.WHITE); starBg2.setStroke(dpToPx(1), Color.parseColor("#AAAAAA")); tvStar2.setTextColor(Color.parseColor("#888888")); }
+            tvStar2.setBackground(starBg2);
+            tvStar2.setClickable(true);
+            tvStar2.setFocusable(true);
+            tvStar2.setOnClickListener(v2 -> {
+                boolean wasFav = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(favKey, false);
+                if (wasFav) {
+                    getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                            .remove(favKey).remove(favNameKey).remove(favNoKey)
+                            .remove(favRnoKey).remove(favRidKey).remove(favKey + "_memo").apply();
+                    android.graphics.drawable.GradientDrawable offBg = new android.graphics.drawable.GradientDrawable();
+                    offBg.setCornerRadius(dpToPx(4)); offBg.setColor(Color.WHITE);
+                    offBg.setStroke(dpToPx(1), Color.parseColor("#AAAAAA"));
+                    tvStar2.setTextColor(Color.parseColor("#888888")); tvStar2.setBackground(offBg);
+                    android.widget.Toast.makeText(this, nodeNm + " 즐겨찾기 해제", android.widget.Toast.LENGTH_SHORT).show();
+                    busFavDirty = true;
+                } else {
+                    String exMemo = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString(favKey + "_memo", "");
+                    android.app.Dialog d2 = new android.app.Dialog(this, android.R.style.Theme_Material_Light_Dialog);
+                    LinearLayout dl = new LinearLayout(this); dl.setOrientation(LinearLayout.VERTICAL);
+                    android.graphics.drawable.GradientDrawable dlBg = new android.graphics.drawable.GradientDrawable();
+                    dlBg.setColor(Color.WHITE); dlBg.setCornerRadius(dpToPx(16)); dl.setBackground(dlBg);
+                    dl.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+                    TextView ttl = new TextView(this); ttl.setText(nodeNm + " (" + fRno + "번)");
+                    ttl.setTextColor(Color.parseColor("#0984E3")); ttl.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                    ttl.setTypeface(null, android.graphics.Typeface.BOLD); ttl.setGravity(Gravity.CENTER);
+                    LinearLayout.LayoutParams ttlLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    ttlLp.setMargins(0, 0, 0, dpToPx(14)); ttl.setLayoutParams(ttlLp); dl.addView(ttl);
+                    android.widget.EditText et2 = new android.widget.EditText(this);
+                    et2.setHint("메모 (선택사항)"); et2.setText(exMemo);
+                    et2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    android.graphics.drawable.GradientDrawable etBg2 = new android.graphics.drawable.GradientDrawable();
+                    etBg2.setColor(Color.parseColor("#F8F9FA")); etBg2.setCornerRadius(dpToPx(8));
+                    etBg2.setStroke(dpToPx(1), Color.parseColor("#DDDDDD")); et2.setBackground(etBg2);
+                    et2.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+                    LinearLayout.LayoutParams etLp2 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    etLp2.setMargins(0, 0, 0, dpToPx(16)); et2.setLayoutParams(etLp2); dl.addView(et2);
+                    LinearLayout btnRow2 = new LinearLayout(this); btnRow2.setOrientation(LinearLayout.HORIZONTAL);
+                    btnRow2.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    TextView btnC2 = new TextView(this); btnC2.setText("취소");
+                    btnC2.setTextColor(Color.parseColor("#888888")); btnC2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnC2.setGravity(Gravity.CENTER); btnC2.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                    android.graphics.drawable.GradientDrawable cBg2 = new android.graphics.drawable.GradientDrawable();
+                    cBg2.setColor(Color.parseColor("#F0F0F0")); cBg2.setCornerRadius(dpToPx(12)); btnC2.setBackground(cBg2);
+                    LinearLayout.LayoutParams cLp2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                    cLp2.setMargins(0, 0, dpToPx(8), 0); btnC2.setLayoutParams(cLp2);
+                    btnC2.setOnClickListener(vc -> d2.dismiss()); btnRow2.addView(btnC2);
+                    TextView btnOk2 = new TextView(this); btnOk2.setText("확인");
+                    btnOk2.setTextColor(Color.WHITE); btnOk2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnOk2.setGravity(Gravity.CENTER); btnOk2.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                    android.graphics.drawable.GradientDrawable okBg2 = new android.graphics.drawable.GradientDrawable();
+                    okBg2.setColor(Color.parseColor("#0984E3")); okBg2.setCornerRadius(dpToPx(12)); btnOk2.setBackground(okBg2);
+                    btnOk2.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                    btnOk2.setOnClickListener(vo -> {
+                        String memo2 = et2.getText().toString().trim();
+                        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+                                .putBoolean(favKey, true).putString(favNameKey, nodeNm)
+                                .putString(favNoKey, nodeNo).putString(favRnoKey, fRno)
+                                .putString(favRidKey, fRid).putString(favKey + "_memo", memo2).apply();
+                        android.graphics.drawable.GradientDrawable onBg2 = new android.graphics.drawable.GradientDrawable();
+                        onBg2.setCornerRadius(dpToPx(4)); onBg2.setColor(Color.parseColor("#F39C12"));
+                        onBg2.setStroke(dpToPx(1), Color.parseColor("#F39C12"));
+                        tvStar2.setTextColor(Color.WHITE); tvStar2.setBackground(onBg2);
+                        android.widget.Toast.makeText(this, nodeNm + " 즐겨찾기 추가", android.widget.Toast.LENGTH_SHORT).show();
+                        favOrderAdd("S:" + favKey.substring("fav_stop_".length()));
+                        busFavDirty = true; d2.dismiss();
+                    });
+                    btnRow2.addView(btnOk2); dl.addView(btnRow2);
+                    d2.setContentView(dl);
+                    if (d2.getWindow() != null) d2.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                    d2.show();
+                }
+            });
+
+            // 승·하차 버튼
+            final String alarmKey2 = "bus_alarm_" + fRid + "_" + nodeId;
+            boolean isAlarmed2 = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getBoolean(alarmKey2, false);
+            TextView tvBell2 = new TextView(this);
+            tvBell2.setText("승·하차");
+            tvBell2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvBell2.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvBell2.setGravity(Gravity.CENTER);
+            tvBell2.setPadding(dpToPx(5), dpToPx(4), dpToPx(5), dpToPx(4));
+            android.graphics.drawable.GradientDrawable bellBg2 = new android.graphics.drawable.GradientDrawable();
+            bellBg2.setCornerRadius(dpToPx(6));
+            if (isAlarmed2) { bellBg2.setColor(Color.parseColor("#5BA9F0")); bellBg2.setStroke(dpToPx(1), Color.parseColor("#5BA9F0")); tvBell2.setTextColor(Color.WHITE); }
+            else            { bellBg2.setColor(Color.WHITE); bellBg2.setStroke(dpToPx(1), Color.parseColor("#AAAAAA")); tvBell2.setTextColor(Color.parseColor("#888888")); }
+            tvBell2.setBackground(bellBg2);
+            tvBell2.setClickable(true);
+            tvBell2.setFocusable(true);
+            tvBell2.setOnClickListener(vb -> showBusAlarmScreen(fRno, fRid, nodeId, nodeNm, nodeNo));
+
+            // 버튼 행 (즐겨찾기 + 알림)
+            LinearLayout btnRow = new LinearLayout(this);
+            btnRow.setOrientation(LinearLayout.HORIZONTAL);
+            btnRow.setGravity(Gravity.END);
+            LinearLayout.LayoutParams btnRowLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            btnRowLp.setMargins(0, dpToPx(4), 0, 0);
+            btnRow.setLayoutParams(btnRowLp);
+            btnRow.addView(tvStar2);
+            LinearLayout.LayoutParams bellLp2 = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            bellLp2.setMargins(dpToPx(4), 0, 0, 0);
+            tvBell2.setLayoutParams(bellLp2);
+            btnRow.addView(tvBell2);
+            rightCol.addView(btnRow);
+            row.addView(rightCol);
+
+            // 노선 카드 클릭 → 타임라인 (스크롤 중 오터치 방지)
+            row.setClickable(true); row.setFocusable(true);
+            final long[] lastTouchTime = {0};
+            row.setOnTouchListener((vt, ev) -> {
+                if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN)
+                    lastTouchTime[0] = System.currentTimeMillis();
+                return false;
+            });
+            row.setOnClickListener(vr -> {
+                // DOWN→UP 시간이 300ms 이상이면 스크롤로 판단, 클릭 무시
+                if (System.currentTimeMillis() - lastTouchTime[0] > 300) return;
+                String foundRid = fRid;
+                String foundRtp = fRtp;
+                if ((foundRid == null || foundRid.isEmpty()) && routeDbList != null) {
+                    for (String[] rd : routeDbList) {
+                        if (rd[1].equals(fRno)) { foundRid = rd[0]; foundRtp = rd.length > 4 ? rd[4] : ""; break; }
+                    }
+                }
+                if (foundRid != null && !foundRid.isEmpty()) {
+                    busFixedHeader.removeAllViews();
+                    busResultContainer.removeAllViews();
+                    busScreenLoadStops(foundRid, fRno, busResultContainer, "forward", foundRtp);
+                    // 타임라인 로드 후 현재 정류장(nodeId)으로 스크롤
+                    final String fScrollNodeId = nodeId;
+                    busResultContainer.postDelayed(() -> {
+                        if (busTimelineSv == null) return;
+                        android.view.View targetRow = findViewWithTag(busResultContainer, "stop_" + fScrollNodeId);
+                        if (targetRow != null) {
+                            int[] loc = new int[2];
+                            targetRow.getLocationOnScreen(loc);
+                            int[] svLoc = new int[2];
+                            busTimelineSv.getLocationOnScreen(svLoc);
+                            int rowY = busTimelineSv.getScrollY() + (loc[1] - svLoc[1]);
+                            int offset = busTimelineSv.getHeight() / 2 - targetRow.getHeight() / 2;
+                            int targetY = Math.max(0, rowY - offset);
+                            busTimelineSv.scrollTo(0, targetY);
+                            busTimelineRestoreScrollY = targetY;
+                        }
+                    }, 600);
+                } else {
+                    android.widget.Toast.makeText(this, fRno + "번 노선 정보를 찾을 수 없습니다", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            });
+            container.addView(row);
+            android.view.View div = new android.view.View(this);
+            div.setBackgroundColor(Color.parseColor("#EEEEEE"));
+            div.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+            container.addView(div);
+        }
     }
 
     /** 버스 검색 결과 카드 공통 빌더 */
@@ -11553,7 +14937,7 @@ public class PinActivity extends AppCompatActivity {
 
         TextView tvT = new TextView(this);
         tvT.setText(title);
-        tvT.setTextColor(Color.parseColor(titleColor));
+        tvT.setTextColor(Color.parseColor(!routeType.isEmpty() ? routeTypeBadge(routeType)[1] : titleColor));
         tvT.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
         tvT.setTypeface(null, android.graphics.Typeface.BOLD);
         titleRow.addView(tvT);
@@ -11576,18 +14960,21 @@ public class PinActivity extends AppCompatActivity {
 
     /** 노선유형 → [표시명, 배지색] */
     private String[] routeTypeBadge(String routeType) {
-        if (routeType == null || routeType.isEmpty()) return new String[]{"", "#AAAAAA"};
+        if (routeType == null || routeType.isEmpty()) return new String[]{"", "#0984E3"};
         if (routeType.contains("광역"))   return new String[]{"광역", "#8E44AD"};
         if (routeType.contains("직행"))   return new String[]{"직행", "#C0392B"};
         if (routeType.contains("급행"))   return new String[]{"급행", "#E74C3C"};
         if (routeType.contains("간선"))   return new String[]{"도시", "#0984E3"};
         if (routeType.contains("지선"))   return new String[]{"지선", "#27AE60"};
-        if (routeType.contains("마을"))   return new String[]{"마을", "#27AE60"};
+        if (routeType.contains("마을"))   return new String[]{"마을", "#00B894"};
         if (routeType.contains("외곽"))   return new String[]{"외곽", "#E67E22"};
         if (routeType.contains("순환"))   return new String[]{"순환", "#16A085"};
         if (routeType.contains("공항"))   return new String[]{"공항", "#2980B9"};
         if (routeType.contains("좌석"))   return new String[]{"좌석", "#D35400"};
         if (routeType.contains("도시"))   return new String[]{"도시", "#0984E3"};
+        if (routeType.contains("계룡"))   return new String[]{"계룡", "#6C5CE7"};
+        if (routeType.contains("농어촌")) return new String[]{"농촌", "#FDCB6E"};
+        if (routeType.contains("시외"))   return new String[]{"시외", "#636E72"};
         // 그 외는 앞 2글자
         String label = routeType.length() > 2 ? routeType.substring(0, 2) : routeType;
         return new String[]{label, "#636E72"};
@@ -14565,6 +17952,7 @@ public class PinActivity extends AppCompatActivity {
     private static final String BUS_DB_SCHEMA = "db_schema";
     private static final int    BUS_DB_SCHEMA_VER = 3;
     private static final String STOP_DB_FILE  = "dj_stops.json"; // Drive 정류장 파일
+    private static final String BUS_TIME_FILE = "bustimes.txt"; // Drive 배차시간표 파일
 
     /** SharedPreferences DB를 메모리에 로드 (앱 시작 시 1회) */
     private void loadBusDbToMemory() {
@@ -14593,21 +17981,823 @@ public class PinActivity extends AppCompatActivity {
     private void loadStopJsonToMemory(String json) {
         try {
             java.util.List<String[]> sList = new java.util.ArrayList<>();
-            // JSON 배열: [{"id":"...","nm":"...","no":"..."},...]
+            java.util.Map<String, String> nMap = new java.util.HashMap<>();
+            // JSON 배열: [{"id":"...","nm":"...","no":"...","routes":"211,212,601,708"},...]
             int i = 0;
             while (true) {
                 int s = json.indexOf('{', i);
-                int e = json.indexOf('}', s);
-                if (s < 0 || e < 0) break;
-                String obj = json.substring(s, e+1);
-                String id = jsonVal(obj, "id");
-                String nm = jsonVal(obj, "nm");
-                String no = jsonVal(obj, "no");
-                if (!id.isEmpty() && !nm.isEmpty()) sList.add(new String[]{id, nm, no});
-                i = e + 1;
+                if (s < 0) break;
+                // routes 배열 포함 가능하므로 중괄호 depth 추적
+                int depth = 1, e = s + 1;
+                while (e < json.length() && depth > 0) {
+                    char c = json.charAt(e);
+                    if (c == '{') depth++;
+                    else if (c == '}') depth--;
+                    e++;
+                }
+                String obj = json.substring(s, e);
+                String id     = jsonVal(obj, "id");
+                String nm     = jsonVal(obj, "nm");
+                String no     = jsonVal(obj, "no");
+                String routes = jsonVal(obj, "routes");
+                if (!id.isEmpty() && !nm.isEmpty()) {
+                    sList.add(new String[]{id, nm, no, routes});
+                    // nodeno(표시번호)를 키로 저장 (타임라인 nodeId 형식과 무관하게 매칭 가능)
+                    if (!routes.isEmpty() && !no.isEmpty()) nMap.put(no, routes);
+                }
+                i = e;
             }
             stopDbList = sList;
+            nodeNoToRoutes = nMap;
         } catch (Exception ignored) {}
+    }
+
+    /** 정류장 DB를 내부 저장소 파일에 저장 */
+    private void saveStopDb(String content) {
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), "stop_db.json");
+            if (content.isEmpty()) { f.delete(); return; }
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+            fos.write(content.getBytes("UTF-8"));
+            fos.close();
+        } catch (Exception ignored) {}
+    }
+
+    /** 내부 저장소에서 정류장 DB 읽기 */
+    private String loadStopDb() {
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), "stop_db.json");
+            if (!f.exists()) return "";
+            java.io.FileInputStream fis = new java.io.FileInputStream(f);
+            byte[] buf = new byte[(int) f.length()];
+            fis.read(buf);
+            fis.close();
+            return new String(buf, "UTF-8");
+        } catch (Exception ignored) { return ""; }
+    }
+
+    /** 배차시간표를 내부 저장소 파일에 저장 */
+    private void saveBusTimes(String content) {
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), "bustimes.txt");
+            if (content.isEmpty()) { f.delete(); return; }
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+            fos.write(content.getBytes("UTF-8"));
+            fos.close();
+        } catch (Exception ignored) {}
+    }
+
+    /** 내부 저장소에서 배차시간표 읽기 */
+    private String loadBusTimes() {
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), "bustimes.txt");
+            if (!f.exists()) return "";
+            java.io.FileInputStream fis = new java.io.FileInputStream(f);
+            byte[] buf = new byte[(int) f.length()];
+            fis.read(buf);
+            fis.close();
+            return new String(buf, "UTF-8");
+        } catch (Exception ignored) { return ""; }
+    }
+
+    /**
+     * bustimes_v4.txt → busTimesMap 파싱
+     * 형식: rno|src|dst|company|oneway||W|interval|rows||S|interval|rows||H|interval|rows
+     * rows: "구분레이블:c2,c3,...c21" ~ 구분
+     * busTimesMap value: [src,dst,company,oneway, W_inv,W_rows, S_inv,S_rows, H_inv,H_rows]
+     */
+    private void loadBusTimesFromJson(String txt) {
+        try {
+            java.util.Map<String, String[]> map = new java.util.HashMap<>();
+            for (String line : txt.split("\n")) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                // 헤더와 요일 블록 분리 (|| 구분)
+                String[] blocks = line.split("\\|\\|");
+                if (blocks.length < 2) continue;
+                String[] h = blocks[0].split("\\|", 5);
+                if (h.length < 5) continue;
+                String rno=h[0], src=h[1], dst=h[2], company=h[3], oneway=h[4];
+                // 요일 블록 파싱
+                String wInv="", wRows="", sInv="", sRows="", hInv="", hRows="";
+                for (int bi = 1; bi < blocks.length && bi <= 3; bi++) {
+                    String[] dp = blocks[bi].split("\\|", 3);
+                    if (dp.length < 3) continue;
+                    String dayKey=dp[0], inv=dp[1], rows=dp[2];
+                    if ("W".equals(dayKey)) { wInv=inv; wRows=rows; }
+                    else if ("S".equals(dayKey)) { sInv=inv; sRows=rows; }
+                    else if ("H".equals(dayKey)) { hInv=inv; hRows=rows; }
+                }
+                // 기존 호환: ws/wd 추출 (짝수/홀수 열 합산)
+                String ws2=extractTimesFromRows(wRows,true), wd=extractTimesFromRows(wRows,false);
+                String ss=extractTimesFromRows(sRows,true), sd=extractTimesFromRows(sRows,false);
+                String hs=extractTimesFromRows(hRows,true), hd=extractTimesFromRows(hRows,false);
+                if (!rno.isEmpty()) {
+                    map.put(rno, new String[]{src,dst,company,oneway,
+                            wInv,wRows, sInv,sRows, hInv,hRows,
+                            ws2,wd, ss,sd, hs,hd});
+                }
+            }
+            busTimesMap = map;
+            android.util.Log.d("BusTimes", "loaded: " + map.size() + " routes");
+        } catch (Exception e) {
+            android.util.Log.e("BusTimes", "parse error: " + e.getMessage());
+        }
+    }
+
+    /** rows 문자열에서 출발 시간 추출 (src=true: 짝수열, false: 홀수열) */
+    private String extractTimesFromRows(String rows, boolean src) {
+        if (rows == null || rows.isEmpty()) return "";
+        java.util.Set<String> times = new java.util.TreeSet<>();
+        for (String row : rows.split("~")) {
+            int colon = row.indexOf(':');
+            if (colon < 0) continue;
+            String[] cols = row.substring(colon + 1).split(",", -1);
+            // cols[0]=B, cols[1]=C, ... 짝수인덱스(0,2,4...)=기점, 홀수=종점
+            for (int i = src ? 0 : 1; i < cols.length; i += 2) {
+                String t = cols[i].trim().replace(":", "");
+                if (t.length() == 4) {
+                    try { Integer.parseInt(t); times.add(t); } catch (Exception ig) {}
+                }
+            }
+        }
+        return String.join(",", times);
+    }
+
+    /** 배차시간표 표에 셀 추가 헬퍼 */
+    private void addCell(LinearLayout row, String text, int width, int height,
+                         int color, float size, boolean bold) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextColor(color);
+        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, size);
+        tv.setGravity(Gravity.CENTER);
+        tv.setWidth(width);
+        if (height > 0) tv.setMinHeight(height);
+        tv.setPadding(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2));
+        if (bold) tv.setTypeface(null, android.graphics.Typeface.BOLD);
+        tv.setSingleLine(true);
+        tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        row.addView(tv);
+    }
+
+    private String[] splitTimes(String s) {
+        if (s == null || s.isEmpty()) return new String[0];
+        return s.split(",");
+    }
+
+    private String getNextDeparture(String routeNo, boolean fromSrc) {
+        String[] data = busTimesMap.get(routeNo);
+        if (data == null || data.length < 16) return "";
+        // v4: [10]=ws,[11]=wd,[12]=ss,[13]=sd,[14]=hs,[15]=hd
+        java.util.Calendar now = java.util.Calendar.getInstance();
+        int dow = now.get(java.util.Calendar.DAY_OF_WEEK);
+        int srcIdx, dstIdx;
+        if (dow == java.util.Calendar.SATURDAY) { srcIdx=12; dstIdx=13; }
+        else if (dow == java.util.Calendar.SUNDAY) { srcIdx=14; dstIdx=15; }
+        else { srcIdx=10; dstIdx=11; }
+        String timesStr = fromSrc ? data[srcIdx] : data[dstIdx];
+        if (timesStr.isEmpty()) { timesStr = fromSrc ? data[2] : data[3]; } // fallback 평일
+        if (timesStr.isEmpty()) return "";
+        int nowMin = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE);
+        for (String t : timesStr.split(",")) {
+            if (t.length() != 4) continue;
+            try {
+                int h = Integer.parseInt(t.substring(0, 2));
+                int m = Integer.parseInt(t.substring(2, 4));
+                if (h * 60 + m >= nowMin) {
+                    return h + "시 " + String.format("%02d", m) + "분 출발";
+                }
+            } catch (Exception ig) {}
+        }
+        return "";
+    }
+
+    /** HTTP 스트림 → byte[] */
+    private byte[] readBytes(java.io.InputStream is) throws Exception {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        byte[] tmp = new byte[8192];
+        int n;
+        while ((n = is.read(tmp)) != -1) buf.write(tmp, 0, n);
+        return buf.toByteArray();
+    }
+
+    /**
+     * 대전 배차시간표 엑셀(xlsx) → bustimes.json 파싱
+     * 엑셀 구조: 각 노선 헤더행(1열=노선번호번), 데이터행+6부터 시간 데이터
+     * 짝수열(B,D,F...) = 기점출발, 홀수열(C,E,G...) = 종점출발
+     */
+    /**
+     * 대전 배차시간표 xlsx → 9필드 TXT 파싱
+     * 형식: rno|src|dst|ws|wd|ss|sd|hs|hd
+     * ws=평일기점출발, wd=평일종점출발, ss=토요일기점, sd=토요일종점, hs=휴일기점, hd=휴일종점
+     * 엑셀 구조: 한 노선이 평일/토요일/휴일 3번 반복 (40행 간격)
+     */
+    private String parseBusTimesXls(byte[] xlsBytes) {
+        try {
+            // ZIP(xlsx)에서 sheet1.xml, sharedStrings.xml 추출
+            java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(
+                    new java.io.ByteArrayInputStream(xlsBytes));
+            byte[] sheetXml = null, sharedStrXml = null;
+            java.util.zip.ZipEntry ze;
+            while ((ze = zis.getNextEntry()) != null) {
+                String name = ze.getName();
+                if (name.equals("xl/worksheets/sheet1.xml")) sheetXml = readBytes(zis);
+                if (name.equals("xl/sharedStrings.xml")) sharedStrXml = readBytes(zis);
+                zis.closeEntry();
+            }
+            zis.close();
+            if (sheetXml == null) return "";
+
+            // sharedStrings 파싱
+            java.util.List<String> ss2 = new java.util.ArrayList<>();
+            if (sharedStrXml != null) {
+                String ss = new String(sharedStrXml, "UTF-8");
+                int i = 0;
+                while (true) {
+                    int ts = ss.indexOf("<t", i); if (ts < 0) break;
+                    int te = ss.indexOf("</t>", ts); if (te < 0) break;
+                    int gt = ss.indexOf('>', ts);
+                    ss2.add(gt < te ? ss.substring(gt + 1, te) : "");
+                    i = te + 4;
+                }
+            }
+
+            // 시트 XML → rows[rowNum][colNum]=value
+            String sheet = new String(sheetXml, "UTF-8");
+            java.util.TreeMap<Integer, java.util.TreeMap<Integer, String>> rows = new java.util.TreeMap<>();
+            int ri = 0;
+            while (true) {
+                int rs = sheet.indexOf("<row ", ri); if (rs < 0) break;
+                int re = sheet.indexOf("</row>", rs); if (re < 0) break;
+                int rAttr = sheet.indexOf("r=\"", rs);
+                int rno2 = Integer.parseInt(sheet.substring(rAttr + 3, sheet.indexOf('"', rAttr + 3)));
+                java.util.TreeMap<Integer, String> cols = new java.util.TreeMap<>();
+                String rowStr = sheet.substring(rs, re);
+                int ci = 0;
+                while (true) {
+                    int cs = rowStr.indexOf("<c ", ci); if (cs < 0) break;
+                    int ce = rowStr.indexOf("</c>", cs); if (ce < 0) break;
+                    String cell = rowStr.substring(cs, ce + 4);
+                    int ca = cell.indexOf("r=\"");
+                    String addr = cell.substring(ca + 3, cell.indexOf('"', ca + 3));
+                    int colNum = 0;
+                    for (char ch : addr.toCharArray()) {
+                        if (!Character.isLetter(ch)) break;
+                        colNum = colNum * 26 + (Character.toUpperCase(ch) - 'A' + 1);
+                    }
+                    String val = "";
+                    boolean isShared = cell.contains("t=\"s\"");
+                    int vs = cell.indexOf("<v>"); int ve = cell.indexOf("</v>");
+                    if (vs >= 0 && ve >= 0) {
+                        String raw = cell.substring(vs + 3, ve);
+                        if (isShared) { try { val = ss2.get(Integer.parseInt(raw)); } catch (Exception ig) {} }
+                        else val = raw;
+                    }
+                    cols.put(colNum, val);
+                    ci = ce + 4;
+                }
+                rows.put(rno2, cols);
+                ri = re + 6;
+            }
+
+            // 노선 헤더 행 수집 (1열에 "N번" 포함) - 한 노선당 3개 (평일/토/휴)
+            java.util.Map<String, java.util.List<Integer>> routeBlocks = new java.util.LinkedHashMap<>();
+            for (java.util.Map.Entry<Integer, java.util.TreeMap<Integer, String>> entry : rows.entrySet()) {
+                String c1 = entry.getValue().getOrDefault(1, "");
+                if (c1.contains("번") && c1.length() <= 10) {
+                    String rno = c1.replace("번","").trim();
+                    routeBlocks.computeIfAbsent(rno, k -> new java.util.ArrayList<>()).add(entry.getKey());
+                }
+            }
+
+            // 각 노선 평일/토/휴 파싱
+            StringBuilder sb = new StringBuilder();
+            String[] dayKeys = {"W", "S", "H"};
+            for (java.util.Map.Entry<String, java.util.List<Integer>> entry : routeBlocks.entrySet()) {
+                String rno = entry.getKey();
+                java.util.List<Integer> blocks = entry.getValue();
+                if (blocks.isEmpty()) continue;
+
+                int hdr0 = blocks.get(0);
+                String srcNm = rows.getOrDefault(hdr0, new java.util.TreeMap<>()).getOrDefault(8, "");
+                String dstNm = rows.getOrDefault(hdr0, new java.util.TreeMap<>()).getOrDefault(12, "");
+                // 운행사, 편도
+                String company = rows.getOrDefault(hdr0+2, new java.util.TreeMap<>()).getOrDefault(3, "");
+                String oneway = excelTimeToHHMM(rows.getOrDefault(hdr0+2, new java.util.TreeMap<>()).getOrDefault(20, ""));
+                if (oneway == null) oneway = "";
+                else {
+                    // HHMM → H:MM
+                    if (oneway.length()==4) oneway = Integer.parseInt(oneway.substring(0,2)) + ":" + oneway.substring(2);
+                }
+
+                if (sb.length() > 0) sb.append("\n");
+                sb.append(rno).append("|").append(srcNm).append("|").append(dstNm)
+                        .append("|").append(company.trim()).append("|").append(oneway);
+
+                for (int bi = 0; bi < Math.min(blocks.size(), 3); bi++) {
+                    int hdr = blocks.get(bi);
+                    // 평균간격 계산
+                    java.util.List<Integer> srcTimes = new java.util.ArrayList<>();
+                    for (int dr = hdr+6; dr < hdr+50; dr++) {
+                        java.util.TreeMap<Integer, String> drow = rows.get(dr);
+                        if (drow == null || drow.getOrDefault(1,"").isEmpty()) break;
+                        for (int dc = 2; dc <= 21; dc += 2) {
+                            String ts2 = excelTimeToHHMM(drow.getOrDefault(dc,""));
+                            if (ts2 != null) {
+                                int h=Integer.parseInt(ts2.substring(0,2)), m=Integer.parseInt(ts2.substring(2,4));
+                                srcTimes.add(h*60+m);
+                            }
+                        }
+                    }
+                    java.util.Collections.sort(srcTimes);
+                    int interval = 0;
+                    if (srcTimes.size() >= 2) {
+                        java.util.List<Integer> gaps = new java.util.ArrayList<>();
+                        for (int g=0; g<srcTimes.size()-1; g++) {
+                            int gap = srcTimes.get(g+1)-srcTimes.get(g);
+                            if (gap>0 && gap<120) gaps.add(gap);
+                        }
+                        if (!gaps.isEmpty()) {
+                            int sum=0; for(int g:gaps) sum+=g;
+                            interval = Math.round((float)sum/gaps.size());
+                        }
+                    }
+
+                    // 데이터 행 파싱
+                    StringBuilder rowsSb = new StringBuilder();
+                    for (int dr = hdr+6; dr < hdr+50; dr++) {
+                        java.util.TreeMap<Integer, String> drow = rows.get(dr);
+                        if (drow == null || drow.getOrDefault(1,"").isEmpty()) break;
+                        String labelRaw = drow.getOrDefault(1,"").replace("\n"," ").replace("|","").replace("~","").trim();
+                        if (labelRaw.isEmpty()) break;
+                        if (rowsSb.length() > 0) rowsSb.append("~");
+                        rowsSb.append(labelRaw).append(":");
+                        for (int dc = 2; dc <= 21; dc++) {
+                            if (dc > 2) rowsSb.append(",");
+                            String ts2 = excelTimeToHHMM(drow.getOrDefault(dc,""));
+                            if (ts2 != null) {
+                                rowsSb.append(Integer.parseInt(ts2.substring(0,2)))
+                                        .append(":").append(ts2.substring(2,4));
+                            }
+                        }
+                    }
+
+                    sb.append("||").append(dayKeys[bi]).append("|").append(interval)
+                            .append("|").append(rowsSb);
+                }
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            android.util.Log.e("BusTimes", "parseBusTimesXls error: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /** 평일/토/휴 블록별 시간 파싱 → [[ws,wd],[ss,sd],[hs,hd]] */
+    private String[][] parseAllDayBlocks(
+            java.util.TreeMap<Integer, java.util.TreeMap<Integer, String>> rows,
+            java.util.List<Integer> blocks) {
+        String[][] result = new String[blocks.size()][2];
+        for (int bi = 0; bi < blocks.size(); bi++) {
+            int headerRow = blocks.get(bi);
+            java.util.List<String> sTimes = new java.util.ArrayList<>();
+            java.util.List<String> dTimes = new java.util.ArrayList<>();
+            for (int dr = headerRow + 6; dr < headerRow + 50; dr++) {
+                java.util.TreeMap<Integer, String> drow = rows.get(dr);
+                if (drow == null || drow.getOrDefault(1, "").isEmpty()) break;
+                for (int dc = 2; dc <= 21; dc += 2) {
+                    String ts = excelTimeToHHMM(drow.getOrDefault(dc, ""));
+                    if (ts != null && !sTimes.contains(ts)) sTimes.add(ts);
+                }
+                for (int dc = 3; dc <= 21; dc += 2) {
+                    String ts = excelTimeToHHMM(drow.getOrDefault(dc, ""));
+                    if (ts != null && !dTimes.contains(ts)) dTimes.add(ts);
+                }
+            }
+            java.util.Collections.sort(sTimes);
+            java.util.Collections.sort(dTimes);
+            result[bi][0] = String.join(",", sTimes);
+            result[bi][1] = String.join(",", dTimes);
+        }
+        return result;
+    }
+
+    /** 엑셀 시간값(소수) → "HHMM" 문자열 */
+    private String excelTimeToHHMM(String val) {
+        if (val == null || val.isEmpty()) return null;
+        try {
+            double d = Double.parseDouble(val);
+            if (d <= 0 || d >= 1) return null;
+            int totalMin = (int) Math.round(d * 24 * 60);
+            int h = totalMin / 60, m = totalMin % 60;
+            if (h > 23) return null;
+            return String.format("%02d%02d", h, m);
+        } catch (Exception ig) { return null; }
+    }
+
+    /** 배차시간표 다이얼로그 표시 */
+    private void showBusTimeTableDialog(String routeNo, boolean fromSrc) {
+        // busTimesMap 비어있거나 구버전이면 재로드
+        if (busTimesMap.isEmpty() || (busTimesMap.get(routeNo) != null && busTimesMap.get(routeNo).length < 16)) {
+            busTimesMap.clear();
+            String cached = loadBusTimes(); // 내부 파일 우선
+            if (cached.isEmpty()) cached = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
+                    .getString("bustimes_txt_cache", "");
+            if (!cached.isEmpty() && cached.contains("||")) loadBusTimesFromJson(cached);
+        }
+        String[] data = busTimesMap.get(routeNo);
+        if (data == null || data.length < 16) {
+            android.widget.Toast.makeText(this, "배차시간표 로딩 중...", android.widget.Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                try {
+                    android.content.SharedPreferences p = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE);
+                    DriveReadHelper dr = new DriveReadHelper(this);
+                    final Object lock = new Object();
+                    dr.readFile(BUS_TIME_FILE, new DriveReadHelper.ReadCallback() {
+                        @Override public void onSuccess(String content) {
+                            if (!content.isEmpty()) {
+                                p.edit().putString("bustimes_txt_cache", content).apply();
+                                saveBusTimes(content); // 내부 파일에 영구 저장
+                                loadBusTimesFromJson(content);
+                            }
+                            synchronized(lock) { lock.notifyAll(); }
+                        }
+                        @Override public void onFailure(String e) { synchronized(lock) { lock.notifyAll(); } }
+                    });
+                    synchronized(lock) { lock.wait(10000); }
+                } catch (Exception ignored) {}
+                runOnUiThread(() -> {
+                    String[] d2 = busTimesMap.get(routeNo);
+                    if (d2 != null && d2.length >= 16) showBusTimeTableDialog(routeNo, fromSrc);
+                    else android.widget.Toast.makeText(this,
+                            routeNo + "번 배차시간표 없음. 관리자 메뉴에서 업데이트하세요.",
+                            android.widget.Toast.LENGTH_LONG).show();
+                });
+            }).start();
+            return;
+        }
+
+        // 요일별 시간 데이터
+        // v4: [10]=ws,[11]=wd,[12]=ss,[13]=sd,[14]=hs,[15]=hd
+        String[] weekdayTimes = splitTimes(fromSrc ? data[10] : data[11]);
+        String[] satTimes     = splitTimes(fromSrc ? data[12] : data[13]);
+        String[] holTimes     = splitTimes(fromSrc ? data[14] : data[15]);
+        // 상세 정보
+        String company = data.length > 2 ? data[2] : "";
+        String oneway  = data.length > 3 ? data[3] : "";
+        // 요일별 평균간격
+        java.util.Calendar nowForDay = java.util.Calendar.getInstance();
+        int todayDow = nowForDay.get(java.util.Calendar.DAY_OF_WEEK);
+        String todayInterval = todayDow == java.util.Calendar.SATURDAY ? (data.length>6?data[6]:"")
+                : todayDow == java.util.Calendar.SUNDAY ? (data.length>8?data[8]:"")
+                : (data.length>4?data[4]:"");
+
+        // 다이얼로그 구성
+        android.app.Dialog dlg = new android.app.Dialog(this);
+        dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        dlg.setCancelable(true);
+        if (dlg.getWindow() != null) {
+            dlg.getWindow().setBackgroundDrawable(
+                    new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+            dlg.getWindow().setLayout(
+                    (int)(getResources().getDisplayMetrics().widthPixels * 0.92),
+                    android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+        }
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable rootBg = new android.graphics.drawable.GradientDrawable();
+        rootBg.setColor(Color.WHITE);
+        rootBg.setCornerRadius(dpToPx(16));
+        root.setBackground(rootBg);
+        root.setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16));
+
+        // 제목
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText(routeNo + "번 배차시간표");
+        tvTitle.setTextColor(Color.parseColor("#1A1A2E"));
+        tvTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvTitle.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.addView(tvTitle);
+
+        // 운행사 / 평균간격 / 편도 정보 행
+        if (!company.isEmpty()) {
+            LinearLayout infoRow = new LinearLayout(this);
+            infoRow.setOrientation(LinearLayout.HORIZONTAL);
+            infoRow.setGravity(Gravity.CENTER_VERTICAL);
+            infoRow.setBackgroundColor(Color.parseColor("#F8F8F8"));
+            infoRow.setPadding(dpToPx(8), dpToPx(5), dpToPx(8), dpToPx(5));
+            LinearLayout.LayoutParams irLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            irLp.setMargins(0, dpToPx(6), 0, 0);
+            infoRow.setLayoutParams(irLp);
+
+            // 운행사 (좌측 flex)
+            TextView tvCompany = new TextView(this);
+            tvCompany.setText("🚌 " + company.trim());
+            tvCompany.setTextColor(Color.parseColor("#555555"));
+            tvCompany.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+            tvCompany.setSingleLine(true);
+            tvCompany.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            tvCompany.setLayoutParams(new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            infoRow.addView(tvCompany);
+
+            // 편도 시간
+            if (!oneway.isEmpty()) {
+                TextView tvOneway = new TextView(this);
+                tvOneway.setText("편도 " + oneway);
+                tvOneway.setTextColor(Color.parseColor("#0984E3"));
+                tvOneway.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvOneway.setPadding(dpToPx(8), 0, dpToPx(4), 0);
+                infoRow.addView(tvOneway);
+            }
+
+            // 평균간격
+            if (!todayInterval.isEmpty() && !todayInterval.equals("0")) {
+                TextView tvInterval = new TextView(this);
+                tvInterval.setText("배차 " + todayInterval + "분");
+                tvInterval.setTextColor(Color.parseColor("#E67E22"));
+                tvInterval.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvInterval.setTypeface(null, android.graphics.Typeface.BOLD);
+                infoRow.addView(tvInterval);
+            }
+            root.addView(infoRow);
+        }
+
+        // 평일 / 토요일 / 공휴일 탭
+        String[] dayLabels = {"평일", "토요일", "공휴일"};
+        final int[] curDay = {0};
+        TextView[] dayTabs = new TextView[3];
+        LinearLayout dayTabRow = new LinearLayout(this);
+        dayTabRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams dtrLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        dtrLp.setMargins(0, dpToPx(8), 0, dpToPx(6));
+        dayTabRow.setLayoutParams(dtrLp);
+
+        // 시간 그리드 영역 - 세로스크롤(ScrollView) + 가로스크롤(HorizontalScrollView)
+        ScrollView sv = new ScrollView(this);
+        sv.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(320)));
+        HorizontalScrollView hsv = new HorizontalScrollView(PinActivity.this);
+        hsv.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        hsv.setHorizontalScrollBarEnabled(true);
+        LinearLayout gridWrap = new LinearLayout(this);
+        gridWrap.setOrientation(LinearLayout.VERTICAL);
+        hsv.addView(gridWrap);
+        sv.addView(hsv);
+
+        // 현재 시간
+        java.util.Calendar nowCal = java.util.Calendar.getInstance();
+        int nowMin = nowCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + nowCal.get(java.util.Calendar.MINUTE);
+
+        Runnable buildGrid = new Runnable() {
+            @Override public void run() {
+                gridWrap.removeAllViews();
+                // 요일별 rows 데이터 가져오기
+                // v4: [4]=wInv,[5]=wRows, [6]=sInv,[7]=sRows, [8]=hInv,[9]=hRows
+                String rowsStr = (curDay[0] == 0) ? (data.length>5?data[5]:"")
+                        : (curDay[0] == 1) ? (data.length>7?data[7]:"")
+                        : (data.length>9?data[9]:"");
+                String curInterval = (curDay[0] == 0) ? (data.length>4?data[4]:"")
+                        : (curDay[0] == 1) ? (data.length>6?data[6]:"")
+                        : (data.length>8?data[8]:"");
+
+                if (rowsStr.isEmpty()) {
+                    TextView tvEmpty = new TextView(PinActivity.this);
+                    tvEmpty.setText(dayLabels[curDay[0]] + " 시간표 데이터가 없습니다");
+                    tvEmpty.setTextColor(Color.parseColor("#AAAAAA"));
+                    tvEmpty.setGravity(Gravity.CENTER);
+                    tvEmpty.setPadding(0, dpToPx(30), 0, dpToPx(30));
+                    gridWrap.addView(tvEmpty);
+                    return;
+                }
+
+                // 현재 시간
+                java.util.Calendar nowBg = java.util.Calendar.getInstance();
+                int nowMinBg = nowBg.get(java.util.Calendar.HOUR_OF_DAY)*60 + nowBg.get(java.util.Calendar.MINUTE);
+
+                // 간격 표시
+                if (!curInterval.isEmpty() && !curInterval.equals("0")) {
+                    TextView tvInv = new TextView(PinActivity.this);
+                    tvInv.setText("평균 배차간격: " + curInterval + "분");
+                    tvInv.setTextColor(Color.parseColor("#E67E22"));
+                    tvInv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    tvInv.setPadding(dpToPx(4), dpToPx(4), 0, dpToPx(4));
+                    gridWrap.addView(tvInv);
+                }
+
+                // 각 행 파싱: "구분레이블:c1,c2,...c20"
+                String[] rowArr = rowsStr.split("~");
+
+                // 헤더: 구분 | 기점 | 종점 반복 (최대 10쌍)
+                // 열 수 파악
+                int maxCols = 0;
+                for (String row : rowArr) {
+                    int ci = row.indexOf(':');
+                    if (ci < 0) continue;
+                    String[] cs = row.substring(ci+1).split(",", -1);
+                    int nonEmpty = 0;
+                    for (String c : cs) if (!c.trim().isEmpty()) nonEmpty = cs.length;
+                    if (nonEmpty > maxCols) maxCols = nonEmpty;
+                }
+                maxCols = Math.min(maxCols, 20);
+                // 실제 데이터 있는 최대 열 찾기
+                int lastDataCol = 0;
+                for (String row : rowArr) {
+                    int ci = row.indexOf(':');
+                    if (ci < 0) continue;
+                    String[] cs = row.substring(ci+1).split(",", -1);
+                    for (int c = cs.length-1; c >= 0; c--) {
+                        if (!cs[c].trim().isEmpty()) { if(c>lastDataCol) lastDataCol=c; break; }
+                    }
+                }
+                int visibleCols = Math.min(lastDataCol+1, 20);
+
+                // 열 너비 계산
+                int cellW = dpToPx(42);
+                int labelW = dpToPx(50);
+
+                // 열 쌍 수 (구암역/보훈병원 반복)
+                int pairCount = (visibleCols + 1) / 2;
+
+                // 헤더1: 구분 | 1 | 2 | 3 ...
+                LinearLayout hdr1 = new LinearLayout(PinActivity.this);
+                hdr1.setOrientation(LinearLayout.HORIZONTAL);
+                hdr1.setBackgroundColor(Color.parseColor("#00ACC1")); // 청록
+                addCell(hdr1, "구분", labelW, dpToPx(22), Color.WHITE, fs(10), true);
+                for (int p = 0; p < pairCount; p++) {
+                    // 쌍 헤더 (숫자, 2열 span)
+                    TextView tvH = new TextView(PinActivity.this);
+                    tvH.setText(String.valueOf(p+1));
+                    tvH.setTextColor(Color.WHITE);
+                    tvH.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                    tvH.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvH.setGravity(Gravity.CENTER);
+                    tvH.setWidth(cellW * 2);
+                    tvH.setPadding(0, dpToPx(3), 0, dpToPx(3));
+                    hdr1.addView(tvH);
+                }
+                gridWrap.addView(hdr1);
+
+                // 헤더2: 구분 | 기점 | 종점 반복
+                LinearLayout hdr2 = new LinearLayout(PinActivity.this);
+                hdr2.setOrientation(LinearLayout.HORIZONTAL);
+                hdr2.setBackgroundColor(Color.parseColor("#B2EBF2"));
+                addCell(hdr2, "", labelW, dpToPx(20), Color.parseColor("#555555"), fs(10), false);
+                for (int p = 0; p < pairCount; p++) {
+                    addCell(hdr2, data[0], cellW, dpToPx(20), Color.parseColor("#0984E3"), fs(9), false);
+                    addCell(hdr2, data[1], cellW, dpToPx(20), Color.parseColor("#E74C3C"), fs(9), false);
+                }
+                gridWrap.addView(hdr2);
+
+                // 데이터 행
+                for (int ri = 0; ri < rowArr.length; ri++) {
+                    String rowLine = rowArr[ri];
+                    int ci = rowLine.indexOf(':');
+                    if (ci < 0) continue;
+                    String label = rowLine.substring(0, ci).trim();
+                    String[] cs = rowLine.substring(ci+1).split(",", -1);
+                    if (label.isEmpty()) continue;
+
+                    // 빈 행 스킵 - 모든 열이 비어있으면 표시 안 함
+                    boolean hasAnyData = false;
+                    for (int c = 0; c < cs.length && c < visibleCols; c++) {
+                        if (!cs[c].trim().isEmpty()) { hasAnyData = true; break; }
+                    }
+                    if (!hasAnyData) continue;
+
+                    // 이 행의 기점 출발 시간 (짝수 인덱스) 중 현재 시간 이후 첫 번째
+                    boolean hasNext = false;
+                    for (int c = 0; c < cs.length && c < visibleCols; c+=2) {
+                        String t = cs[c].trim();
+                        if (t.length() == 5) {
+                            try {
+                                int h=Integer.parseInt(t.substring(0,2)), m=Integer.parseInt(t.substring(3,5));
+                                if (h*60+m >= nowMinBg) { hasNext = true; break; }
+                            } catch(Exception ig){}
+                        }
+                    }
+
+                    LinearLayout dataRow = new LinearLayout(PinActivity.this);
+                    dataRow.setOrientation(LinearLayout.HORIZONTAL);
+                    dataRow.setBackgroundColor((ri%2==0) ? Color.WHITE : Color.parseColor("#FAFAFA"));
+
+                    // 구분 레이블
+                    TextView tvLabel = new TextView(PinActivity.this);
+                    tvLabel.setText(label);
+                    tvLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(9));
+                    tvLabel.setTextColor(Color.parseColor("#333333"));
+                    tvLabel.setGravity(Gravity.CENTER);
+                    tvLabel.setWidth(labelW);
+                    tvLabel.setPadding(dpToPx(2), dpToPx(4), dpToPx(2), dpToPx(4));
+                    dataRow.addView(tvLabel);
+
+                    // 시간 셀들
+                    for (int c = 0; c < visibleCols; c++) {
+                        String t = c < cs.length ? cs[c].trim() : "";
+                        boolean isSrc = (c % 2 == 0); // 짝수=기점, 홀수=종점
+
+                        TextView tvCell = new TextView(PinActivity.this);
+                        tvCell.setText(t.isEmpty() ? "" : t);
+                        tvCell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                        tvCell.setGravity(Gravity.CENTER);
+                        tvCell.setWidth(cellW);
+                        tvCell.setPadding(dpToPx(1), dpToPx(3), dpToPx(1), dpToPx(3));
+
+                        // 현재 시간 이후 첫 번째 → 노란 강조
+                        if (!t.isEmpty() && isSrc) {
+                            try {
+                                int h=Integer.parseInt(t.substring(0,2)), m=Integer.parseInt(t.substring(3,5));
+                                if (h*60+m >= nowMinBg) {
+                                    tvCell.setBackgroundColor(Color.parseColor("#FFF176"));
+                                    tvCell.setTypeface(null, android.graphics.Typeface.BOLD);
+                                    tvCell.setTextColor(Color.parseColor("#D32F2F"));
+                                } else {
+                                    tvCell.setTextColor(Color.parseColor("#AAAAAA"));
+                                }
+                            } catch(Exception ig){ tvCell.setTextColor(Color.parseColor("#333333")); }
+                        } else if (!t.isEmpty()) {
+                            try {
+                                int h=Integer.parseInt(t.substring(0,2)), m=Integer.parseInt(t.substring(3,5));
+                                tvCell.setTextColor(h*60+m < nowMinBg ? Color.parseColor("#CCCCCC") : Color.parseColor("#555555"));
+                            } catch(Exception ig){ tvCell.setTextColor(Color.parseColor("#555555")); }
+                        } else {
+                            tvCell.setTextColor(Color.TRANSPARENT);
+                        }
+                        dataRow.addView(tvCell);
+                    }
+                    gridWrap.addView(dataRow);
+
+                    // 구분선
+                    android.view.View div = new android.view.View(PinActivity.this);
+                    div.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                    div.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)));
+                    gridWrap.addView(div);
+                }
+            }
+        };
+
+        // 헬퍼: 셀 TextView 추가
+        final TextView[] fTabs = dayTabs;
+        for (int i = 0; i < 3; i++) {
+            final int di = i;
+            dayTabs[i] = new TextView(this);
+            dayTabs[i].setText(dayLabels[i]);
+            dayTabs[i].setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+            dayTabs[i].setGravity(Gravity.CENTER);
+            dayTabs[i].setPadding(dpToPx(6), dpToPx(7), dpToPx(6), dpToPx(7));
+            LinearLayout.LayoutParams tbLp = new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            tbLp.setMargins(i == 0 ? 0 : dpToPx(4), 0, 0, 0);
+            dayTabs[i].setLayoutParams(tbLp);
+            dayTabs[i].setOnClickListener(vt -> {
+                curDay[0] = di;
+                for (int j = 0; j < 3; j++) {
+                    boolean sel = j == di;
+                    android.graphics.drawable.GradientDrawable tbg =
+                            new android.graphics.drawable.GradientDrawable();
+                    tbg.setColor(sel ? Color.parseColor("#0984E3") : Color.parseColor("#F0F0F0"));
+                    tbg.setCornerRadius(dpToPx(8));
+                    fTabs[j].setBackground(tbg);
+                    fTabs[j].setTextColor(sel ? Color.WHITE : Color.parseColor("#555555"));
+                }
+                buildGrid.run();
+            });
+            // 초기 스타일
+            android.graphics.drawable.GradientDrawable tbg0 =
+                    new android.graphics.drawable.GradientDrawable();
+            tbg0.setColor(i == 0 ? Color.parseColor("#0984E3") : Color.parseColor("#F0F0F0"));
+            tbg0.setCornerRadius(dpToPx(8));
+            dayTabs[i].setBackground(tbg0);
+            dayTabs[i].setTextColor(i == 0 ? Color.WHITE : Color.parseColor("#555555"));
+            dayTabRow.addView(dayTabs[i]);
+        }
+
+        root.addView(dayTabRow);
+        root.addView(sv);
+        buildGrid.run();
+
+        // 닫기 버튼
+        TextView tvClose = new TextView(this);
+        tvClose.setText("닫기");
+        tvClose.setGravity(Gravity.CENTER);
+        tvClose.setTextColor(Color.parseColor("#888888"));
+        tvClose.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        closeLp.setMargins(0, dpToPx(10), 0, 0);
+        tvClose.setLayoutParams(closeLp);
+        tvClose.setOnClickListener(vc -> dlg.dismiss());
+        root.addView(tvClose);
+
+        dlg.setContentView(root);
+        dlg.show();
     }
 
     private String jsonVal(String obj, String key) {
@@ -14623,29 +18813,85 @@ public class PinActivity extends AppCompatActivity {
     private void buildAndUploadStopDb(Runnable onDone, ProgressCallback onProgress) {
         new Thread(() -> {
             try {
-                int[] choIdxArr = {0,2,3,5,6,7,9,11,12,14,15,16,17,18};
-                int total = choIdxArr.length * 21 + 10;
+                // ── STEP 1: routeDbList에서 노선 목록 가져오기 ──────────────
+                // SharedPreferences에서 직접 읽기 (타이밍 문제 방지)
+                java.util.List<String[]> routeSnap = new java.util.ArrayList<>();
+                if (routeDbList != null && !routeDbList.isEmpty()) {
+                    routeSnap = new java.util.ArrayList<>(routeDbList);
+                } else {
+                    String rawRoute = getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE)
+                            .getString(BUS_DB_KEY, "");
+                    if (!rawRoute.isEmpty()) {
+                        for (String line : rawRoute.split(";")) {
+                            String[] parts = line.split("\\|", -1);
+                            if (parts.length >= 2) routeSnap.add(parts);
+                        }
+                    }
+                }
+                android.util.Log.d("BusDB", "buildStop: routeSnap=" + routeSnap.size());
 
-                // ── 전체 prefix 목록 생성 ──
+                // ── STEP 2: 모든 노선의 정류장 목록 수집 → nodeno→routes 역인덱스 ──
+                // nodeno → Set<routeNo>
+                java.util.concurrent.ConcurrentHashMap<String, java.util.Set<String>> nodeNoRouteMap =
+                        new java.util.concurrent.ConcurrentHashMap<>();
+                // nodeId → [nm, no] (정류장 정보)
+                java.util.concurrent.ConcurrentHashMap<String, String[]> nodeInfoMap =
+                        new java.util.concurrent.ConcurrentHashMap<>();
+
+                int totalR = routeSnap.size();
+                java.util.concurrent.ExecutorService poolR =
+                        java.util.concurrent.Executors.newFixedThreadPool(4);
+                java.util.concurrent.atomic.AtomicInteger doneR =
+                        new java.util.concurrent.atomic.AtomicInteger(0);
+
+                for (String[] rd : routeSnap) {
+                    final String fRid = rd[0];
+                    final String fRno = rd.length > 1 ? rd[1] : "";
+                    poolR.submit(() -> {
+                        try {
+                            String url = BUS_BASE2 + "BusRouteInfoInqireService/getRouteAcctoThrghSttnList"
+                                    + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                    + "&routeId=" + fRid + "&numOfRows=200&pageNo=1&_type=xml";
+                            String xml = httpGet(url);
+                            for (String item : xml.split("<item>")) {
+                                if (!item.contains("<nodeid>")) continue;
+                                String nid = tag(item, "nodeid");
+                                String nnm = tag(item, "nodenm");
+                                String nno = tag(item, "nodeno");
+                                if (nid.isEmpty() || nno.isEmpty()) continue;
+                                // 정류장 정보 저장
+                                nodeInfoMap.putIfAbsent(nid, new String[]{nid, nnm, nno});
+                                // nodeno → 노선번호 매핑
+                                nodeNoRouteMap.computeIfAbsent(nno,
+                                        k -> java.util.Collections.synchronizedSet(
+                                                new java.util.TreeSet<>())).add(fRno);
+                            }
+                        } catch (Exception ignored) {}
+                        int d = doneR.incrementAndGet();
+                        final int pct = (int)(d * 49.0 / Math.max(totalR, 1));
+                        if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct, 49)));
+                    });
+                }
+                poolR.shutdown();
+                poolR.awaitTermination(15, java.util.concurrent.TimeUnit.MINUTES);
+                android.util.Log.d("BusDB", "nodeInfoMap=" + nodeInfoMap.size() + " nodeNoRouteMap=" + nodeNoRouteMap.size());
+
+                // ── STEP 3: getSttnNoList로 추가 정류장 수집 (노선 미경유 정류장 보완) ──
+                int[] choIdxArr = {0,2,3,5,6,7,9,11,12,14,15,16,17,18};
                 java.util.List<String> allPrefixes = new java.util.ArrayList<>();
                 for (int ci : choIdxArr)
                     for (int ji = 0; ji < 21; ji++)
                         allPrefixes.add(String.valueOf((char)(0xAC00 + ci*21*28 + ji*28)));
-                for (int d = 0; d < 10; d++)
-                    allPrefixes.add(String.valueOf(d));
+                for (int d = 0; d < 10; d++) allPrefixes.add(String.valueOf(d));
 
-                // ── 병렬 수집 (4스레드) ──
-                java.util.concurrent.ExecutorService pool =
+                int totalP = allPrefixes.size();
+                java.util.concurrent.ExecutorService poolP =
                         java.util.concurrent.Executors.newFixedThreadPool(4);
-                // 결과를 안전하게 모을 동시성 맵
-                java.util.concurrent.ConcurrentHashMap<String, String[]> resultMap =
-                        new java.util.concurrent.ConcurrentHashMap<>();
-                java.util.concurrent.atomic.AtomicInteger doneCount =
+                java.util.concurrent.atomic.AtomicInteger doneP =
                         new java.util.concurrent.atomic.AtomicInteger(0);
 
-                java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
                 for (String prefix : allPrefixes) {
-                    futures.add(pool.submit(() -> {
+                    poolP.submit(() -> {
                         int page = 1;
                         while (true) {
                             try {
@@ -14657,11 +18903,11 @@ public class PinActivity extends AppCompatActivity {
                                 int cnt = 0;
                                 for (String item : xml.split("<item>")) {
                                     if (!item.contains("<nodeid>")) continue;
-                                    String id = tag(item,"nodeid");
-                                    String nm = tag(item,"nodenm");
-                                    String no = tag(item,"nodeno");
-                                    if (!id.isEmpty())
-                                        resultMap.put(id, new String[]{id, nm, no});
+                                    String nid = tag(item, "nodeid");
+                                    String nnm = tag(item, "nodenm");
+                                    String nno = tag(item, "nodeno");
+                                    if (!nid.isEmpty())
+                                        nodeInfoMap.putIfAbsent(nid, new String[]{nid, nnm, nno});
                                     cnt++;
                                 }
                                 if (cnt < 100) break;
@@ -14669,42 +18915,50 @@ public class PinActivity extends AppCompatActivity {
                                 if (page > 20) break;
                             } catch (Exception ignored) { break; }
                         }
-                        int d = doneCount.incrementAndGet();
-                        final int pct = (int)(d * 99.0 / total);
-                        if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(pct));
-                    }));
+                        int d = doneP.incrementAndGet();
+                        final int pct = 50 + (int)(d * 49.0 / Math.max(totalP, 1));
+                        if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(Math.min(pct, 99)));
+                    });
                 }
+                poolP.shutdown();
+                poolP.awaitTermination(10, java.util.concurrent.TimeUnit.MINUTES);
 
-                // 모든 작업 완료 대기
-                pool.shutdown();
-                pool.awaitTermination(10, java.util.concurrent.TimeUnit.MINUTES);
-
-                // ── JSON 조립 ──
+                // ── STEP 4: JSON 조립 ──────────────────────────────────────
                 StringBuilder jsonSb = new StringBuilder("[");
                 boolean first = true;
-                for (String[] s : resultMap.values()) {
+                for (String[] info : nodeInfoMap.values()) {
+                    String nid = info[0], nnm = info[1], nno = info[2];
+                    // nodeno로 routes 조회
+                    java.util.Set<String> rnoSet = nodeNoRouteMap.get(nno);
+                    String routes = "";
+                    if (rnoSet != null && !rnoSet.isEmpty()) {
+                        routes = String.join(",", rnoSet);
+                    }
                     if (!first) jsonSb.append(',');
-                    jsonSb.append("{\"id\":\"").append(s[0])
-                            .append("\",\"nm\":\"").append(s[1].replace("\"","\\\""))
-                            .append("\",\"no\":\"").append(s[2]).append("\"}");
+                    jsonSb.append("{\"id\":\"").append(nid)
+                            .append("\",\"nm\":\"").append(nnm.replace("\"","\\\""))
+                            .append("\",\"no\":\"").append(nno)
+                            .append("\",\"routes\":\"").append(routes).append("\"}");
                     first = false;
                 }
                 jsonSb.append("]");
+                android.util.Log.d("BusDB", "JSON length=" + jsonSb.length());
 
                 String json = jsonSb.toString();
                 new DriveUploadHelper(this).uploadFileSync(json, STOP_DB_FILE);
                 getSharedPreferences(BUS_DB_PREF, MODE_PRIVATE).edit()
                         .putString("stop_json_cache", json).apply();
+                saveStopDb(json); // 내부 파일에도 저장
                 loadStopJsonToMemory(json);
 
                 if (onProgress != null) runOnUiThread(() -> onProgress.onProgress(100));
                 if (onDone != null) runOnUiThread(onDone);
             } catch (Exception e) {
+                android.util.Log.e("BusDB", "buildStop error: " + e.getMessage());
                 if (onDone != null) runOnUiThread(onDone);
             }
         }).start();
     }
-
 
     /** 로컬 노선 DB에서 검색 (메모리 우선) */
     private java.util.List<String[]> busSearchLocal(String keyword) {
@@ -14773,7 +19027,6 @@ public class PinActivity extends AppCompatActivity {
                 int totalRoute = 0;
                 try { totalRoute = Integer.parseInt(tag(firstRouteXml,"totalCount")); } catch(Exception ig){}
                 // 정류장 총계는 prefix 분할 방식으로 계산하므로 별도 API 호출 불필요
-                int totalStop = 0; // 사용 안함 (prefix 23개 기준 진행률 계산)
                 final int grandTotal = Math.max(totalRoute, 1);
 
                 // ① 노선 목록
@@ -14834,20 +19087,14 @@ public class PinActivity extends AppCompatActivity {
     private LinearLayout busFavSection;   // 검색 화면에서 참조용
 
     private void refreshBusFavorites(LinearLayout favSection, LinearLayout resultContainer) {
+        refreshBusFavorites(favSection, resultContainer, false);
+    }
+
+    private void refreshBusFavorites(LinearLayout favSection, LinearLayout resultContainer, boolean skipPrefetch) {
         busFavSection = favSection;
         favSection.removeAllViews();
-        if (resultContainer != null) resultContainer.removeAllViews(); // 타임라인 등 이전 내용 제거
-        // 고정헤더도 숨김
-        if (busFixedHeader != null) {
-            busFixedHeader.setVisibility(android.view.View.GONE);
-            busFixedHeader.removeAllViews();
-        }
-        if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
         android.content.SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-        // 키: fav_stop_routeId_nodeId (boolean=true인 것만)
         java.util.List<String> favKeys = new java.util.ArrayList<>();
-        // 키: fav_route_routeId_direction (노선 즐겨찾기)
         java.util.List<String> favRouteKeys = new java.util.ArrayList<>();
         for (java.util.Map.Entry<String, ?> e : prefs.getAll().entrySet()) {
             String k = e.getKey();
@@ -14863,687 +19110,1327 @@ public class PinActivity extends AppCompatActivity {
         }
         if (favKeys.isEmpty() && favRouteKeys.isEmpty()) return;
 
-        // 즐겨찾기 타이틀
-        TextView tvFavTitle = new TextView(this);
-        tvFavTitle.setText("★ 즐겨찾기");
-        tvFavTitle.setTextColor(Color.parseColor("#1A1A2E"));
-        tvFavTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-        tvFavTitle.setTypeface(null, android.graphics.Typeface.BOLD);
-        LinearLayout.LayoutParams ttLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        ttLp.setMargins(0, 0, 0, dpToPx(8));
-        tvFavTitle.setLayoutParams(ttLp);
-        favSection.addView(tvFavTitle);
+        // ── 백그라운드: 도착정보 + 운행대수 프리페치 (최초 1회만) ──
+        if (!skipPrefetch) {
+            final java.util.List<String> fFavKeys = new java.util.ArrayList<>(favKeys);
+            final java.util.List<String> fFavRouteKeys = new java.util.ArrayList<>(favRouteKeys);
+            // busTimesMap 비어있으면 로드 시도
+            if (busTimesMap.isEmpty()) {
+                String btCached = loadBusTimes();
+                if (btCached.isEmpty()) btCached = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getString("bustimes_txt_cache", "");
+                if (!btCached.isEmpty()) loadBusTimesFromJson(btCached);
+            }
+            // UI 스레드에서 미리 출발시간 수집 (busTimesMap은 메인 스레드에서만 안전)
+            final java.util.Map<String, String> nextDepartureMap = new java.util.HashMap<>();
+            for (String compositeKey : fFavKeys) {
+                String routeNo2 = prefs.getString("fav_stop_route_" + compositeKey, "");
+                if (routeNo2.isEmpty()) continue;
+                String nd = getNextDeparture(routeNo2, true);
+                if (nd.isEmpty()) nd = getNextDeparture(routeNo2, false);
+                if (!nd.isEmpty()) {
+                    // "20시 41분 출발" → "20:41 출발"
+                    nextDepartureMap.put(routeNo2, nd.replaceAll("(\\d+)시 (\\d+)분 출발", "$1:$2 출발"));
+                }
+            }
+            new Thread(() -> {
+                // ① 정류장+노선 즐겨찾기: 도착정보 API
+                java.util.Set<String> fetchedNodes = new java.util.HashSet<>();
+                for (String compositeKey : fFavKeys) {
+                    String routeNo2 = prefs.getString("fav_stop_route_" + compositeKey, "");
+                    if (routeNo2.isEmpty()) continue;
+                    String nodeId = compositeKey.contains("_")
+                            ? compositeKey.substring(compositeKey.indexOf("_") + 1)
+                            : compositeKey;
+                    if (fetchedNodes.contains(nodeId)) continue;
+                    fetchedNodes.add(nodeId);
+                    try {
+                        String arvlUrl = BUS_BASE2 + "ArvlInfoInqireService/getSttnAcctoArvlPrearngeInfoList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&nodeId=" + nodeId + "&numOfRows=50&pageNo=1&_type=xml";
+                        String arvlXml = httpGet(arvlUrl);
+                        java.util.Map<String, String[]> arrMap = new java.util.HashMap<>();
+                        java.util.Map<String, Integer> minSecMap = new java.util.HashMap<>();
+                        for (String item : arvlXml.split("<item>")) {
+                            if (!item.contains("<routeno>")) continue;
+                            String rno2 = tag(item, "routeno");
+                            String arrt2 = tag(item, "arrtime");
+                            String arrc2 = tag(item, "arrprevstationcnt");
+                            String nextnm2 = tag(item, "nodenm");
+                            String endnm2 = tag(item, "endnodenm");
+                            int sec2 = -1; try { sec2 = Integer.parseInt(arrt2); } catch (Exception ig) {}
+                            int prev2 = -1; try { prev2 = Integer.parseInt(arrc2); } catch (Exception ig) {}
+                            if (minSecMap.containsKey(rno2) && sec2 >= 0 && sec2 >= minSecMap.get(rno2)) continue;
+                            if (sec2 >= 0) minSecMap.put(rno2, sec2);
+                            String timeStr2, timeColor2;
+                            if (prev2 == 0) {
+                                // 출발지 대기중 → 미리 수집한 출발시간 사용
+                                String nd2 = nextDepartureMap.get(rno2);
+                                if (nd2 != null && !nd2.isEmpty()) {
+                                    timeStr2 = nd2; timeColor2 = "#888888";
+                                } else {
+                                    timeStr2 = "출발지 대기중"; timeColor2 = "#888888";
+                                }
+                            }
+                            else if (sec2 <= 0) { timeStr2 = ""; timeColor2 = "#555555"; }
+                            else if (sec2 < 60) { timeStr2 = "곧 도착"; timeColor2 = "#E74C3C"; }
+                            else { timeStr2 = "약 " + (sec2/60) + "분"; timeColor2 = sec2/60 <= 5 ? "#E74C3C" : "#333333"; }
+                            String prevStr2 = prev2 == 1 ? "[바로 앞]" : prev2 > 1 ? "[" + prev2 + "정거장 앞]" : "";
+                            if (!timeStr2.isEmpty()) arrMap.put(rno2, new String[]{timeStr2, prevStr2, timeColor2, endnm2, nextnm2});
+                        }
+                        arrivalSessionCache.put(nodeId, new Object[]{System.currentTimeMillis(),
+                                new java.util.ArrayList<>(), arrMap});
+                        // API에 없는 노선도 nextDepartureMap에서 보완
+                        // compositeKey에서 routeNo 찾아서 arrMap에 없으면 추가
+                        for (String ck : fFavKeys) {
+                            String rno3 = prefs.getString("fav_stop_route_" + ck, "");
+                            String nid3 = ck.contains("_") ? ck.substring(ck.indexOf("_") + 1) : ck;
+                            if (!nid3.equals(nodeId) || rno3.isEmpty()) continue;
+                            if (!arrMap.containsKey(rno3)) {
+                                String nd3 = nextDepartureMap.get(rno3);
+                                if (nd3 != null && !nd3.isEmpty()) {
+                                    arrMap.put(rno3, new String[]{nd3, "", "#888888", "", ""});
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {
+                        // API 실패해도 nextDepartureMap으로 최소한의 캐시 구성
+                        java.util.Map<String, String[]> fallbackMap = new java.util.HashMap<>();
+                        for (String ck : fFavKeys) {
+                            String rno3 = prefs.getString("fav_stop_route_" + ck, "");
+                            String nid3 = ck.contains("_") ? ck.substring(ck.indexOf("_") + 1) : ck;
+                            if (!nid3.equals(nodeId) || rno3.isEmpty()) continue;
+                            String nd3 = nextDepartureMap.get(rno3);
+                            if (nd3 != null && !nd3.isEmpty()) {
+                                fallbackMap.put(rno3, new String[]{nd3, "", "#888888", "", ""});
+                            }
+                        }
+                        if (!fallbackMap.isEmpty()) {
+                            arrivalSessionCache.put(nodeId, new Object[]{System.currentTimeMillis(),
+                                    new java.util.ArrayList<>(), fallbackMap});
+                        }
+                    }
+                }
+                // ② 노선 즐겨찾기: 운행대수 API
+                for (String rKey2 : fFavRouteKeys) {
+                    String rId2 = prefs.getString("fav_route_id_" + rKey2, "");
+                    if (rId2.isEmpty()) continue;
+                    try {
+                        String lcXml2 = httpGet(BUS_BASE2 + "BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
+                                + "&routeId=" + rId2 + "&numOfRows=50&pageNo=1&_type=xml");
+                        int cnt2 = 0; try { cnt2 = Integer.parseInt(tag(lcXml2, "totalCount")); } catch (Exception ig) {}
+                        getSharedPreferences("bus_cache", MODE_PRIVATE).edit()
+                                .putInt("route_" + rId2 + "_running", cnt2).apply();
+                    } catch (Exception ignored) {}
+                }
+                // 데이터 갱신 후 재렌더링 (skipPrefetch=true로 무한루프 방지)
+                runOnUiThread(() -> refreshBusFavorites(favSection, resultContainer, true));
+            }).start();
+        }
+
+        // fav_order 순서대로 통합 렌더링 리스트 구성
+        java.util.List<String> allOrdered = new java.util.ArrayList<>();
+        String savedOrder = prefs.getString("fav_order", "");
+
+        // fav_order가 비어있으면 현재 즐겨찾기로 초기화 후 저장
+        if (savedOrder.isEmpty()) {
+            StringBuilder initSb = new StringBuilder();
+            for (String k : favRouteKeys) { if (initSb.length()>0) initSb.append(","); initSb.append("R:").append(k); allOrdered.add("R:"+k); }
+            for (String k : favKeys)      { if (initSb.length()>0) initSb.append(","); initSb.append("S:").append(k); allOrdered.add("S:"+k); }
+            if (initSb.length() > 0) prefs.edit().putString("fav_order", initSb.toString()).apply();
+        } else {
+            for (String tok : savedOrder.split(",")) {
+                tok = tok.trim();
+                if (tok.startsWith("R:") && favRouteKeys.contains(tok.substring(2)))
+                    allOrdered.add(tok);
+                else if (tok.startsWith("S:") && favKeys.contains(tok.substring(2)))
+                    allOrdered.add(tok);
+            }
+        }
+        // fav_order에 없는 항목은 타임스탬프 기준 정렬 후 추가
+        java.util.List<String> unsorted = new java.util.ArrayList<>();
+        for (String k : favRouteKeys) { if (!allOrdered.contains("R:"+k)) unsorted.add("R:"+k); }
+        for (String k : favKeys)      { if (!allOrdered.contains("S:"+k)) unsorted.add("S:"+k); }
+        if (unsorted.size() > 1) {
+            final android.content.SharedPreferences pRef = prefs;
+            unsorted.sort((a, b) -> {
+                long ta = pRef.getLong("fav_ts_" + a, 0);
+                long tb = pRef.getLong("fav_ts_" + b, 0);
+                return Long.compare(ta, tb);
+            });
+        }
+        allOrdered.addAll(unsorted);
+
+        // 즐겨찾기 타이틀 (숨김)
 
         // ── 노선 즐겨찾기 카드 (2열 그리드) ──────────────────
-        LinearLayout routeGrid = new LinearLayout(this);
-        routeGrid.setOrientation(LinearLayout.VERTICAL);
-        routeGrid.setLayoutParams(new LinearLayout.LayoutParams(
+        // ── 통합 2열 그리드 (노선+정류소 함께) ──────────────────
+        // allOrdered 순서대로 카드 정보 (드래그 순서 추적용)
+        final java.util.List<String[]> allCardInfos = new java.util.ArrayList<>();
+        for (String tok : allOrdered) {
+            if (tok.startsWith("R:")) allCardInfos.add(new String[]{"R", tok.substring(2)});
+            else                      allCardInfos.add(new String[]{"S", tok.substring(2)});
+        }
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        grid.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        LinearLayout routeRow = null;
-        int routeColIdx = 0;
+        LinearLayout gridRow = null;
+        int colIdx = 0;
 
-        for (String rKey : favRouteKeys) {
-            String rNo     = prefs.getString("fav_route_no_"     + rKey, rKey);
-            String rDir    = prefs.getString("fav_route_dir_"    + rKey, "");
-            String rId     = prefs.getString("fav_route_id_"     + rKey, "");
-            String rDirKey = prefs.getString("fav_route_dirkey_" + rKey, "forward");
-            String rMemo   = prefs.getString("fav_route_memo_"   + rKey, "");
+        for (String ordKey : allOrdered) {
+            if (ordKey.startsWith("R:")) { String rKey = ordKey.substring(2);
+                String rNo     = prefs.getString("fav_route_no_"     + rKey, rKey);
+                String rDir    = prefs.getString("fav_route_dir_"    + rKey, "");
+                String rId     = prefs.getString("fav_route_id_"     + rKey, "");
+                String rDirKey = prefs.getString("fav_route_dirkey_" + rKey, "forward");
+                String rMemo   = prefs.getString("fav_route_memo_"   + rKey, "");
 
-            // 새 행 시작
-            if (routeColIdx % 2 == 0) {
-                routeRow = new LinearLayout(this);
-                routeRow.setOrientation(LinearLayout.HORIZONTAL);
-                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                rowLp.setMargins(0, 0, 0, dpToPx(8));
-                routeRow.setLayoutParams(rowLp);
-                routeGrid.addView(routeRow);
-            }
-
-            LinearLayout rCard = new LinearLayout(this);
-            rCard.setOrientation(LinearLayout.VERTICAL);
-            rCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
-            rCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-            rCard.setPadding(dpToPx(12), dpToPx(14), dpToPx(12), dpToPx(12));
-            LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0,
-                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            rCardLp.setMargins(0, 0, routeColIdx % 2 == 0 ? dpToPx(6) : 0, 0);
-            rCard.setLayoutParams(rCardLp);
-
-            // 오른쪽 위: 버스이미지 + 설정 + 알림 버튼 행
-            final String fRKey = rKey;
-
-            LinearLayout iconBtnRow = new LinearLayout(this);
-            iconBtnRow.setOrientation(LinearLayout.HORIZONTAL);
-            iconBtnRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-            iconBtnRow.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-
-            // 버스 이미지 (설정 왼쪽)
-            android.widget.ImageView ivFavBus = new android.widget.ImageView(this);
-            android.graphics.Bitmap favBusBmp = getBusIconPurple();
-            if (favBusBmp != null) ivFavBus.setImageBitmap(favBusBmp);
-            LinearLayout.LayoutParams favBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
-            favBusLp.setMargins(0, 0, dpToPx(6), 0);
-            favBusLp.gravity = Gravity.CENTER_VERTICAL;
-            ivFavBus.setLayoutParams(favBusLp);
-            ivFavBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-            // 버스 이미지는 왼쪽 공간 차지용 - Gravity.START
-            LinearLayout busImgWrapper = new LinearLayout(this);
-            busImgWrapper.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-            busImgWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-            busImgWrapper.addView(ivFavBus);
-            iconBtnRow.addView(busImgWrapper);
-
-            // 설정 버튼 (왼쪽)
-            TextView tvGear = new TextView(this);
-            tvGear.setText("설정");
-            tvGear.setTextColor(Color.parseColor("#888888"));
-            tvGear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-            tvGear.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvGear.setGravity(Gravity.CENTER);
-            tvGear.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
-            android.graphics.drawable.GradientDrawable gearBg = new android.graphics.drawable.GradientDrawable();
-            gearBg.setColor(Color.parseColor("#F0F0F0"));
-            gearBg.setCornerRadius(dpToPx(6));
-            gearBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
-            tvGear.setBackground(gearBg);
-            LinearLayout.LayoutParams gearLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            gearLp.setMargins(0, 0, dpToPx(5), 0);
-            tvGear.setLayoutParams(gearLp);
-            tvGear.setOnClickListener(v2 -> {
-                // ── 커스텀 수정/삭제/취소 카드 다이얼로그 ──
-                android.app.Dialog settingDlg = new android.app.Dialog(this,
-                        android.R.style.Theme_Material_Light_Dialog);
-                LinearLayout settingLayout = new LinearLayout(this);
-                settingLayout.setOrientation(LinearLayout.VERTICAL);
-                android.graphics.drawable.GradientDrawable settingCardBg = new android.graphics.drawable.GradientDrawable();
-                settingCardBg.setColor(Color.WHITE);
-                settingCardBg.setCornerRadius(dpToPx(20));
-                settingLayout.setBackground(settingCardBg);
-                settingLayout.setPadding(dpToPx(20), dpToPx(22), dpToPx(20), dpToPx(20));
-
-                // 제목
-                TextView tvSettingTitle = new TextView(this);
-                tvSettingTitle.setText(rNo + "번  " + rDir);
-                tvSettingTitle.setTextColor(Color.parseColor("#0984E3"));
-                tvSettingTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
-                tvSettingTitle.setTypeface(null, android.graphics.Typeface.BOLD);
-                tvSettingTitle.setGravity(Gravity.CENTER);
-                tvSettingTitle.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
-                LinearLayout.LayoutParams stTitleLp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                stTitleLp.setMargins(0, 0, 0, dpToPx(6));
-                tvSettingTitle.setLayoutParams(stTitleLp);
-                settingLayout.addView(tvSettingTitle);
-
-                // 메모 표시 (있는 경우)
-                String curMemo = prefs.getString("fav_route_memo_" + fRKey, "");
-                if (!curMemo.isEmpty()) {
-                    TextView tvCurMemo = new TextView(this);
-                    tvCurMemo.setText(curMemo);
-                    tvCurMemo.setTextColor(Color.parseColor("#888888"));
-                    tvCurMemo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                    tvCurMemo.setGravity(Gravity.CENTER);
-                    LinearLayout.LayoutParams cmLp = new LinearLayout.LayoutParams(
+                // 새 행 시작
+                if (colIdx % 2 == 0) {
+                    gridRow = new LinearLayout(this);
+                    gridRow.setOrientation(LinearLayout.HORIZONTAL);
+                    gridRow.setWeightSum(2f);
+                    LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    cmLp.setMargins(0, 0, 0, dpToPx(16));
-                    tvCurMemo.setLayoutParams(cmLp);
-                    settingLayout.addView(tvCurMemo);
-                } else {
-                    View spacer = new View(this);
-                    spacer.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(10)));
-                    // 구분선
-                    View divSetting = new View(this);
-                    divSetting.setBackgroundColor(Color.parseColor("#EEEEEE"));
-                    LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
-                    divLp.setMargins(0, 0, 0, dpToPx(16));
-                    divSetting.setLayoutParams(divLp);
-                    settingLayout.addView(divSetting);
+                    rowLp.setMargins(0, 0, 0, dpToPx(8));
+                    gridRow.setLayoutParams(rowLp);
+                    grid.addView(gridRow);
                 }
 
-                // 수정 버튼
-                TextView btnEdit = new TextView(this);
-                btnEdit.setText("수정");
-                btnEdit.setTextColor(Color.WHITE);
-                btnEdit.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
-                btnEdit.setTypeface(null, android.graphics.Typeface.BOLD);
-                btnEdit.setGravity(Gravity.CENTER);
-                btnEdit.setPadding(0, dpToPx(14), 0, dpToPx(14));
-                android.graphics.drawable.GradientDrawable editBg = new android.graphics.drawable.GradientDrawable();
-                editBg.setColor(Color.parseColor("#5BA9F0"));
-                editBg.setCornerRadius(dpToPx(12));
-                btnEdit.setBackground(editBg);
-                btnEdit.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-                LinearLayout.LayoutParams editLp = new LinearLayout.LayoutParams(
+                LinearLayout rCard = new LinearLayout(this);
+                rCard.setOrientation(LinearLayout.VERTICAL);
+                rCard.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
+                rCard.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                rCard.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
+                LinearLayout.LayoutParams rCardLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                rCardLp.setMargins(0, 0, colIdx % 2 == 0 ? dpToPx(6) : 0, 0);
+                rCard.setLayoutParams(rCardLp);
+
+                // 오른쪽 위: 버스이미지 + 설정 + 알림 버튼 행
+                final String fRKey = rKey;
+                // routeType 가져오기 (bus_cache에서)
+                String rTpCached = getSharedPreferences("bus_cache", MODE_PRIVATE)
+                        .getString("route_" + rId + "_rTp", "");
+                String[] rBadge = routeTypeBadge(rTpCached);
+                String rTypeColor = rBadge[1];
+                int rTypeColorInt = Color.parseColor(rTypeColor);
+
+                LinearLayout iconBtnRow = new LinearLayout(this);
+                iconBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+                iconBtnRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+                LinearLayout.LayoutParams iconBtnRowLp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                editLp.setMargins(0, 0, 0, dpToPx(10));
-                btnEdit.setLayoutParams(editLp);
-                btnEdit.setOnClickListener(vv -> {
-                    settingDlg.dismiss();
-                    // 즐겨찾기 추가 다이얼로그와 동일한 메모 수정창
-                    String existingMemo = prefs.getString("fav_route_memo_" + fRKey, "");
-                    android.app.Dialog memoDlg = new android.app.Dialog(this,
+                iconBtnRowLp.setMargins(0, 0, 0, dpToPx(4));
+                iconBtnRow.setLayoutParams(iconBtnRowLp);
+
+                // 버스 이미지 (설정 왼쪽)
+                android.widget.ImageView ivFavBus = new android.widget.ImageView(this);
+                android.graphics.Bitmap favBusBmp = getBusIconColor(0xFF000000 | (rTypeColorInt & 0xFFFFFF));
+                if (favBusBmp != null) ivFavBus.setImageBitmap(favBusBmp);
+                LinearLayout.LayoutParams favBusLp = new LinearLayout.LayoutParams(dpToPx(24), dpToPx(24));
+                favBusLp.setMargins(0, 0, dpToPx(6), 0);
+                favBusLp.gravity = Gravity.CENTER_VERTICAL;
+                ivFavBus.setLayoutParams(favBusLp);
+                ivFavBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                // 버스 이미지는 왼쪽 공간 차지용 - Gravity.START
+                LinearLayout busImgWrapper = new LinearLayout(this);
+                busImgWrapper.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                busImgWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+                busImgWrapper.addView(ivFavBus);
+                iconBtnRow.addView(busImgWrapper);
+
+                // 설정 버튼 (왼쪽)
+                TextView tvGear = new TextView(this);
+                tvGear.setText("설정");
+                tvGear.setTextColor(Color.parseColor("#888888"));
+                tvGear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvGear.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvGear.setGravity(Gravity.CENTER);
+                tvGear.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
+                android.graphics.drawable.GradientDrawable gearBg = new android.graphics.drawable.GradientDrawable();
+                gearBg.setColor(Color.parseColor("#F0F0F0"));
+                gearBg.setCornerRadius(dpToPx(6));
+                gearBg.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                tvGear.setBackground(gearBg);
+                LinearLayout.LayoutParams gearLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                gearLp.setMargins(0, 0, dpToPx(5), 0);
+                tvGear.setLayoutParams(gearLp);
+                tvGear.setOnClickListener(v2 -> {
+                    // ── 커스텀 수정/삭제/취소 카드 다이얼로그 ──
+                    android.app.Dialog settingDlg = new android.app.Dialog(this,
                             android.R.style.Theme_Material_Light_Dialog);
-                    LinearLayout memoLayout = new LinearLayout(this);
-                    memoLayout.setOrientation(LinearLayout.VERTICAL);
-                    android.graphics.drawable.GradientDrawable memoCardBg = new android.graphics.drawable.GradientDrawable();
-                    memoCardBg.setColor(Color.WHITE);
-                    memoCardBg.setCornerRadius(dpToPx(16));
-                    memoLayout.setBackground(memoCardBg);
-                    memoLayout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+                    LinearLayout settingLayout = new LinearLayout(this);
+                    settingLayout.setOrientation(LinearLayout.VERTICAL);
+                    android.graphics.drawable.GradientDrawable settingCardBg = new android.graphics.drawable.GradientDrawable();
+                    settingCardBg.setColor(Color.WHITE);
+                    settingCardBg.setCornerRadius(dpToPx(20));
+                    settingLayout.setBackground(settingCardBg);
+                    settingLayout.setPadding(dpToPx(20), dpToPx(22), dpToPx(20), dpToPx(20));
+
                     // 제목
-                    TextView tvMTitle = new TextView(this);
-                    tvMTitle.setText(rNo + "번  " + rDir);
-                    tvMTitle.setTextColor(Color.parseColor("#0984E3"));
-                    tvMTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
-                    tvMTitle.setTypeface(null, android.graphics.Typeface.BOLD);
-                    tvMTitle.setGravity(Gravity.CENTER);
-                    LinearLayout.LayoutParams mtLp = new LinearLayout.LayoutParams(
+                    TextView tvSettingTitle = new TextView(this);
+                    tvSettingTitle.setText(rNo + "번  " + rDir);
+                    tvSettingTitle.setTextColor(Color.parseColor("#0984E3"));
+                    tvSettingTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                    tvSettingTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvSettingTitle.setGravity(Gravity.CENTER);
+                    tvSettingTitle.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
+                    LinearLayout.LayoutParams stTitleLp = new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    mtLp.setMargins(0, 0, 0, dpToPx(14));
-                    tvMTitle.setLayoutParams(mtLp);
-                    memoLayout.addView(tvMTitle);
-                    // 구분선
-                    View mDiv = new View(this);
-                    mDiv.setBackgroundColor(Color.parseColor("#EEEEEE"));
-                    LinearLayout.LayoutParams mDivLp = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
-                    mDivLp.setMargins(0, 0, 0, dpToPx(14));
-                    mDiv.setLayoutParams(mDivLp);
-                    memoLayout.addView(mDiv);
-                    // 메모 라벨
-                    TextView tvMLabel = new TextView(this);
-                    tvMLabel.setText("메모 (선택)");
-                    tvMLabel.setTextColor(Color.parseColor("#555555"));
-                    tvMLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                    LinearLayout.LayoutParams mlLp = new LinearLayout.LayoutParams(
+                    stTitleLp.setMargins(0, 0, 0, dpToPx(6));
+                    tvSettingTitle.setLayoutParams(stTitleLp);
+                    settingLayout.addView(tvSettingTitle);
+
+                    // 메모 표시 (있는 경우)
+                    String curMemo = prefs.getString("fav_route_memo_" + fRKey, "");
+                    if (!curMemo.isEmpty()) {
+                        TextView tvCurMemo = new TextView(this);
+                        tvCurMemo.setText(curMemo);
+                        tvCurMemo.setTextColor(Color.parseColor("#888888"));
+                        tvCurMemo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                        tvCurMemo.setGravity(Gravity.CENTER);
+                        LinearLayout.LayoutParams cmLp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        cmLp.setMargins(0, 0, 0, dpToPx(16));
+                        tvCurMemo.setLayoutParams(cmLp);
+                        settingLayout.addView(tvCurMemo);
+                    } else {
+                        View spacer = new View(this);
+                        spacer.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(10)));
+                        // 구분선
+                        View divSetting = new View(this);
+                        divSetting.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                        divLp.setMargins(0, 0, 0, dpToPx(16));
+                        divSetting.setLayoutParams(divLp);
+                        settingLayout.addView(divSetting);
+                    }
+
+                    // 수정 버튼
+                    TextView btnEdit = new TextView(this);
+                    btnEdit.setText("수정");
+                    btnEdit.setTextColor(Color.WHITE);
+                    btnEdit.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnEdit.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnEdit.setGravity(Gravity.CENTER);
+                    btnEdit.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                    android.graphics.drawable.GradientDrawable editBg = new android.graphics.drawable.GradientDrawable();
+                    editBg.setColor(Color.parseColor("#5BA9F0"));
+                    editBg.setCornerRadius(dpToPx(12));
+                    btnEdit.setBackground(editBg);
+                    btnEdit.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                    LinearLayout.LayoutParams editLp = new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    mlLp.setMargins(0, 0, 0, dpToPx(6));
-                    tvMLabel.setLayoutParams(mlLp);
-                    memoLayout.addView(tvMLabel);
-                    // 메모 입력창
-                    android.widget.EditText etMemo2 = new android.widget.EditText(this);
-                    setBlackCursor(etMemo2);
-                    etMemo2.setHint("예) 출근길, 집앞 정류장");
-                    etMemo2.setText(existingMemo);
-                    etMemo2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
-                    etMemo2.setSingleLine(true);
-                    android.graphics.drawable.GradientDrawable memoBg2 = new android.graphics.drawable.GradientDrawable();
-                    memoBg2.setColor(Color.parseColor("#F8F8F8"));
-                    memoBg2.setCornerRadius(dpToPx(10));
-                    memoBg2.setStroke(dpToPx(1), Color.parseColor("#DDDDDD"));
-                    etMemo2.setBackground(memoBg2);
-                    etMemo2.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
-                    LinearLayout.LayoutParams etLp2 = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    etLp2.setMargins(0, 0, 0, dpToPx(20));
-                    etMemo2.setLayoutParams(etLp2);
-                    memoLayout.addView(etMemo2);
-                    // 버튼 행
-                    LinearLayout mBtnRow = new LinearLayout(this);
-                    mBtnRow.setOrientation(LinearLayout.HORIZONTAL);
-                    mBtnRow.setLayoutParams(new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-                    TextView mBtnCancel = new TextView(this);
-                    mBtnCancel.setText("취소");
-                    mBtnCancel.setTextColor(Color.parseColor("#888888"));
-                    mBtnCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
-                    mBtnCancel.setTypeface(null, android.graphics.Typeface.BOLD);
-                    mBtnCancel.setGravity(Gravity.CENTER);
-                    mBtnCancel.setPadding(0, dpToPx(13), 0, dpToPx(13));
-                    android.graphics.drawable.GradientDrawable mCancelBg = new android.graphics.drawable.GradientDrawable();
-                    mCancelBg.setColor(Color.parseColor("#F0F0F0"));
-                    mCancelBg.setCornerRadius(dpToPx(10));
-                    mBtnCancel.setBackground(mCancelBg);
-                    LinearLayout.LayoutParams mCancelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                    mCancelLp.setMargins(0, 0, dpToPx(8), 0);
-                    mBtnCancel.setLayoutParams(mCancelLp);
-                    mBtnCancel.setOnClickListener(vvv -> memoDlg.dismiss());
-                    mBtnRow.addView(mBtnCancel);
-                    TextView mBtnOk = new TextView(this);
-                    mBtnOk.setText("저장");
-                    mBtnOk.setTextColor(Color.WHITE);
-                    mBtnOk.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
-                    mBtnOk.setTypeface(null, android.graphics.Typeface.BOLD);
-                    mBtnOk.setGravity(Gravity.CENTER);
-                    mBtnOk.setPadding(0, dpToPx(13), 0, dpToPx(13));
-                    android.graphics.drawable.GradientDrawable mOkBg = new android.graphics.drawable.GradientDrawable();
-                    mOkBg.setColor(Color.parseColor("#5BA9F0"));
-                    mOkBg.setCornerRadius(dpToPx(10));
-                    mBtnOk.setBackground(mOkBg);
-                    mBtnOk.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-                    mBtnOk.setOnClickListener(vvv -> {
-                        memoDlg.dismiss();
-                        prefs.edit().putString("fav_route_memo_" + fRKey, etMemo2.getText().toString().trim()).apply();
-                        android.widget.Toast.makeText(this, "메모가 저장되었습니다", android.widget.Toast.LENGTH_SHORT).show();
-                        refreshBusFavorites(favSection, resultContainer);
+                    editLp.setMargins(0, 0, 0, dpToPx(10));
+                    btnEdit.setLayoutParams(editLp);
+                    btnEdit.setOnClickListener(vv -> {
+                        settingDlg.dismiss();
+                        // 즐겨찾기 추가 다이얼로그와 동일한 메모 수정창
+                        String existingMemo = prefs.getString("fav_route_memo_" + fRKey, "");
+                        android.app.Dialog memoDlg = new android.app.Dialog(this,
+                                android.R.style.Theme_Material_Light_Dialog);
+                        LinearLayout memoLayout = new LinearLayout(this);
+                        memoLayout.setOrientation(LinearLayout.VERTICAL);
+                        android.graphics.drawable.GradientDrawable memoCardBg = new android.graphics.drawable.GradientDrawable();
+                        memoCardBg.setColor(Color.WHITE);
+                        memoCardBg.setCornerRadius(dpToPx(16));
+                        memoLayout.setBackground(memoCardBg);
+                        memoLayout.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+                        // 제목
+                        TextView tvMTitle = new TextView(this);
+                        tvMTitle.setText(rNo + "번  " + rDir);
+                        tvMTitle.setTextColor(Color.parseColor("#0984E3"));
+                        tvMTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                        tvMTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+                        tvMTitle.setGravity(Gravity.CENTER);
+                        LinearLayout.LayoutParams mtLp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        mtLp.setMargins(0, 0, 0, dpToPx(14));
+                        tvMTitle.setLayoutParams(mtLp);
+                        memoLayout.addView(tvMTitle);
+                        // 구분선
+                        View mDiv = new View(this);
+                        mDiv.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                        LinearLayout.LayoutParams mDivLp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                        mDivLp.setMargins(0, 0, 0, dpToPx(14));
+                        mDiv.setLayoutParams(mDivLp);
+                        memoLayout.addView(mDiv);
+                        // 메모 라벨
+                        TextView tvMLabel = new TextView(this);
+                        tvMLabel.setText("메모 (선택)");
+                        tvMLabel.setTextColor(Color.parseColor("#555555"));
+                        tvMLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                        LinearLayout.LayoutParams mlLp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        mlLp.setMargins(0, 0, 0, dpToPx(6));
+                        tvMLabel.setLayoutParams(mlLp);
+                        memoLayout.addView(tvMLabel);
+                        // 메모 입력창
+                        android.widget.EditText etMemo2 = new android.widget.EditText(this);
+                        setBlackCursor(etMemo2);
+                        etMemo2.setHint("예) 출근길, 집앞 정류장");
+                        etMemo2.setText(existingMemo);
+                        etMemo2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(13));
+                        etMemo2.setSingleLine(true);
+                        android.graphics.drawable.GradientDrawable memoBg2 = new android.graphics.drawable.GradientDrawable();
+                        memoBg2.setColor(Color.parseColor("#F8F8F8"));
+                        memoBg2.setCornerRadius(dpToPx(10));
+                        memoBg2.setStroke(dpToPx(1), Color.parseColor("#DDDDDD"));
+                        etMemo2.setBackground(memoBg2);
+                        etMemo2.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+                        LinearLayout.LayoutParams etLp2 = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        etLp2.setMargins(0, 0, 0, dpToPx(20));
+                        etMemo2.setLayoutParams(etLp2);
+                        memoLayout.addView(etMemo2);
+                        // 버튼 행
+                        LinearLayout mBtnRow = new LinearLayout(this);
+                        mBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+                        mBtnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                        TextView mBtnCancel = new TextView(this);
+                        mBtnCancel.setText("취소");
+                        mBtnCancel.setTextColor(Color.parseColor("#888888"));
+                        mBtnCancel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                        mBtnCancel.setTypeface(null, android.graphics.Typeface.BOLD);
+                        mBtnCancel.setGravity(Gravity.CENTER);
+                        mBtnCancel.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                        android.graphics.drawable.GradientDrawable mCancelBg = new android.graphics.drawable.GradientDrawable();
+                        mCancelBg.setColor(Color.parseColor("#F0F0F0"));
+                        mCancelBg.setCornerRadius(dpToPx(10));
+                        mBtnCancel.setBackground(mCancelBg);
+                        LinearLayout.LayoutParams mCancelLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                        mCancelLp.setMargins(0, 0, dpToPx(8), 0);
+                        mBtnCancel.setLayoutParams(mCancelLp);
+                        mBtnCancel.setOnClickListener(vvv -> memoDlg.dismiss());
+                        mBtnRow.addView(mBtnCancel);
+                        TextView mBtnOk = new TextView(this);
+                        mBtnOk.setText("저장");
+                        mBtnOk.setTextColor(Color.WHITE);
+                        mBtnOk.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                        mBtnOk.setTypeface(null, android.graphics.Typeface.BOLD);
+                        mBtnOk.setGravity(Gravity.CENTER);
+                        mBtnOk.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                        android.graphics.drawable.GradientDrawable mOkBg = new android.graphics.drawable.GradientDrawable();
+                        mOkBg.setColor(Color.parseColor("#5BA9F0"));
+                        mOkBg.setCornerRadius(dpToPx(10));
+                        mBtnOk.setBackground(mOkBg);
+                        mBtnOk.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                        mBtnOk.setOnClickListener(vvv -> {
+                            memoDlg.dismiss();
+                            prefs.edit().putString("fav_route_memo_" + fRKey, etMemo2.getText().toString().trim()).apply();
+                            android.widget.Toast.makeText(this, "메모가 저장되었습니다", android.widget.Toast.LENGTH_SHORT).show();
+                            refreshBusFavorites(favSection, resultContainer);
+                        });
+                        mBtnRow.addView(mBtnOk);
+                        memoLayout.addView(mBtnRow);
+                        memoDlg.setContentView(memoLayout);
+                        memoDlg.setCancelable(true);
+                        if (memoDlg.getWindow() != null) {
+                            memoDlg.getWindow().setLayout(
+                                    (int)(getResources().getDisplayMetrics().widthPixels * 0.85),
+                                    android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+                            memoDlg.getWindow().setBackgroundDrawable(
+                                    new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                        }
+                        memoDlg.show();
+                        etMemo2.post(() -> {
+                            etMemo2.requestFocus();
+                            etMemo2.setSelection(etMemo2.getText().length());
+                        });
                     });
-                    mBtnRow.addView(mBtnOk);
-                    memoLayout.addView(mBtnRow);
-                    memoDlg.setContentView(memoLayout);
-                    memoDlg.setCancelable(true);
-                    if (memoDlg.getWindow() != null) {
-                        memoDlg.getWindow().setLayout(
-                                (int)(getResources().getDisplayMetrics().widthPixels * 0.85),
+                    settingLayout.addView(btnEdit);
+
+                    // 삭제 버튼
+                    TextView btnDel = new TextView(this);
+                    btnDel.setText("삭제");
+                    btnDel.setTextColor(Color.WHITE);
+                    btnDel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnDel.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnDel.setGravity(Gravity.CENTER);
+                    btnDel.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                    android.graphics.drawable.GradientDrawable delBg = new android.graphics.drawable.GradientDrawable();
+                    delBg.setColor(Color.parseColor("#E74C3C"));
+                    delBg.setCornerRadius(dpToPx(12));
+                    btnDel.setBackground(delBg);
+                    btnDel.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                    LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    delLp.setMargins(0, 0, 0, dpToPx(10));
+                    btnDel.setLayoutParams(delLp);
+                    btnDel.setOnClickListener(vv -> {
+                        settingDlg.dismiss();
+                        showConfirmDialog("삭제", rNo + "번 즐겨찾기 삭제",
+                                "즐겨찾기에서 삭제하시겠습니까?", () -> {
+                                    prefs.edit().remove("fav_route_" + fRKey)
+                                            .remove("fav_route_no_"     + fRKey)
+                                            .remove("fav_route_dir_"    + fRKey)
+                                            .remove("fav_route_id_"     + fRKey)
+                                            .remove("fav_route_dirkey_" + fRKey)
+                                            .remove("fav_route_memo_"   + fRKey).apply();
+                                    favOrderRemove("R:" + fRKey);
+                                    busFavDirty = false;
+                                    refreshBusFavorites(favSection, resultContainer);
+                                    android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 삭제",
+                                            android.widget.Toast.LENGTH_SHORT).show();
+                                    refreshBusFavorites(favSection, resultContainer);
+                                });
+                    });
+                    settingLayout.addView(btnDel);
+
+                    // 취소 버튼
+                    TextView btnCancel2 = new TextView(this);
+                    btnCancel2.setText("취소");
+                    btnCancel2.setTextColor(Color.parseColor("#888888"));
+                    btnCancel2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnCancel2.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnCancel2.setGravity(Gravity.CENTER);
+                    btnCancel2.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                    android.graphics.drawable.GradientDrawable cancelBg2 = new android.graphics.drawable.GradientDrawable();
+                    cancelBg2.setColor(Color.parseColor("#F0F0F0"));
+                    cancelBg2.setCornerRadius(dpToPx(12));
+                    cancelBg2.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                    btnCancel2.setBackground(cancelBg2);
+                    btnCancel2.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    btnCancel2.setOnClickListener(vv -> settingDlg.dismiss());
+                    settingLayout.addView(btnCancel2);
+
+                    settingDlg.setContentView(settingLayout);
+                    settingDlg.setCancelable(true);
+                    if (settingDlg.getWindow() != null) {
+                        settingDlg.getWindow().setLayout(
+                                (int)(getResources().getDisplayMetrics().widthPixels * 0.80),
                                 android.view.WindowManager.LayoutParams.WRAP_CONTENT);
-                        memoDlg.getWindow().setBackgroundDrawable(
+                        settingDlg.getWindow().setBackgroundDrawable(
                                 new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
                     }
-                    memoDlg.show();
-                    etMemo2.post(() -> {
-                        etMemo2.requestFocus();
-                        etMemo2.setSelection(etMemo2.getText().length());
-                    });
+                    settingDlg.show();
                 });
-                settingLayout.addView(btnEdit);
+                iconBtnRow.addView(tvGear);
 
-                // 삭제 버튼
-                TextView btnDel = new TextView(this);
-                btnDel.setText("삭제");
-                btnDel.setTextColor(Color.WHITE);
-                btnDel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
-                btnDel.setTypeface(null, android.graphics.Typeface.BOLD);
-                btnDel.setGravity(Gravity.CENTER);
-                btnDel.setPadding(0, dpToPx(14), 0, dpToPx(14));
-                android.graphics.drawable.GradientDrawable delBg = new android.graphics.drawable.GradientDrawable();
-                delBg.setColor(Color.parseColor("#E74C3C"));
-                delBg.setCornerRadius(dpToPx(12));
-                btnDel.setBackground(delBg);
-                btnDel.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-                LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
+                // 승·하차 버튼 (오른쪽)
+                TextView tvBell = new TextView(this);
+                tvBell.setText("승·하차");
+                tvBell.setTextColor(Color.parseColor("#5BA9F0"));
+                tvBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvBell.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvBell.setGravity(Gravity.CENTER);
+                tvBell.setPadding(dpToPx(5), dpToPx(4), dpToPx(5), dpToPx(4));
+                android.graphics.drawable.GradientDrawable bellBg = new android.graphics.drawable.GradientDrawable();
+                bellBg.setColor(Color.parseColor("#EBF5FB"));
+                bellBg.setCornerRadius(dpToPx(6));
+                bellBg.setStroke(dpToPx(1), Color.parseColor("#5BA9F0"));
+                tvBell.setBackground(bellBg);
+                tvBell.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                tvBell.setOnClickListener(v2 -> android.widget.Toast.makeText(this,
+                        rNo + "번 승·하차 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
+                iconBtnRow.addView(tvBell);
+                rCard.addView(iconBtnRow);
+
+                // 버스 번호 + 운행대수 가로 행
+                LinearLayout rNoRow = new LinearLayout(this);
+                rNoRow.setOrientation(LinearLayout.HORIZONTAL);
+                rNoRow.setGravity(Gravity.CENTER_VERTICAL);
+                rNoRow.setWeightSum(2f);
+                LinearLayout.LayoutParams rNoRowLp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                delLp.setMargins(0, 0, 0, dpToPx(10));
-                btnDel.setLayoutParams(delLp);
-                btnDel.setOnClickListener(vv -> {
-                    settingDlg.dismiss();
-                    showConfirmDialog("🗑", rNo + "번 즐겨찾기 삭제",
-                            "즐겨찾기에서 삭제하시겠습니까?", () -> {
-                                prefs.edit().remove("fav_route_" + fRKey)
-                                        .remove("fav_route_no_"     + fRKey)
-                                        .remove("fav_route_dir_"    + fRKey)
-                                        .remove("fav_route_id_"     + fRKey)
-                                        .remove("fav_route_dirkey_" + fRKey)
-                                        .remove("fav_route_memo_"   + fRKey).apply();
-                                android.widget.Toast.makeText(this, rNo + "번 즐겨찾기 삭제",
-                                        android.widget.Toast.LENGTH_SHORT).show();
-                                refreshBusFavorites(favSection, resultContainer);
-                            });
-                });
-                settingLayout.addView(btnDel);
+                rNoRowLp.setMargins(0, dpToPx(2), 0, 0);
+                rNoRow.setLayoutParams(rNoRowLp);
 
-                // 취소 버튼
-                TextView btnCancel2 = new TextView(this);
-                btnCancel2.setText("취소");
-                btnCancel2.setTextColor(Color.parseColor("#888888"));
-                btnCancel2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
-                btnCancel2.setTypeface(null, android.graphics.Typeface.BOLD);
-                btnCancel2.setGravity(Gravity.CENTER);
-                btnCancel2.setPadding(0, dpToPx(14), 0, dpToPx(14));
-                android.graphics.drawable.GradientDrawable cancelBg2 = new android.graphics.drawable.GradientDrawable();
-                cancelBg2.setColor(Color.parseColor("#F0F0F0"));
-                cancelBg2.setCornerRadius(dpToPx(12));
-                cancelBg2.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
-                btnCancel2.setBackground(cancelBg2);
-                btnCancel2.setLayoutParams(new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-                btnCancel2.setOnClickListener(vv -> settingDlg.dismiss());
-                settingLayout.addView(btnCancel2);
-
-                settingDlg.setContentView(settingLayout);
-                settingDlg.setCancelable(true);
-                if (settingDlg.getWindow() != null) {
-                    settingDlg.getWindow().setLayout(
-                            (int)(getResources().getDisplayMetrics().widthPixels * 0.80),
-                            android.view.WindowManager.LayoutParams.WRAP_CONTENT);
-                    settingDlg.getWindow().setBackgroundDrawable(
-                            new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
-                }
-                settingDlg.show();
-            });
-            iconBtnRow.addView(tvGear);
-
-            // 알림 버튼 (오른쪽)
-            TextView tvBell = new TextView(this);
-            tvBell.setText("알림");
-            tvBell.setTextColor(Color.parseColor("#5BA9F0"));
-            tvBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
-            tvBell.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvBell.setGravity(Gravity.CENTER);
-            tvBell.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
-            android.graphics.drawable.GradientDrawable bellBg = new android.graphics.drawable.GradientDrawable();
-            bellBg.setColor(Color.parseColor("#EBF5FB"));
-            bellBg.setCornerRadius(dpToPx(6));
-            bellBg.setStroke(dpToPx(1), Color.parseColor("#5BA9F0"));
-            tvBell.setBackground(bellBg);
-            tvBell.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            tvBell.setOnClickListener(v2 -> android.widget.Toast.makeText(this,
-                    rNo + "번 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
-            iconBtnRow.addView(tvBell);
-            rCard.addView(iconBtnRow);
-
-            // 버스 번호
-            TextView tvRNo = new TextView(this);
-            tvRNo.setText(rNo + "번");
-            tvRNo.setTextColor(Color.parseColor("#6C3FA0"));
-            tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
-            tvRNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
-            tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
-            LinearLayout.LayoutParams rNoLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            rNoLp.setMargins(0, dpToPx(4), 0, 0);
-            tvRNo.setLayoutParams(rNoLp);
-            rCard.addView(tvRNo);
-
-            // 방면 (메모 or 방향)
-            String subText = rMemo.isEmpty() ? rDir : rMemo;
-            if (!subText.isEmpty()) {
-                TextView tvRSub = new TextView(this);
-                tvRSub.setText(subText);
-                tvRSub.setTextColor(Color.parseColor("#555555"));
-                tvRSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
-                LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                subLp.setMargins(0, dpToPx(3), 0, 0);
-                tvRSub.setLayoutParams(subLp);
-                rCard.addView(tvRSub);
-            }
-
-
-            // 카드 탭 → 즉시 타임라인 (캐시 있으면 UI 스레드에서 바로 렌더링)
-            final String fRId = rId, fRNo = rNo, fRDirKey = rDirKey;
-            rCard.setOnClickListener(v2 -> {
-                if (fRId.isEmpty()) return;
-                resultContainer.removeAllViews();
-                if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
-                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
-                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                android.view.inputmethod.InputMethodManager immF =
-                        (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-                if (immF != null) immF.hideSoftInputFromWindow(resultContainer.getWindowToken(), 0);
-
-                // 캐시에서 즉시 읽기
-                android.content.SharedPreferences fc = getSharedPreferences("bus_cache", MODE_PRIVATE);
-                String fcKey = "route_" + fRId;
-                boolean hasCache = fc.contains(fcKey + "_startNm")
-                        && !fc.getString(fcKey + "_stops", "").isEmpty();
-
-                if (hasCache) {
-                    // ── 캐시 HIT: UI 스레드에서 즉시 렌더링 ──
-                    String sNm = fc.getString(fcKey+"_startNm","기점");
-                    String eNm = fc.getString(fcKey+"_endNm","종점");
-                    String sTm = fc.getString(fcKey+"_startTime","");
-                    String eTm = fc.getString(fcKey+"_endTime","");
-                    String inv = fc.getString(fcKey+"_interval","");
-                    String rTp = fc.getString(fcKey+"_rTp","");
-                    String stF = sTm.length()==4 ? sTm.substring(0,2)+":"+sTm.substring(2) : sTm;
-                    String etF = eTm.length()==4 ? eTm.substring(0,2)+":"+eTm.substring(2) : eTm;
-                    java.util.List<String[]> stops = new java.util.ArrayList<>();
-                    for (String line : fc.getString(fcKey+"_stops","").split(";")) {
-                        String[] p = line.split("\\|",-1);
-                        if (p.length==4) stops.add(p);
+                TextView tvRNo = new TextView(this);
+                tvRNo.setText(rNo); // "번" 제거
+                tvRNo.setTextColor(Color.parseColor(rTypeColor));
+                tvRNo.setSingleLine(true);
+                tvRNo.setEllipsize(null);
+                // 글자수에 따라 크기 조정
+                {
+                    if (rNo.length() > 8) {
+                        tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                        tvRNo.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    } else if (rNo.length() > 5) {
+                        tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
                     }
-                    if ("reverse".equals(fRDirKey)) java.util.Collections.reverse(stops);
-                    // 즉시 표시 (운행대수 0, 버스위치 없음)
-                    String fcTurnOrd = fc.getString(fcKey+"_turnOrd","");
-                    renderBusTimeline(fRId, fRNo, fRDirKey, resultContainer,
-                            sNm, eNm, stF, etF, inv, rTp,
-                            0, new java.util.HashMap<>(), new java.util.HashSet<>(), stops, fcTurnOrd);
-                    // 실시간만 백그라운드
-                    final java.util.List<String[]> fStops = stops;
-                    final String fSNm=sNm,fENm=eNm,fStF=stF,fEtF=etF,fInv=inv,fRTp2=rTp;
-                    new Thread(() -> {
-                        try {
-                            String lcXml = httpGet(BUS_BASE2+"BusLcInfoInqireService/getRouteAcctoBusLcList"
-                                    +"?serviceKey="+BUS_KEY+"&cityCode="+BUS_CITY
-                                    +"&routeId="+fRId+"&numOfRows=50&pageNo=1&_type=xml");
-                            int cnt=0;
-                            try{cnt=Integer.parseInt(tag(lcXml,"totalCount"));}catch(Exception ig){}
-                            java.util.Set<String> ordSet=new java.util.HashSet<>();
-                            java.util.Map<String,String> vehMap=new java.util.HashMap<>();
-                            for (String item:lcXml.split("<item>")) {
-                                String ord=tag(item,"nodeord"),vno=tag(item,"vehicleno");
-                                if(!ord.isEmpty()){ordSet.add(ord);if(!vno.isEmpty())vehMap.put(ord,vno);}
-                            }
-                            final int fCnt=cnt;
-                            final java.util.Set<String> fOrd=ordSet;
-                            final java.util.Map<String,String> fVeh=vehMap;
-                            final String fFcTurnOrd = fc.getString(fcKey+"_turnOrd","");
-                            runOnUiThread(()->renderBusTimeline(fRId,fRNo,fRDirKey,resultContainer,
-                                    fSNm,fENm,fStF,fEtF,fInv,fRTp2,fCnt,fVeh,fOrd,fStops,fFcTurnOrd));
-                        } catch(Exception ignored){}
-                    }).start();
-                } else {
-                    // 캐시 없으면 기존 방식
-                    busScreenLoadStops(fRId, fRNo, resultContainer, fRDirKey, "");
                 }
-            });
-            routeRow.addView(rCard);
-            routeColIdx++;
-        }
-        // 홀수개면 빈 카드로 채우기
-        if (routeColIdx % 2 == 1 && routeRow != null) {
-            View empty = new View(this);
-            LinearLayout.LayoutParams emLp = new LinearLayout.LayoutParams(0, 1, 1f);
-            emLp.setMargins(0, 0, 0, 0);
-            empty.setLayoutParams(emLp);
-            routeRow.addView(empty);
-        }
-        if (!favRouteKeys.isEmpty()) favSection.addView(routeGrid);
+                tvRNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
+                tvRNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
+                tvRNo.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvRNo.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                rNoRow.addView(tvRNo);
 
-        // ── 정류소 즐겨찾기 2열 그리드 ─────────────────────
-        LinearLayout stopGrid = new LinearLayout(this);
-        stopGrid.setOrientation(LinearLayout.VERTICAL);
-        stopGrid.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        LinearLayout stopRow = null;
-        int stopColIdx = 0;
+                // spacer 왼쪽
+                android.view.View rSpacer1 = new android.view.View(this);
+                rSpacer1.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                rNoRow.addView(rSpacer1);
 
-        for (String compositeKey : favKeys) {
-            // compositeKey = "routeId_nodeId"
-            String stopName = prefs.getString("fav_stop_name_"    + compositeKey, compositeKey);
-            String stopNo   = prefs.getString("fav_stop_no_"      + compositeKey, "");
-            String routeNo  = prefs.getString("fav_stop_route_"   + compositeKey, "");
-            String routeId  = prefs.getString("fav_stop_routeid_" + compositeKey, "");
+                // 운행중 대수 (bus_cache에서) - 중앙 배치
+                int runningCnt = getSharedPreferences("bus_cache", MODE_PRIVATE)
+                        .getInt("route_" + rId + "_running", -1);
+                if (runningCnt >= 0) {
+                    TextView tvRunning = new TextView(this);
+                    // "X대 운행중" - 숫자+대 연한빨강, " 운행중" 회색
+                    android.text.SpannableStringBuilder rssb = new android.text.SpannableStringBuilder();
+                    int rs1 = rssb.length(); rssb.append(runningCnt + "대");
+                    rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#FF7675")), rs1, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    int rs2 = rssb.length(); rssb.append(" 운행중");
+                    rssb.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#888888")), rs2, rssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    tvRunning.setText(rssb, android.widget.TextView.BufferType.SPANNABLE);
+                    tvRunning.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                    tvRunning.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvRunning.setGravity(Gravity.CENTER);
+                    tvRunning.setSingleLine(true);
+                    tvRunning.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    rNoRow.addView(tvRunning);
+                }
 
-            // 카드: 버스이모지 + 노선번호 + 정류소명
-            // 새 행 시작
-            if (stopColIdx % 2 == 0) {
-                stopRow = new LinearLayout(this);
-                stopRow.setOrientation(LinearLayout.HORIZONTAL);
-                LinearLayout.LayoutParams stopRowLp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                stopRowLp.setMargins(0, 0, 0, dpToPx(8));
-                stopRow.setLayoutParams(stopRowLp);
-                stopGrid.addView(stopRow);
-            }
+                // spacer 오른쪽
+                android.view.View rSpacer2 = new android.view.View(this);
+                rSpacer2.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                rNoRow.addView(rSpacer2);
 
-            LinearLayout card = new LinearLayout(this);
-            card.setOrientation(LinearLayout.HORIZONTAL);
-            card.setGravity(Gravity.CENTER_VERTICAL);
-            card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
-            card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
-            card.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
-            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            card.setLayoutParams(cardLp);
+                rCard.addView(rNoRow);
 
-            // 버스 아이콘 제거 - 텍스트만 표시
-            // 텍스트 영역
-            LinearLayout textArea = new LinearLayout(this);
-            textArea.setOrientation(LinearLayout.VERTICAL);
-            textArea.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-            if (!routeNo.isEmpty()) {
-                TextView tvRoute = new TextView(this);
-                tvRoute.setText(routeNo + "번");
-                tvRoute.setTextColor(Color.parseColor("#0984E3"));
-                tvRoute.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(18));
-                tvRoute.setTypeface(null, android.graphics.Typeface.BOLD);
-                textArea.addView(tvRoute);
-            }
-            TextView tvStopName = new TextView(this);
-            tvStopName.setText(stopName);
-            tvStopName.setTextColor(Color.parseColor("#555555"));
-            tvStopName.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
-            textArea.addView(tvStopName);
-            card.addView(textArea);
+                // 방면 (메모 or 방향)
+                String subText = rMemo.isEmpty() ? rDir : rMemo;
+                if (!subText.isEmpty()) {
+                    TextView tvRSub = new TextView(this);
+                    tvRSub.setText(subText);
+                    tvRSub.setTextColor(Color.parseColor("#555555"));
+                    tvRSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                    tvRSub.setSingleLine(true);
+                    tvRSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    subLp.setMargins(0, dpToPx(3), 0, 0);
+                    tvRSub.setLayoutParams(subLp);
+                    rCard.addView(tvRSub);
+                }
 
-            // 즐겨찾기 버튼 (크게)
-            final String favKey2 = "fav_stop_" + compositeKey;
-            final String fCompositeKey = compositeKey;
-            final String fNodeId = compositeKey, fStopName = stopName, fRouteNo = routeNo;
-            TextView tvStar2 = new TextView(this);
-            tvStar2.setText("즐겨찾기");
-            tvStar2.setTextColor(Color.WHITE);
-            tvStar2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-            tvStar2.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvStar2.setGravity(Gravity.CENTER);
-            tvStar2.setPadding(dpToPx(10), dpToPx(6), dpToPx(10), dpToPx(6));
-            android.graphics.drawable.GradientDrawable star2Bg = new android.graphics.drawable.GradientDrawable();
-            star2Bg.setColor(Color.parseColor("#F39C12"));
-            star2Bg.setCornerRadius(dpToPx(6));
-            tvStar2.setBackground(star2Bg);
-            LinearLayout.LayoutParams star2Lp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            star2Lp.gravity = Gravity.CENTER_VERTICAL;
-            tvStar2.setLayoutParams(star2Lp);
-            tvStar2.setOnClickListener(v2 -> {
-                prefs.edit().remove(favKey2)
-                        .remove("fav_stop_name_"    + fCompositeKey)
-                        .remove("fav_stop_no_"      + fCompositeKey)
-                        .remove("fav_stop_route_"   + fCompositeKey)
-                        .remove("fav_stop_routeid_" + fCompositeKey).apply();
-                android.widget.Toast.makeText(this, fStopName + " 즐겨찾기 해제",
-                        android.widget.Toast.LENGTH_SHORT).show();
-                refreshBusFavorites(favSection, resultContainer);
-            });
-            card.addView(tvStar2);
 
-            // 카드 탭 → 캐시된 routeId로 바로 타임라인 이동
-            final String fRouteId = routeId;
-            card.setOnClickListener(v2 -> {
-                if (fRouteNo.isEmpty()) return;
-                resultContainer.removeAllViews();
-                if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.GONE);
-                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
-                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
+                // 카드 탭 → 즉시 타임라인 (캐시 있으면 UI 스레드에서 바로 렌더링)
+                final String fRId = rId, fRNo = rNo, fRDirKey = rDirKey;
+                rCard.setOnClickListener(v2 -> {
+                    if (fRId.isEmpty()) return;
+                    busResultContainer.removeAllViews();
+                    if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+                    if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+                    if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
+                    android.view.inputmethod.InputMethodManager immF =
+                            (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                    if (immF != null) immF.hideSoftInputFromWindow(resultContainer.getWindowToken(), 0);
 
-                if (!fRouteId.isEmpty()) {
-                    // routeId 있으면 캐시 즉시 확인 후 렌더링
-                    android.content.SharedPreferences fc2 = getSharedPreferences("bus_cache", MODE_PRIVATE);
-                    String fcKey2 = "route_" + fRouteId;
-                    boolean hasCache2 = fc2.contains(fcKey2+"_startNm")
-                            && !fc2.getString(fcKey2+"_stops","").isEmpty();
-                    if (hasCache2) {
-                        String sNm2=fc2.getString(fcKey2+"_startNm","기점");
-                        String eNm2=fc2.getString(fcKey2+"_endNm","종점");
-                        String sTm2=fc2.getString(fcKey2+"_startTime","");
-                        String eTm2=fc2.getString(fcKey2+"_endTime","");
-                        String inv2=fc2.getString(fcKey2+"_interval","");
-                        String rTp2=fc2.getString(fcKey2+"_rTp","");
-                        String stF2=sTm2.length()==4?sTm2.substring(0,2)+":"+sTm2.substring(2):sTm2;
-                        String etF2=eTm2.length()==4?eTm2.substring(0,2)+":"+eTm2.substring(2):eTm2;
-                        java.util.List<String[]> stops2=new java.util.ArrayList<>();
-                        for (String line:fc2.getString(fcKey2+"_stops","").split(";")) {
-                            String[] p=line.split("\\|",-1); if(p.length==4) stops2.add(p);
+                    // 캐시에서 즉시 읽기
+                    android.content.SharedPreferences fc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+                    String fcKey = "route_" + fRId;
+                    boolean hasCache = fc.contains(fcKey + "_startNm")
+                            && !fc.getString(fcKey + "_stops", "").isEmpty();
+
+                    if (hasCache) {
+                        // ── 캐시 HIT: UI 스레드에서 즉시 렌더링 ──
+                        String sNm = fc.getString(fcKey+"_startNm","기점");
+                        String eNm = fc.getString(fcKey+"_endNm","종점");
+                        String sTm = fc.getString(fcKey+"_startTime","");
+                        String eTm = fc.getString(fcKey+"_endTime","");
+                        String inv = fc.getString(fcKey+"_interval","");
+                        String rTp = fc.getString(fcKey+"_rTp","");
+                        String stF = sTm.length()==4 ? sTm.substring(0,2)+":"+sTm.substring(2) : sTm;
+                        String etF = eTm.length()==4 ? eTm.substring(0,2)+":"+eTm.substring(2) : eTm;
+                        java.util.List<String[]> stops = new java.util.ArrayList<>();
+                        for (String line : fc.getString(fcKey+"_stops","").split(";")) {
+                            String[] p = line.split("\\|",-1);
+                            if (p.length==4) stops.add(p);
                         }
-                        String fcTurnOrd2 = fc2.getString(fcKey2+"_turnOrd","");
-                        renderBusTimeline(fRouteId,fRouteNo,"forward",resultContainer,
-                                sNm2,eNm2,stF2,etF2,inv2,rTp2,
-                                0,new java.util.HashMap<>(),new java.util.HashSet<>(),stops2,fcTurnOrd2);
-                        final java.util.List<String[]> fS2=stops2;
-                        final String fSN2=sNm2,fEN2=eNm2,fStF2=stF2,fEtF2=etF2,fInv2=inv2,fRT2=rTp2;
-                        new Thread(()->{
+                        if ("reverse".equals(fRDirKey)) java.util.Collections.reverse(stops);
+                        // 즉시 표시 (운행대수 0, 버스위치 없음)
+                        String fcTurnOrd = fc.getString(fcKey+"_turnOrd","");
+                        renderBusTimeline(fRId, fRNo, fRDirKey, resultContainer,
+                                sNm, eNm, stF, etF, inv, rTp,
+                                0, new java.util.HashMap<>(), new java.util.HashSet<>(), stops, fcTurnOrd);
+                        // 실시간만 백그라운드
+                        final java.util.List<String[]> fStops = stops;
+                        final String fSNm=sNm,fENm=eNm,fStF=stF,fEtF=etF,fInv=inv,fRTp2=rTp;
+                        new Thread(() -> {
                             try {
-                                String lc=httpGet(BUS_BASE2+"BusLcInfoInqireService/getRouteAcctoBusLcList"
+                                String lcXml = httpGet(BUS_BASE2+"BusLcInfoInqireService/getRouteAcctoBusLcList"
                                         +"?serviceKey="+BUS_KEY+"&cityCode="+BUS_CITY
-                                        +"&routeId="+fRouteId+"&numOfRows=50&pageNo=1&_type=xml");
-                                int c=0; try{c=Integer.parseInt(tag(lc,"totalCount"));}catch(Exception ig){}
-                                java.util.Set<String> os=new java.util.HashSet<>();
-                                java.util.Map<String,String> vm=new java.util.HashMap<>();
-                                for(String item:lc.split("<item>")){
-                                    String o=tag(item,"nodeord"),v=tag(item,"vehicleno");
-                                    if(!o.isEmpty()){os.add(o);if(!v.isEmpty())vm.put(o,v);}
+                                        +"&routeId="+fRId+"&numOfRows=50&pageNo=1&_type=xml");
+                                int cnt=0;
+                                try{cnt=Integer.parseInt(tag(lcXml,"totalCount"));}catch(Exception ig){}
+                                java.util.Set<String> ordSet=new java.util.HashSet<>();
+                                java.util.Map<String,String> vehMap=new java.util.HashMap<>();
+                                for (String item:lcXml.split("<item>")) {
+                                    String ord=tag(item,"nodeord"),vno=tag(item,"vehicleno");
+                                    if(!ord.isEmpty()){ordSet.add(ord);if(!vno.isEmpty())vehMap.put(ord,vno);}
                                 }
-                                final int fc3=c; final java.util.Set<String> fo=os; final java.util.Map<String,String> fv=vm;
-                                final String fFcTurnOrd2 = fc2.getString(fcKey2+"_turnOrd","");
-                                runOnUiThread(()->renderBusTimeline(fRouteId,fRouteNo,"forward",resultContainer,
-                                        fSN2,fEN2,fStF2,fEtF2,fInv2,fRT2,fc3,fv,fo,fS2,fFcTurnOrd2));
-                            }catch(Exception ignored){}
+                                final int fCnt=cnt;
+                                final java.util.Set<String> fOrd=ordSet;
+                                final java.util.Map<String,String> fVeh=vehMap;
+                                final String fFcTurnOrd = fc.getString(fcKey+"_turnOrd","");
+                                runOnUiThread(()->renderBusTimeline(fRId,fRNo,fRDirKey,resultContainer,
+                                        fSNm,fENm,fStF,fEtF,fInv,fRTp2,fCnt,fVeh,fOrd,fStops,fFcTurnOrd));
+                            } catch(Exception ignored){}
                         }).start();
                     } else {
-                        busScreenLoadStops(fRouteId, fRouteNo, resultContainer);
+                        // 캐시 없으면 기존 방식
+                        busScreenLoadStops(fRId, fRNo, resultContainer, fRDirKey, "");
                     }
-                } else {
-                    // routeId 없으면 API로 조회 (구버전 즐겨찾기 호환)
-                    TextView tvLoading = new TextView(this);
-                    tvLoading.setText(fRouteNo + "번 노선 불러오는 중...");
-                    tvLoading.setTextColor(Color.parseColor("#AAAAAA"));
-                    tvLoading.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
-                    resultContainer.addView(tvLoading);
-                    new Thread(() -> {
-                        try {
-                            String url = BUS_BASE2 + "BusRouteInfoInqireService/getRouteNoList"
-                                    + "?serviceKey=" + BUS_KEY + "&cityCode=" + BUS_CITY
-                                    + "&routeNo=" + java.net.URLEncoder.encode(fRouteNo, "UTF-8")
-                                    + "&numOfRows=20&pageNo=1&_type=xml";
-                            String xml = httpGet(url);
-                            String rid = "";
-                            for (String item : xml.split("<item>")) {
-                                if (tag(item, "routeno").equals(fRouteNo)) {
-                                    rid = tag(item, "routeid");
-                                    break;
-                                }
-                            }
-                            final String finalRid = rid;
-                            runOnUiThread(() -> {
-                                if (finalRid.isEmpty()) {
-                                    if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-                                    if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                                    if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                                    if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                                    resultContainer.removeAllViews();
-                                } else {
-                                    busScreenLoadStops(finalRid, fRouteNo, resultContainer);
-                                }
-                            });
-                        } catch (Exception e) {
-                            runOnUiThread(() -> {
-                                if (busSearchArea != null) busSearchArea.setVisibility(android.view.View.VISIBLE);
-                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                                if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.VISIBLE);
-                                if (busFixedHeader != null) { busFixedHeader.setVisibility(android.view.View.GONE); busFixedHeader.removeAllViews(); }
-                                resultContainer.removeAllViews();
-                            });
-                        }
-                    }).start();
-                }
-            });
+                });
+                if (gridRow != null) gridRow.addView(rCard);
+                colIdx++;
+            } else { String compositeKey = ordKey.substring(2);
+                // compositeKey = "routeId_nodeId"
+                String stopName = prefs.getString("fav_stop_name_"    + compositeKey, compositeKey);
+                String stopNo   = prefs.getString("fav_stop_no_"      + compositeKey, "");
+                String routeNo  = prefs.getString("fav_stop_route_"   + compositeKey, "");
+                String routeId  = prefs.getString("fav_stop_routeid_" + compositeKey, "");
 
-            stopRow.addView(card);
-            stopColIdx++;
-        }
+                // 카드: 버스이모지 + 노선번호 + 정류소명
+                // 새 행 시작
+                if (colIdx % 2 == 0) {
+                    gridRow = new LinearLayout(this);
+                    gridRow.setOrientation(LinearLayout.HORIZONTAL);
+                    gridRow.setWeightSum(2f);
+                    LinearLayout.LayoutParams gridRowLp2 = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    gridRowLp2.setMargins(0, 0, 0, dpToPx(8));
+                    gridRow.setLayoutParams(gridRowLp2);
+                    grid.addView(gridRow);
+                }
+
+                // ── 정류소 즐겨찾기 카드 (노선 즐겨찾기와 동일한 디자인) ──
+                LinearLayout card = new LinearLayout(this);
+                card.setOrientation(LinearLayout.VERTICAL);
+                card.setBackground(makeShadowCardDrawable("#FFFFFF", 10, 3));
+                card.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                card.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
+                LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                cardLp.setMargins(0, 0, colIdx % 2 == 0 ? dpToPx(6) : 0, 0);
+                card.setLayoutParams(cardLp);
+
+                // 오른쪽 위: 버스이미지 + 설정 + 알림 버튼 행
+                final String fCompositeKey = compositeKey;
+                final String fStopName = stopName, fRouteNo = routeNo, fRouteId = routeId;
+                final String favKey2 = "fav_stop_" + compositeKey;
+
+                LinearLayout sIconBtnRow = new LinearLayout(this);
+                sIconBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+                sIconBtnRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+                LinearLayout.LayoutParams sIconBtnRowLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                sIconBtnRowLp.setMargins(0, 0, 0, dpToPx(4));
+                sIconBtnRow.setLayoutParams(sIconBtnRowLp);
+
+                // 버스 아이콘 (왼쪽) - routeType 색상
+                String sTpCached = getSharedPreferences("bus_cache", MODE_PRIVATE)
+                        .getString("route_" + routeId + "_rTp", "");
+                String[] sBadge = routeTypeBadge(sTpCached);
+                String sTypeColor = sBadge[1];
+                int sTypeColorInt = Color.parseColor(sTypeColor);
+
+                LinearLayout stopBusWrapper = new LinearLayout(this);
+                stopBusWrapper.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                stopBusWrapper.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+                // routeId 있으면 노선+정류소(pngwing_com.png), 없으면 정류소만(stop.png=pngwing-stio_1.png)
+                int stopArgbColor = 0xFF000000 | (sTypeColorInt & 0xFFFFFF);
+                boolean isRouteStop = !routeId.isEmpty();
+                android.graphics.Bitmap stopBusBmp = isRouteStop
+                        ? getStopRouteIconColor(stopArgbColor)
+                        : getStopIconColor(stopArgbColor);
+                if (stopBusBmp != null) {
+                    android.widget.ImageView ivStopBus = new android.widget.ImageView(this);
+                    ivStopBus.setImageBitmap(stopBusBmp);
+                    int iconSize = dpToPx(32);
+                    LinearLayout.LayoutParams stopBusLp = new LinearLayout.LayoutParams(iconSize, iconSize);
+                    stopBusLp.setMargins(0, 0, dpToPx(6), 0);
+                    stopBusLp.gravity = Gravity.CENTER_VERTICAL;
+                    ivStopBus.setLayoutParams(stopBusLp);
+                    ivStopBus.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                    stopBusWrapper.addView(ivStopBus);
+                }
+                sIconBtnRow.addView(stopBusWrapper);
+
+                // 설정 버튼
+                TextView tvStopGear = new TextView(this);
+                tvStopGear.setText("설정");
+                tvStopGear.setTextColor(Color.parseColor("#888888"));
+                tvStopGear.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvStopGear.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvStopGear.setGravity(Gravity.CENTER);
+                tvStopGear.setPadding(dpToPx(9), dpToPx(4), dpToPx(9), dpToPx(4));
+                android.graphics.drawable.GradientDrawable stopGearBg = new android.graphics.drawable.GradientDrawable();
+                stopGearBg.setColor(Color.parseColor("#F5F5F5"));
+                stopGearBg.setCornerRadius(dpToPx(6));
+                stopGearBg.setStroke(dpToPx(1), Color.parseColor("#DDDDDD"));
+                tvStopGear.setBackground(stopGearBg);
+                LinearLayout.LayoutParams stopGearLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                stopGearLp.setMargins(0, 0, dpToPx(6), 0);
+                tvStopGear.setLayoutParams(stopGearLp);
+                tvStopGear.setOnClickListener(vg -> {
+                    // 노선 즐겨찾기 설정과 동일한 다이얼로그
+                    android.app.Dialog stopSettingDlg = new android.app.Dialog(this,
+                            android.R.style.Theme_Material_Light_Dialog);
+                    LinearLayout settingLayout2 = new LinearLayout(this);
+                    settingLayout2.setOrientation(LinearLayout.VERTICAL);
+                    android.graphics.drawable.GradientDrawable sgCardBg = new android.graphics.drawable.GradientDrawable();
+                    sgCardBg.setColor(Color.WHITE);
+                    sgCardBg.setCornerRadius(dpToPx(20));
+                    settingLayout2.setBackground(sgCardBg);
+                    settingLayout2.setPadding(dpToPx(20), dpToPx(22), dpToPx(20), dpToPx(20));
+
+                    // 제목
+                    TextView tvSgTitle = new TextView(this);
+                    tvSgTitle.setText(routeNo + "번  " + stopName);
+                    tvSgTitle.setTextColor(Color.parseColor("#0984E3"));
+                    tvSgTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                    tvSgTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvSgTitle.setGravity(Gravity.CENTER);
+                    tvSgTitle.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
+                    tvSgTitle.setSingleLine(true);
+                    tvSgTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    LinearLayout.LayoutParams sgTitleLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    sgTitleLp.setMargins(0, 0, 0, dpToPx(6));
+                    tvSgTitle.setLayoutParams(sgTitleLp);
+                    settingLayout2.addView(tvSgTitle);
+
+                    // 메모 표시
+                    String curStopMemo = prefs.getString(favKey2 + "_memo", "");
+                    if (!curStopMemo.isEmpty()) {
+                        TextView tvCurMemo2 = new TextView(this);
+                        tvCurMemo2.setText(curStopMemo);
+                        tvCurMemo2.setTextColor(Color.parseColor("#888888"));
+                        tvCurMemo2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                        tvCurMemo2.setGravity(Gravity.CENTER);
+                        LinearLayout.LayoutParams cmLp2 = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        cmLp2.setMargins(0, 0, 0, dpToPx(16));
+                        tvCurMemo2.setLayoutParams(cmLp2);
+                        settingLayout2.addView(tvCurMemo2);
+                    } else {
+                        android.view.View divSg = new android.view.View(this);
+                        divSg.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                        LinearLayout.LayoutParams divSgLp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                        divSgLp.setMargins(0, 0, 0, dpToPx(16));
+                        divSg.setLayoutParams(divSgLp);
+                        settingLayout2.addView(divSg);
+                    }
+
+                    // 수정 버튼
+                    TextView btnSgEdit = new TextView(this);
+                    btnSgEdit.setText("수정");
+                    btnSgEdit.setTextColor(Color.WHITE);
+                    btnSgEdit.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnSgEdit.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnSgEdit.setGravity(Gravity.CENTER);
+                    btnSgEdit.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                    android.graphics.drawable.GradientDrawable sgEditBg = new android.graphics.drawable.GradientDrawable();
+                    sgEditBg.setColor(Color.parseColor("#5BA9F0"));
+                    sgEditBg.setCornerRadius(dpToPx(12));
+                    btnSgEdit.setBackground(sgEditBg);
+                    btnSgEdit.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                    LinearLayout.LayoutParams sgEditLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    sgEditLp.setMargins(0, 0, 0, dpToPx(10));
+                    btnSgEdit.setLayoutParams(sgEditLp);
+                    btnSgEdit.setOnClickListener(vv -> {
+                        stopSettingDlg.dismiss();
+                        String existMemo2 = prefs.getString(favKey2 + "_memo", "");
+                        android.app.Dialog memoDlg2 = new android.app.Dialog(this, android.R.style.Theme_Material_Light_Dialog);
+                        LinearLayout mLayout2 = new LinearLayout(this);
+                        mLayout2.setOrientation(LinearLayout.VERTICAL);
+                        android.graphics.drawable.GradientDrawable mBg2 = new android.graphics.drawable.GradientDrawable();
+                        mBg2.setColor(Color.WHITE); mBg2.setCornerRadius(dpToPx(16));
+                        mLayout2.setBackground(mBg2);
+                        mLayout2.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20));
+                        TextView mTitle2 = new TextView(this);
+                        mTitle2.setText(routeNo + "번  " + stopName);
+                        mTitle2.setTextColor(Color.parseColor("#0984E3"));
+                        mTitle2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                        mTitle2.setTypeface(null, android.graphics.Typeface.BOLD);
+                        mTitle2.setGravity(Gravity.CENTER);
+                        mTitle2.setSingleLine(true);
+                        mTitle2.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                        LinearLayout.LayoutParams mt2Lp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        mt2Lp.setMargins(0, 0, 0, dpToPx(14)); mTitle2.setLayoutParams(mt2Lp);
+                        mLayout2.addView(mTitle2);
+                        android.view.View mDiv2 = new android.view.View(this);
+                        mDiv2.setBackgroundColor(Color.parseColor("#EEEEEE"));
+                        LinearLayout.LayoutParams mDiv2Lp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+                        mDiv2Lp.setMargins(0, 0, 0, dpToPx(14)); mDiv2.setLayoutParams(mDiv2Lp);
+                        mLayout2.addView(mDiv2);
+                        TextView tvML2 = new TextView(this); tvML2.setText("메모 (선택)");
+                        tvML2.setTextColor(Color.parseColor("#555555")); tvML2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(12));
+                        LinearLayout.LayoutParams tvML2Lp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        tvML2Lp.setMargins(0, 0, 0, dpToPx(6)); tvML2.setLayoutParams(tvML2Lp);
+                        mLayout2.addView(tvML2);
+                        android.widget.EditText etM2 = new android.widget.EditText(this);
+                        setBlackCursor(etM2); etM2.setText(existMemo2); etM2.setSingleLine(true);
+                        etM2.setHint("예) 집앞, 출근길");
+                        android.graphics.drawable.GradientDrawable etM2Bg = new android.graphics.drawable.GradientDrawable();
+                        etM2Bg.setColor(Color.parseColor("#F8F8F8")); etM2Bg.setCornerRadius(dpToPx(10));
+                        etM2Bg.setStroke(dpToPx(1), Color.parseColor("#DDDDDD"));
+                        etM2.setBackground(etM2Bg); etM2.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+                        LinearLayout.LayoutParams etM2Lp = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        etM2Lp.setMargins(0, 0, 0, dpToPx(20)); etM2.setLayoutParams(etM2Lp);
+                        mLayout2.addView(etM2);
+                        LinearLayout mBtnRow2 = new LinearLayout(this);
+                        mBtnRow2.setOrientation(LinearLayout.HORIZONTAL);
+                        mBtnRow2.setLayoutParams(new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                        TextView mCancel2 = new TextView(this); mCancel2.setText("취소");
+                        mCancel2.setTextColor(Color.parseColor("#888888")); mCancel2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                        mCancel2.setTypeface(null, android.graphics.Typeface.BOLD); mCancel2.setGravity(Gravity.CENTER);
+                        mCancel2.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                        android.graphics.drawable.GradientDrawable mC2Bg = new android.graphics.drawable.GradientDrawable();
+                        mC2Bg.setColor(Color.parseColor("#F0F0F0")); mC2Bg.setCornerRadius(dpToPx(10));
+                        mCancel2.setBackground(mC2Bg);
+                        LinearLayout.LayoutParams mC2Lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                        mC2Lp.setMargins(0, 0, dpToPx(8), 0); mCancel2.setLayoutParams(mC2Lp);
+                        mCancel2.setOnClickListener(vvv -> memoDlg2.dismiss()); mBtnRow2.addView(mCancel2);
+                        TextView mOk2 = new TextView(this); mOk2.setText("저장");
+                        mOk2.setTextColor(Color.WHITE); mOk2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                        mOk2.setTypeface(null, android.graphics.Typeface.BOLD); mOk2.setGravity(Gravity.CENTER);
+                        mOk2.setPadding(0, dpToPx(13), 0, dpToPx(13));
+                        android.graphics.drawable.GradientDrawable mO2Bg = new android.graphics.drawable.GradientDrawable();
+                        mO2Bg.setColor(Color.parseColor("#5BA9F0")); mO2Bg.setCornerRadius(dpToPx(10));
+                        mOk2.setBackground(mO2Bg);
+                        mOk2.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                        mOk2.setOnClickListener(vvv -> {
+                            memoDlg2.dismiss();
+                            prefs.edit().putString(favKey2 + "_memo", etM2.getText().toString().trim()).apply();
+                            android.widget.Toast.makeText(this, "메모가 저장되었습니다", android.widget.Toast.LENGTH_SHORT).show();
+                            refreshBusFavorites(favSection, resultContainer);
+                        }); mBtnRow2.addView(mOk2);
+                        mLayout2.addView(mBtnRow2);
+                        memoDlg2.setContentView(mLayout2); memoDlg2.setCancelable(true);
+                        if (memoDlg2.getWindow() != null) {
+                            memoDlg2.getWindow().setLayout(
+                                    (int)(getResources().getDisplayMetrics().widthPixels * 0.85),
+                                    android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+                            memoDlg2.getWindow().setBackgroundDrawable(
+                                    new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                        }
+                        memoDlg2.show();
+                        etM2.post(() -> { etM2.requestFocus(); etM2.setSelection(etM2.getText().length()); });
+                    });
+                    settingLayout2.addView(btnSgEdit);
+
+                    // 삭제 버튼
+                    TextView btnSgDel = new TextView(this);
+                    btnSgDel.setText("삭제");
+                    btnSgDel.setTextColor(Color.WHITE);
+                    btnSgDel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnSgDel.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnSgDel.setGravity(Gravity.CENTER);
+                    btnSgDel.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                    android.graphics.drawable.GradientDrawable sgDelBg = new android.graphics.drawable.GradientDrawable();
+                    sgDelBg.setColor(Color.parseColor("#E74C3C"));
+                    sgDelBg.setCornerRadius(dpToPx(12));
+                    btnSgDel.setBackground(sgDelBg);
+                    btnSgDel.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                    LinearLayout.LayoutParams sgDelLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    sgDelLp.setMargins(0, 0, 0, dpToPx(10));
+                    btnSgDel.setLayoutParams(sgDelLp);
+                    btnSgDel.setOnClickListener(vv -> {
+                        stopSettingDlg.dismiss();
+                        showConfirmDialog("삭제", stopName + " 즐겨찾기 삭제", "즐겨찾기에서 삭제하시겠습니까?", () -> {
+                            busFavDirty = false;
+                            prefs.edit().remove(favKey2)
+                                    .remove("fav_stop_name_" + fCompositeKey)
+                                    .remove("fav_stop_no_" + fCompositeKey)
+                                    .remove("fav_stop_route_" + fCompositeKey)
+                                    .remove("fav_stop_routeid_" + fCompositeKey)
+                                    .remove(favKey2 + "_memo").apply();
+                            favOrderRemove("S:" + fCompositeKey);
+                            android.widget.Toast.makeText(this, stopName + " 즐겨찾기 삭제",
+                                    android.widget.Toast.LENGTH_SHORT).show();
+                            refreshBusFavorites(favSection, resultContainer);
+                        });
+                    });
+                    settingLayout2.addView(btnSgDel);
+
+                    // 취소 버튼
+                    TextView btnSgCancel2 = new TextView(this);
+                    btnSgCancel2.setText("취소");
+                    btnSgCancel2.setTextColor(Color.parseColor("#888888"));
+                    btnSgCancel2.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(14));
+                    btnSgCancel2.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnSgCancel2.setGravity(Gravity.CENTER);
+                    btnSgCancel2.setPadding(0, dpToPx(14), 0, dpToPx(14));
+                    android.graphics.drawable.GradientDrawable sgCancelBg2 = new android.graphics.drawable.GradientDrawable();
+                    sgCancelBg2.setColor(Color.parseColor("#F0F0F0"));
+                    sgCancelBg2.setCornerRadius(dpToPx(12));
+                    sgCancelBg2.setStroke(dpToPx(1), Color.parseColor("#CCCCCC"));
+                    btnSgCancel2.setBackground(sgCancelBg2);
+                    btnSgCancel2.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    btnSgCancel2.setOnClickListener(vv -> stopSettingDlg.dismiss());
+                    settingLayout2.addView(btnSgCancel2);
+
+                    stopSettingDlg.setContentView(settingLayout2);
+                    stopSettingDlg.setCancelable(true);
+                    if (stopSettingDlg.getWindow() != null) {
+                        stopSettingDlg.getWindow().setLayout(
+                                (int)(getResources().getDisplayMetrics().widthPixels * 0.80),
+                                android.view.WindowManager.LayoutParams.WRAP_CONTENT);
+                        stopSettingDlg.getWindow().setBackgroundDrawable(
+                                new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                    }
+                    stopSettingDlg.show();
+                });
+                sIconBtnRow.addView(tvStopGear);
+
+
+
+                // 승·하차 버튼
+                TextView tvStopBell = new TextView(this);
+                tvStopBell.setText("승·하차");
+                tvStopBell.setTextColor(Color.parseColor("#5BA9F0"));
+                tvStopBell.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(11));
+                tvStopBell.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvStopBell.setGravity(Gravity.CENTER);
+                tvStopBell.setPadding(dpToPx(5), dpToPx(4), dpToPx(5), dpToPx(4));
+                android.graphics.drawable.GradientDrawable stopBellBg = new android.graphics.drawable.GradientDrawable();
+                stopBellBg.setColor(Color.parseColor("#EBF5FB"));
+                stopBellBg.setCornerRadius(dpToPx(6));
+                stopBellBg.setStroke(dpToPx(1), Color.parseColor("#5BA9F0"));
+                tvStopBell.setBackground(stopBellBg);
+                tvStopBell.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                tvStopBell.setOnClickListener(v2 -> android.widget.Toast.makeText(this,
+                        stopName + " 승·하차 알림 (준비중)", android.widget.Toast.LENGTH_SHORT).show());
+                sIconBtnRow.addView(tvStopBell);
+                card.addView(sIconBtnRow);
+
+                // 노선 번호 + 도착시간 가로 행
+                String stopMemo = prefs.getString(favKey2 + "_memo", "");
+                LinearLayout stopNoRow = new LinearLayout(this);
+                stopNoRow.setOrientation(LinearLayout.HORIZONTAL);
+                stopNoRow.setGravity(Gravity.CENTER_VERTICAL);
+                stopNoRow.setWeightSum(2f);
+                LinearLayout.LayoutParams rNoLp2 = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rNoLp2.setMargins(0, dpToPx(2), 0, 0);
+                stopNoRow.setLayoutParams(rNoLp2);
+
+                TextView tvStopRouteNo = new TextView(this);
+                if (!routeNo.isEmpty()) {
+                    tvStopRouteNo.setText(routeNo); // "번" 제거
+                } else {
+                    tvStopRouteNo.setText(stopMemo.isEmpty() ? stopName : stopMemo);
+                }
+                tvStopRouteNo.setTextColor(Color.parseColor(sTypeColor));
+                tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(20));
+                tvStopRouteNo.setShadowLayer(4f, 0f, 1.5f, 0x40000000);
+                tvStopRouteNo.setTypeface(null, android.graphics.Typeface.BOLD);
+                tvStopRouteNo.setSingleLine(true);
+                {
+                    String txt = tvStopRouteNo.getText().toString();
+                    if (txt.length() > 8) {
+                        tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                        tvStopRouteNo.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    } else if (txt.length() > 5) {
+                        tvStopRouteNo.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                    }
+                }
+                tvStopRouteNo.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                stopNoRow.addView(tvStopRouteNo);
+
+                // spacer 왼쪽
+                android.view.View sSpacer1 = new android.view.View(this);
+                sSpacer1.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                stopNoRow.addView(sSpacer1);
+
+                // 번호 오른쪽: 도착시간 (버스번호+정류장 즐겨찾기) - 중앙 배치
+                if (!routeNo.isEmpty()) {
+                    String fNodeId2 = compositeKey.contains("_")
+                            ? compositeKey.substring(compositeKey.indexOf("_") + 1)
+                            : compositeKey;
+                    Object[] cached2 = arrivalSessionCache.get(fNodeId2);
+                    String arrTimeStr = "";
+                    if (cached2 != null && cached2.length >= 3) {
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, String[]> arrMap2 = (java.util.Map<String, String[]>) cached2[2];
+                        String[] ai2 = arrMap2.get(routeNo);
+                        if (ai2 != null && !ai2[0].isEmpty()) arrTimeStr = ai2[0];
+                    }
+                    // timeColor: arrMap의 [2]에서 읽기, 없으면 기본값
+                    String arrTimeColor = "#AAAAAA";
+                    if (!arrTimeStr.isEmpty()) {
+                        try {
+                            Object[] c3 = arrivalSessionCache.get(
+                                    compositeKey.contains("_") ? compositeKey.substring(compositeKey.indexOf("_")+1) : compositeKey);
+                            if (c3 != null && c3.length >= 3) {
+                                @SuppressWarnings("unchecked")
+                                java.util.Map<String, String[]> am3 = (java.util.Map<String, String[]>) c3[2];
+                                String[] ai3 = am3.get(routeNo);
+                                if (ai3 != null && ai3.length > 2) arrTimeColor = ai3[2];
+                            }
+                        } catch (Exception ig) {}
+                    }
+                    TextView tvArrTime = new TextView(this);
+                    if (arrTimeStr.isEmpty()) {
+                        // 데이터 없음 - 회색
+                        tvArrTime.setText("정보 없음");
+                        tvArrTime.setTextColor(Color.parseColor("#AAAAAA"));
+                    } else {
+                        // 약 X분, 곧 도착 등 - 기존 색깔(시간대별)
+                        tvArrTime.setText(arrTimeStr);
+                        tvArrTime.setTextColor(Color.parseColor(arrTimeColor));
+                    }
+                    tvArrTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(16));
+                    tvArrTime.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvArrTime.setGravity(Gravity.CENTER);
+                    tvArrTime.setSingleLine(true);
+                    tvArrTime.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    stopNoRow.addView(tvArrTime);
+                }
+
+                // spacer 오른쪽
+                android.view.View sSpacer2 = new android.view.View(this);
+                sSpacer2.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+                stopNoRow.addView(sSpacer2);
+
+                card.addView(stopNoRow);
+
+                // 서브 텍스트
+                String stopSubText;
+                if (!routeNo.isEmpty()) {
+                    stopSubText = stopMemo.isEmpty() ? stopName : stopMemo;
+                } else {
+                    stopSubText = stopNo.isEmpty() ? "" : stopNo;
+                }
+                if (!stopSubText.isEmpty()) {
+                    TextView tvStopSub = new TextView(this);
+                    tvStopSub.setText(stopSubText);
+                    tvStopSub.setTextColor(Color.parseColor("#555555"));
+                    tvStopSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(15));
+                    tvStopSub.setSingleLine(true);
+                    tvStopSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    LinearLayout.LayoutParams stopSubLp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    stopSubLp.setMargins(0, dpToPx(3), 0, 0);
+                    tvStopSub.setLayoutParams(stopSubLp);
+                    card.addView(tvStopSub);
+                }
+
+                // 카드 탭 → 노선 있으면 타임라인 해당 정류장 중앙 스크롤만 (화면 전환 없음)
+                card.setOnClickListener(v2 -> {
+                    if (!fRouteId.isEmpty()) {
+                        // nodeId 추출 (compositeKey = routeId_nodeId)
+                        String fNodeId = fCompositeKey.contains("_")
+                                ? fCompositeKey.substring(fCompositeKey.indexOf("_") + 1)
+                                : fCompositeKey;
+                        // 현재 스크롤 위치 저장 (돌아오기용)
+                        busTimelineRestoreScrollY = -1; // 아직 타임라인 진입 전이므로 초기화
+                        busScreenLoadStops(fRouteId, fRouteNo, busResultContainer, "forward", "");
+                        // 렌더링 완료 후 해당 정류장 중앙 스크롤만
+                        busResultContainer.postDelayed(() -> {
+                            if (busTimelineSv == null) return;
+                            android.view.View targetRow = findViewWithTag(busResultContainer, "stop_" + fNodeId);
+                            if (targetRow != null) {
+                                int[] loc = new int[2];
+                                targetRow.getLocationOnScreen(loc);
+                                int[] svLoc = new int[2];
+                                busTimelineSv.getLocationOnScreen(svLoc);
+                                int rowY = busTimelineSv.getScrollY() + (loc[1] - svLoc[1]);
+                                int offset = busTimelineSv.getHeight() / 2 - targetRow.getHeight() / 2;
+                                int targetY = Math.max(0, rowY - offset);
+                                busTimelineSv.scrollTo(0, targetY);
+                                busTimelineRestoreScrollY = targetY; // 돌아오기용 저장
+                            }
+                        }, 400);
+                    } else {
+                        // 정류소만 즐겨찾기 → 도착화면으로 이동
+                        String nId = fCompositeKey;
+                        String nNm = fStopName;
+                        String nNo = prefs.getString("fav_stop_no_" + nId, "");
+                        if (busSearchArea  != null) busSearchArea.setVisibility(android.view.View.GONE);
+                        if (busFavSection2 != null) busFavSection2.setVisibility(android.view.View.GONE);
+                        busScreenLoadArrival(nId, nNm, nNo, "", busResultContainer);
+                    }
+                });
+
+                if (gridRow != null) gridRow.addView(card);
+                colIdx++;
+            } // end else S:
+        } // end for allOrdered
 
         // 홀수개면 빈 공간 채우기
-        if (stopColIdx % 2 == 1 && stopRow != null) {
-            View emptyStop = new View(this);
-            LinearLayout.LayoutParams emStopLp = new LinearLayout.LayoutParams(0, 1, 1f);
-            emptyStop.setLayoutParams(emStopLp);
-            stopRow.addView(emptyStop);
+        // 홀수개면 빈 공간 채우기
+        if (colIdx % 2 == 1 && gridRow != null) {
+            View emptyFav = new View(this);
+            LinearLayout.LayoutParams emFavLp = new LinearLayout.LayoutParams(0, dpToPx(110), 1f);
+            emptyFav.setLayoutParams(emFavLp);
+            gridRow.addView(emptyFav);
         }
-        if (!favKeys.isEmpty()) favSection.addView(stopGrid);
-        // 구분선
-        View div = new View(this);
-        div.setBackgroundColor(Color.parseColor("#EEEEEE"));
-        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
-        divLp.setMargins(0, dpToPx(4), 0, dpToPx(12));
-        div.setLayoutParams(divLp);
-        favSection.addView(div);
+        if (colIdx > 0) favSection.addView(grid);
+    }
+
+    /** 정렬 모드에 따라 busSoonTV 업데이트 */
+    private void refreshSoonTV() {
+        if (busSoonTV == null || busSoonCache == null || busSoonCache.isEmpty()) return;
+        // 가장 빠른 시간 하나만 표시
+        int minSec = busSoonCache.firstKey();
+        // 5분(300초) 이상이면 "곧 도착 없음" 표시
+        if (minSec >= 300) {
+            android.text.SpannableStringBuilder ssbNone = new android.text.SpannableStringBuilder();
+            // "곧 도착" 부분 - X분 후와 같은 빨간색
+            int s1 = ssbNone.length(); ssbNone.append("곧 도착");
+            ssbNone.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#E74C3C")), s1, ssbNone.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            ssbNone.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), s1, ssbNone.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            // " 없음" 부분 - 검정색
+            int s2 = ssbNone.length(); ssbNone.append(" 없음");
+            ssbNone.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#222222")), s2, ssbNone.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            ssbNone.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), s2, ssbNone.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            busSoonTV.setText(ssbNone, android.widget.TextView.BufferType.SPANNABLE);
+            busSoonTV.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, fs(17));
+            return;
+        }
+        String timeLabel = minSec == 0 ? "곧 도착 " : (minSec / 60) + "분 후 ";
+        // X분 후에 해당하는 버스만 수집 (첫번째 키=최소시간)
+        java.util.List<String> allBuses = new java.util.ArrayList<>(busSoonCache.firstEntry().getValue());
+        // 정렬 적용
+        if (busSortMode == 1) { // 번호순
+            allBuses.sort((a, b) -> {
+                try { return Integer.compare(Integer.parseInt(a.replaceAll("[^0-9]","")), Integer.parseInt(b.replaceAll("[^0-9]",""))); }
+                catch(Exception e) { return a.compareTo(b); }
+            });
+        } else if (busSortMode == 2) { // 유형순
+            allBuses.sort((a, b) -> {
+                String ta = getRtp(a), tb = getRtp(b);
+                return routeTypeBadge(ta)[0].compareTo(routeTypeBadge(tb)[0]);
+            });
+        }
+        // SpannableString 생성 - X분 후 + 번호들 (쉼표 구분, 줄바꿈 시 들여쓰기)
+        android.text.SpannableStringBuilder ssb = new android.text.SpannableStringBuilder();
+        // X분 후 (빨강 17dp)
+        int ts = ssb.length(); ssb.append(timeLabel);
+        ssb.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#E74C3C")), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(17), true), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), ts, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        // 버스번호들 (쉼표 공백 구분, 17dp)
+        for (int bi = 0; bi < allBuses.size(); bi++) {
+            String rn = allBuses.get(bi);
+            String rtp = getRtp(rn);
+            String[] bdg = routeTypeBadge(rtp);
+            // 쉼표 + 공백 구분 (첫번째는 이미 timeLabel에 공백 있음)
+            String sep = (bi == 0) ? "" : " , ";
+            int sepStart = ssb.length();
+            if (!sep.isEmpty()) {
+                ssb.append(sep);
+                ssb.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#888888")), sepStart, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(17), true), sepStart, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+            int bs = ssb.length(); ssb.append(rn);
+            ssb.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor(bdg[1])), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            ssb.setSpan(new android.text.style.AbsoluteSizeSpan((int)fs(17), true), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            ssb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), bs, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        // LeadingMarginSpan으로 줄바꿈 시 "X분 후 " 너비만큼 들여쓰기
+        android.graphics.Paint measurePaint = new android.graphics.Paint();
+        measurePaint.setTextSize(fs(17) * getResources().getDisplayMetrics().density);
+        measurePaint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        int indent = (int) measurePaint.measureText(timeLabel);
+        ssb.setSpan(new android.text.style.LeadingMarginSpan.Standard(0, indent), 0, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        busSoonTV.setText(ssb, android.widget.TextView.BufferType.SPANNABLE);
+        busSoonTV.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
+    }
+
+    /** ViewGroup 내에서 tag가 일치하는 첫 번째 View를 재귀 탐색 */
+    private android.view.View findViewWithTag(android.view.ViewGroup parent, String tag) {
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            android.view.View child = parent.getChildAt(i);
+            if (tag.equals(child.getTag())) return child;
+            if (child instanceof android.view.ViewGroup) {
+                android.view.View found = findViewWithTag((android.view.ViewGroup) child, tag);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private int getSecFromTimeStr(String ts) {
+        if (ts == null || ts.isEmpty()) return Integer.MAX_VALUE;
+        if (ts.equals("곧 도착")) return 0;
+        if (ts.contains("분")) { try { return Integer.parseInt(ts.replaceAll("[^0-9]","")) * 60; } catch(Exception e){} }
+        return Integer.MAX_VALUE;
+    }
+
+    private String getRtp(String rno) {
+        if (busSoonRoutesCache == null) return "";
+        for (String[] ar : busSoonRoutesCache) { if (ar[0].equals(rno)) return ar.length > 4 ? ar[4] : ""; }
+        return "";
+    }
+
+    /** nodeId 기준 다음 정류소 최빈값 → 방면 문자열 반환 */
+    private String getDirectionForNode(String nodeId) {
+        android.content.SharedPreferences bc = getSharedPreferences("bus_cache", MODE_PRIVATE);
+        java.util.Map<String, Integer> countMap = new java.util.HashMap<>();
+        // bus_cache에서 route_*_stops 키 순회
+        java.util.Map<String, ?> allKeys = bc.getAll();
+        for (java.util.Map.Entry<String, ?> e : allKeys.entrySet()) {
+            String k = e.getKey();
+            if (!k.endsWith("_stops")) continue;
+            String stopsStr = (String) e.getValue();
+            if (stopsStr == null || stopsStr.isEmpty()) continue;
+            String[] items = stopsStr.split(";");
+            for (int i = 0; i < items.length - 1; i++) {
+                String[] sp = items[i].split("\\|");
+                if (sp.length > 0 && sp[0].equals(nodeId)) {
+                    String[] spN = items[i + 1].split("\\|");
+                    if (spN.length > 1 && !spN[1].isEmpty()) {
+                        String nm = spN[1];
+                        countMap.put(nm, countMap.containsKey(nm) ? countMap.get(nm) + 1 : 1);
+                    }
+                    break;
+                }
+            }
+        }
+        if (countMap.isEmpty()) return "";
+        String top = ""; int topCnt = 0;
+        for (java.util.Map.Entry<String, Integer> e : countMap.entrySet()) {
+            if (e.getValue() > topCnt) { topCnt = e.getValue(); top = e.getKey(); }
+        }
+        return top.isEmpty() ? "" : top + " 방면";
+    }
+
+    /** fav_order에 항목 추가 (중복 방지) + 타임스탬프 저장 */
+    private void favOrderAdd(String typeKey) {
+        android.content.SharedPreferences p = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        String cur = p.getString("fav_order", "");
+        java.util.List<String> list = new java.util.ArrayList<>();
+        if (!cur.isEmpty()) for (String t : cur.split(",")) { t=t.trim(); if (!t.isEmpty()) list.add(t); }
+        if (!list.contains(typeKey)) list.add(typeKey);
+        p.edit()
+                .putString("fav_order", android.text.TextUtils.join(",", list))
+                .putLong("fav_ts_" + typeKey, System.currentTimeMillis())
+                .apply();
+    }
+
+    /** fav_order에서 항목 제거 */
+    private void favOrderRemove(String typeKey) {
+        android.content.SharedPreferences p = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        String cur = p.getString("fav_order", "");
+        java.util.List<String> list = new java.util.ArrayList<>();
+        if (!cur.isEmpty()) for (String t : cur.split(",")) { t=t.trim(); if (!t.isEmpty() && !t.equals(typeKey)) list.add(t); }
+        p.edit().putString("fav_order", android.text.TextUtils.join(",", list)).apply();
     }
 
     // ── 헬퍼 ──────────────────────────────────────────────
